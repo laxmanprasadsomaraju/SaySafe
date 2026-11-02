@@ -10,6 +10,7 @@ import Order from './pages/Order';
 import Help from './pages/Help';
 import Guide from './pages/Guide';
 import Discover from './pages/Discover';
+import ReturnGate from './pages/ReturnGate';
 import Family, { FamilyPair } from './pages/Family';
 
 // Apply saved display preferences before first paint.
@@ -25,7 +26,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/check" element={<Check />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/order/:id" element={<Order />} />
-        <Route path="/checkout/return" element={<Order fromPayPal />} />
+        <Route path="/checkout/return" element={<ReturnGate />} />
         <Route path="/checkout/cancel" element={<Order />} />
         <Route path="/help" element={<Help />} />
         <Route path="/guide" element={<Guide />} />

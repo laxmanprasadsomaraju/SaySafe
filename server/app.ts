@@ -1,4 +1,4 @@
-import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3';
+import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -16,7 +16,7 @@ import { PRODUCTS, searchProducts, getProduct } from './catalogue/products.js';
 import { interpret, describeOptions, eur } from './ai/agent.js';
 import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from './ai/provider.js';
 import * as pay from './payments/service.js';
-import { paypalConfigured, verifyWebhook } from './paypal/client.js';
+import { paypalConfigured, verifyWebhook, getOrder as getPayPalOrder } from './paypal/client.js';
 import { SAMPLE_MESSAGES } from './scam/samples.js';
 
 export function createApp() {
@@ -183,6 +183,27 @@ export function createApp() {
       reply = describeOptions(products, name);
     }
     res.json({ intent, products, reply, ai });
+  }));
+
+  // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
+  // Read-only: asks PayPal what actually happened to an order this app created. Never captures, never creates.
+  const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+  app.get('/api/paypal/orders/:orderId/status', recoverLimiter, wrap(async (req, res) => {
+    const orderId = z.string().regex(/^[A-Z0-9]{10,30}$/).parse(req.params.orderId);
+    let order: any;
+    try { order = await getPayPalOrder(orderId); } catch { return res.status(404).json({ error: 'not_found', message: 'PayPal does not know this order.' }); }
+    const pu = order?.purchase_units?.[0];
+    if (typeof pu?.custom_id !== 'string' || !/^pay_[A-Za-z0-9_-]{6,40}$/.test(pu.custom_id)) return res.status(404).json({ error: 'not_found', message: 'This is not a SaySafe order.' });
+    const cap = pu?.payments?.captures?.[0];
+    res.json({
+      source: 'paypal',
+      orderId: order.id,
+      orderStatus: order.status, // CREATED | APPROVED | COMPLETED | VOIDED ...
+      requestId: pu.custom_id,
+      amount: pu.amount?.value, currency: pu.amount?.currency_code,
+      capture: cap ? { id: cap.id, status: cap.status, amount: cap.amount?.value, currency: cap.amount?.currency_code, time: cap.create_time } : null,
+      localRecord: Boolean(db.prepare('SELECT 1 FROM payment_requests WHERE id=?').get(pu.custom_id)),
+    });
   }));
 
   // ---------- Real product discovery (Channel3). Discovery only: purchases happen on the retailer's site. ----------
