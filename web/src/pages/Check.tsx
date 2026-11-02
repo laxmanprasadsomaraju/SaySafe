@@ -31,7 +31,7 @@ export default function Check() {
   const show = (r: ScanResult) => {
     setResult(r); setShared(false);
     speak(r.spokenSummary);
-    setTimeout(() => resultRef.current?.focus(), 50);
+    setTimeout(() => { resultRef.current?.focus({ preventScroll: true }); resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   };
   const scan = useCallback(async (t: string) => {
     if (!t.trim()) { setErr('Please paste or type the message first.'); return; }
@@ -88,7 +88,7 @@ export default function Check() {
           {err && <div className="mt-5"><Notice tone="danger" title={err} /></div>}
         </Card>
 
-        <div ref={resultRef} tabIndex={-1} aria-live="polite" className="outline-none">
+        <div ref={resultRef} tabIndex={-1} aria-live="polite" className="outline-none scroll-mt-24">
           {!result && !busy && (
             <Card className="p-6 text-ink-soft"><p>Your result will appear here, in plain words, with safe next steps.</p></Card>
           )}
