@@ -44,8 +44,8 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
             <button type="button" className={`${toggle} ${large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={large} onClick={() => setLarge(!large)}><Type className="size-5" aria-hidden /><span className={lbl}>Bigger text</span></button>
             <button type="button" className={`${toggle} ${contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={contrast} onClick={() => setContrast(!contrast)}><Contrast className="size-5" aria-hidden /><span className={lbl}>Contrast</span></button>
             {mode !== 'family' && (
-              <button type="button" className={`${toggle} ${voiceOn ? 'border-line' : 'bg-navy text-white border-navy'}`} aria-pressed={voiceOn} aria-label="Spoken replies" onClick={() => setVoiceOn(!voiceOn)}>
-                {voiceOn ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}<span className={lbl}>{voiceOn ? 'Voice' : 'Muted'}</span>
+              <button type="button" className={`${toggle} ${voiceOn ? 'border-line' : 'bg-navy text-white border-navy'}`} aria-pressed={voiceOn} aria-label="Voice replies" onClick={() => setVoiceOn(!voiceOn)}>
+                {voiceOn ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}<span className={lbl}>Voice</span>
               </button>
             )}
           </nav>

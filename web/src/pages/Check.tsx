@@ -16,7 +16,9 @@ const VERDICT = {
 export default function Check() {
   const me = useMe('elder');
   const nav = useNavigate();
-  const loc = useLocation() as { state?: { text?: string } };
+  const loc = useLocation() as { state?: { text?: string; scenario?: string } };
+  const scenario = loc.state?.scenario === 'mary';
+  const started = useRef(false);
   const [text, setText] = useState(loc.state?.text ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -27,6 +29,12 @@ export default function Check() {
   const resultRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { api('/api/samples').then(setSamples).catch(() => {}); }, []);
+  // Guided demo: Mary's story opens straight on the real-looking invoice and checks it for real.
+  useEffect(() => {
+    if (!scenario || started.current || samples.length === 0) return;
+    const s = samples.find((x) => x.id === 'invoice') ?? samples[0];
+    started.current = true; setText(s.text); scan(s.text);
+  }, [scenario, samples]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const show = (r: ScanResult) => {
     setResult(r); setShared(false);
@@ -61,6 +69,12 @@ export default function Check() {
   return (
     <Layout>
       <PageTitle eyebrow="Scam guardian" title="Check a message" lead="Paste the text, email, link or phone number you received. Or upload a screenshot. I never open the links in it." />
+      {scenario && (
+        <div role="note" className="mb-6 rounded-2xl border border-line bg-white p-5 flex flex-wrap items-center justify-between gap-4">
+          <p className="text-lg"><span className="font-bold">Mary’s story, step 1 of 4.</span> An invoice arrives that looks like it is from PayPal. SaySafe checks it below.</p>
+          {result && <Button variant="secondary" onClick={() => nav('/shop', { state: { scenario: 'mary' } })}>Next: buy a kettle</Button>}
+        </div>
+      )}
       <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6 items-start">
         <Card className="p-6">
           <form onSubmit={(e) => { e.preventDefault(); scan(text); }} className="space-y-5">
@@ -78,7 +92,7 @@ export default function Check() {
           {samples.length > 0 && (
             <div className="mt-6 border-t border-line pt-5">
               <p className="font-bold">Try a sample (not real messages):</p>
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-3 flex flex-wrap gap-3">
                 {samples.map((s) => (
                   <button key={s.id} type="button" onClick={() => { setText(s.text); scan(s.text); }} className="rounded-full border-2 border-line hover:border-teal px-4 min-h-12 text-base font-bold text-left">{s.label.replace('Sample: ', '')}</button>
                 ))}
