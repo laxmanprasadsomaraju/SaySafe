@@ -44,3 +44,9 @@ _Last updated: 2026-11-02 (Irish time). "Verified" means we ran it; anything els
 - Before approval, confirm returned 409 `not_approved`. After approval, confirm captured: capture `7GW748197L509353B`, state CAPTURED, EUR 32.00.
 - Second confirm: same capture returned, no second charge.
 - Open: return redirect to SaySafe's own page and spoken receipt not yet tested in browser (redirect target was localhost); a confirm with a mismatched orderId on an already-captured request returns the stored receipt instead of rejecting — tighten.
+
+## Landing redesign (2026-11-02 22:30 UTC)
+- New hero, proof strip, research figures, four full-width showcases using real captured SaySafe screens (web/public/screens, regenerate with scripts/shots-product.mjs), journey, can/cannot, what's real.
+- Receipt showcase is the real sandbox capture 7GW748197L509353B (EUR 32.00). Voice screenshot used typed input; microphone not yet tested on devices.
+- axe WCAG 2.2 A/AA: 0 violations on landing desktop and mobile, Mary scene 1, home, check result, order awaiting, family dashboard. Browser e2e 12/12. No horizontal overflow at 390px on /, /home, /check, /shop, /help, /family (Shop overflow fixed).
+- Reveal motion disabled under prefers-reduced-motion; button press feedback.

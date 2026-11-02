@@ -26,7 +26,8 @@ try {
 
   // Elder: start demo -> home
   await m.getByRole('button', { name: /Try it free as Mary/ }).first().click();
-  await m.waitForURL('**/home'); await m.waitForLoadState('networkidle');
+  await m.waitForURL('**/check'); ok('Try it as Mary opens the guided scam check', true);
+  await m.goto(BASE + '/home'); await m.waitForLoadState('networkidle');
   await m.screenshot({ path: `${OUT}/home-mobile.png`, fullPage: true }); await axe(m, 'home mobile');
   const tiles = await m.locator('nav[aria-label="Main actions"] button').count();
   ok('home has 3 main actions', tiles === 3, `found ${tiles}`);

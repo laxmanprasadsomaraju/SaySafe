@@ -71,12 +71,12 @@ export default function Shop() {
     <Layout>
       <PageTitle eyebrow="Shop by voice" title={quote ? 'Check before you pay' : 'What do you need?'} lead={quote ? 'Here is exactly what you would pay, and who you would pay.' : 'Tell me, for example: “Find me a reliable kettle under €40.”'} />
       {!quote && (
-        <div className="grid md:grid-cols-[auto_1fr] gap-8 items-center">
+        <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
           <MicButton state={busy ? 'processing' : voice.state} onClick={voice.toggle} />
-          <div className="space-y-4">
+          <div className="space-y-4 min-w-0">
             <form className="flex gap-3" onSubmit={(e) => { e.preventDefault(); if (query.trim()) ask(query.trim()); }}>
               <label htmlFor="q" className="sr-only">Type what you are looking for</label>
-              <input id="q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type it here instead" className="flex-1 min-h-14 rounded-full border-2 border-line px-6 bg-paper focus:border-teal outline-none" />
+              <input id="q" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Type it here instead" className="flex-1 min-w-0 min-h-14 rounded-full border-2 border-line px-6 bg-paper focus:border-teal outline-none" />
               <Button type="submit" busy={busy} icon={<Search className="size-6" aria-hidden />}>Find</Button>
             </form>
             {voice.error && <p role="alert" className="text-danger font-bold">{voice.error}</p>}

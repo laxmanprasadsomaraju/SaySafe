@@ -79,3 +79,18 @@ main:focus, main:focus-visible { outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* ---------- Landing (public) ---------- */
+html { scroll-behavior: smooth; }
+.wrap { width: 100%; max-width: 80rem; margin-inline: auto; padding-inline: 1.25rem; }
+@media (min-width: 768px) { .wrap { padding-inline: 2.5rem; } }
+.eyebrow { color: var(--color-teal); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; font-size: .9375rem; }
+.display-2 { font-size: clamp(2.25rem, 1.6rem + 2.6vw, 3.75rem); line-height: 1.06; letter-spacing: -0.022em; }
+.display-3 { font-size: clamp(1.75rem, 1.4rem + 1.2vw, 2.375rem); line-height: 1.12; letter-spacing: -0.015em; }
+.link { color: var(--color-teal); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+.reveal-ready { opacity: 0; transform: translateY(16px); transition: opacity .5s ease-out, transform .5s ease-out; }
+.reveal-ready.reveal-in { opacity: 1; transform: none; }
+details > summary { list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::after { content: '+'; font-size: 1.5rem; line-height: 1; margin-left: .25rem; }
+details[open] > summary::after { content: '−'; }

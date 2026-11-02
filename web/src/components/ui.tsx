@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, HelpCircle, Mic, Loader2, Square, ShieldCh
 import type { VoiceState } from '../lib/voice';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-const base = 'inline-flex items-center justify-center gap-3 rounded-[var(--radius-pill)] font-bold min-h-14 px-7 text-[1.125rem] transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+const base = 'inline-flex items-center justify-center gap-3 rounded-[var(--radius-pill)] font-bold min-h-14 px-7 text-[1.125rem] transition-[background-color,border-color,transform] duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed';
 const variants: Record<Variant, string> = {
   primary: 'bg-teal text-white hover:bg-teal-deep shadow-[var(--shadow-lift)]',
   secondary: 'bg-paper text-navy border-2 border-line hover:border-teal',

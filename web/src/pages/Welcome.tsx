@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ShieldCheck, ShoppingBag, Users, ArrowRight, MessageSquareWarning, Mic, BadgeCheck, Lock, Eye, Volume2, CheckCircle2, CircleDashed } from 'lucide-react';
+import { ShoppingBag, Users, ArrowRight, MessageSquareWarning, Mic, CheckCircle2, CircleDashed, CircleX, CircleHelp, TriangleAlert } from 'lucide-react';
 import { Layout } from '../components/Layout';
-import { Button, Card, SandboxBadge } from '../components/ui';
+import { Button, SandboxBadge } from '../components/ui';
 import { api } from '../lib/api';
 
 /** Public landing page: what SaySafe is, why it is safe, and how to try it in three steps. */
@@ -15,32 +15,13 @@ export default function Welcome() {
     try { await api('/api/demo/start', { body: { name: 'Mary' } }); nav(to, { state }); }
     catch (e: any) { setErr(e.message); setBusy(false); }
   };
-
-  const phases = [
-    { icon: MessageSquareWarning, when: 'Before you pay', title: 'Spot the scam', text: 'Paste or photograph a text, email or link. SaySafe reads it out, shows the warning signs, and points you to PayPal’s real help page — never a phone number from the message.' },
-    { icon: Users, when: 'While you pay', title: 'Family in the loop', text: 'Anything over your limit waits for a trusted family member to approve. Then you still approve it yourself at PayPal. Nobody can pay for you.' },
-    { icon: Volume2, when: 'After you pay', title: 'A receipt you can hear', text: 'SaySafe checks with PayPal that the money really went through, then tells you what you bought, what it cost, and where it is going.' },
-  ];
-  const steps = [
-    { n: '1', title: 'Start the demo', text: 'One tap. No sign-up. You get a private practice space as “Mary”.' },
-    { n: '2', title: 'Check a fake message', text: 'Pick a sample “PayPal support” text and hear why it is a scam.' },
-    { n: '3', title: 'Buy a kettle by voice', text: 'Say “I need a kettle”, then pay with a PayPal sandbox test account. No real money.' },
-  ];
-  const promises = [
-    { icon: Lock, text: 'SaySafe never sees your PayPal password or card.' },
-    { icon: BadgeCheck, text: 'It never calls a payment request “safe”. It tells you what it found, what it could not check, and the safe next step.' },
-    { icon: ShieldCheck, text: 'Family approval is checked on our server, so it cannot be skipped by a trick or a chatbot.' },
-    { icon: Eye, text: 'Big text, high contrast, spoken help with captions on every screen.' },
-  ];
-  const real = [
-    ['PayPal Orders v2 sandbox: create and capture', true],
-    ['Buyer approval on PayPal’s own sandbox page', false, 'being verified'],
-    ['Groq AI: scam explanations and voice shopping', true],
-    ['Server-side family approval and spending limit', true],
-    ['Products and prices', false, 'demo catalogue'],
-    ['Money', false, 'PayPal sandbox only'],
-  ] as const;
-
+  // Gentle reveal on scroll. Content is visible without JS and with reduced motion.
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
+    const els = document.querySelectorAll('.reveal'); els.forEach((e) => e.classList.add('reveal-ready'));
+    const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('reveal-in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -10% 0px' });
+    els.forEach((e) => io.observe(e)); return () => io.disconnect();
+  }, []);
 
   const sources = [
     { where: 'United States', fig: 'about US$3 billion', what: 'total fraud losses reported to the FTC by people aged 60 and over in 2025', src: 'FTC, Protecting Older Consumers 2025–2026 (Oct 2026)', url: 'https://www.ftc.gov/news-events/news/press-releases/2026/10/ftc-issues-annual-report-congress-agencys-actions-protect-older-adults' },
@@ -53,173 +34,201 @@ export default function Welcome() {
   const can = ['Read a message, invoice or screenshot you give it and explain possible warning signs', 'Point you to support pages we have checked ourselves', 'Hold payments you start in SaySafe until your family check is done', 'Complete and verify supported PayPal sandbox payments'];
   const cannot = ['Promise a payment request is scam-free', 'Check every shop or seller', 'Read your PayPal inbox or invoices', 'Stop payments made outside SaySafe', 'File disputes for you or guarantee a refund'];
 
+  const real = [
+    ['PayPal Orders v2 sandbox: create and capture', true],
+    ['Buyer approval on PayPal’s own sandbox page', true, 'tested 2 Nov 2026'],
+    ['Groq AI: scam explanations, screenshot reading, shopping assistant', true],
+    ['Server-side family approval and spending limit', true],
+    ['Microphone on real phones and laptops', false, 'not yet tested'],
+    ['Products and prices', false, 'demo catalogue'],
+    ['Money', false, 'PayPal sandbox only'],
+  ] as const;
+  const journey = ['A suspicious “PayPal” invoice arrives', 'SaySafe shows the warning signs', 'Mary asks for a kettle by voice', 'A bigger buy waits for family', 'Mary approves on PayPal’s sandbox page', 'PayPal confirms it, and SaySafe reads the receipt'];
+
   return (
     <Layout mode="public">
       {/* Hero */}
-      <section className="grid md:grid-cols-[1.1fr_1fr] gap-10 md:gap-14 items-center fade-up">
-        <div>
+      <section className="wrap pt-10 md:pt-16 pb-16 md:pb-24 grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
+        <div className="lg:col-span-6 fade-up">
           <SandboxBadge />
-          <h1 className="mt-5 text-[2.6rem] leading-[1.08] md:text-[3.75rem]">From “Is this real?” to a receipt you can trust.</h1>
-          <p className="mt-5 text-[length:var(--text-lead)] text-ink-soft max-w-xl">SaySafe walks older adults through the whole payment: it explains the warning signs in a suspicious request, offers a trusted family check, enforces your limits, then completes a genuine PayPal checkout and reads back a verified receipt.</p>
-          <div className="mt-8 flex flex-wrap gap-4">
+          <h1 className="mt-6 text-[2.75rem] leading-[1.04] sm:text-[3.5rem] lg:text-[4.5rem] tracking-[-0.025em] max-w-[13ch]">Pay with confidence, not doubt.</h1>
+          <p className="mt-6 text-[1.375rem] leading-relaxed text-ink-soft max-w-[34ch]">SaySafe checks the request, brings in family when it matters, and confirms with PayPal before telling you it’s paid.</p>
+          <div className="mt-9 flex flex-wrap items-center gap-4">
             <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button>
-            <a href="#how" className="inline-flex items-center justify-center rounded-full min-h-14 px-7 text-[1.125rem] font-bold border-2 border-line bg-paper hover:border-teal">How it works</a>
+            <a href="#journey" className="inline-flex items-center min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline">See how it works</a>
           </div>
           {err && <p role="alert" className="mt-4 text-danger font-bold">{err}</p>}
-          <p className="mt-4 text-base text-ink-soft">No account needed. Takes about two minutes.</p>
-        </div>
-        <div className="relative">
-          <img src="/hero-mary.webp" alt="A smiling older woman checking her phone at a sunny kitchen table" width={928} height={1152} className="w-full rounded-[2rem] object-cover aspect-[4/5] shadow-[var(--shadow-card)]" />
-          <Card className="absolute -bottom-6 left-4 right-4 md:-left-10 md:right-10 p-5" aria-label="Example warning">
-            <p className="flex items-center gap-2 font-bold text-danger"><MessageSquareWarning className="size-6" aria-hidden />This message may be a scam</p>
-            <p className="mt-1 text-lg text-ink-soft">It asks you to call a number from the message and pay €149 today. Both are common scam signs. Check in the PayPal app instead.</p>
-          </Card>
-        </div>
-      </section>
-
-
-      {/* Why SaySafe exists */}
-      <section aria-labelledby="impact" className="mt-24">
-        <p className="text-teal font-bold uppercase tracking-[0.14em] text-sm">Why SaySafe exists</p>
-        <h2 id="impact" className="text-[2rem] md:text-[2.75rem] mt-2 max-w-3xl">A moment of doubt shouldn’t cost someone their savings.</h2>
-        <p className="mt-4 text-xl text-ink-soft max-w-3xl">Scammers impersonate trusted businesses, create false urgency and convince people to send money or reveal sensitive information. SaySafe helps people understand warning signs, find trusted support and make more informed payment decisions.</p>
-        <dl className="mt-10 grid md:grid-cols-2 gap-8 border-t border-line pt-8">
-          <div>
-            <dt className="sr-only">United States, 2025</dt>
-            <dd className="font-display text-[3.5rem] md:text-[4.5rem] leading-none text-navy">US$3B</dd>
-            <dd className="mt-3 text-lg text-ink-soft max-w-md">reported fraud losses among US adults aged 60 and over in 2025. <a className="underline text-teal font-bold" href={sources[0].url} target="_blank" rel="noreferrer">FTC<span className="sr-only"> (opens in a new tab)</span></a></dd>
-          </div>
-          <div>
-            <dt className="sr-only">Ireland, 2025</dt>
-            <dd className="font-display text-[3.5rem] md:text-[4.5rem] leading-none text-navy">€179M</dd>
-            <dd className="mt-3 text-lg text-ink-soft max-w-md">fraudulent payment value reported in Ireland in 2025, across all ages. <a className="underline text-teal font-bold" href={sources[2].url} target="_blank" rel="noreferrer">Central Bank of Ireland<span className="sr-only"> (opens in a new tab)</span></a></dd>
-          </div>
-        </dl>
-        <details className="mt-8 rounded-2xl border border-line bg-white/70 p-6 group">
-          <summary className="cursor-pointer text-xl font-bold min-h-12 flex items-center">Explore the research</summary>
-          <p className="mt-4 text-lg text-ink-soft">Each figure comes from a different reporting system with its own definitions, so they cannot be added together or compared as rankings. Reports count complaints or cases, not unique people, and many scams are never reported. Only the US figures refer to older adults.</p>
-          <ul className="mt-5 grid gap-5">
-            {sources.map((x) => (
-              <li key={x.url} className="border-t border-line pt-4">
-                <p className="text-sm font-bold uppercase tracking-[0.12em] text-ink-soft">{x.where} · 2025</p>
-                <p className="text-xl mt-1"><span className="font-bold text-navy">{x.fig}</span> — {x.what}.</p>
-                <a className="mt-1 inline-block underline text-teal font-bold" href={x.url} target="_blank" rel="noreferrer">{x.src}<span className="sr-only"> (opens in a new tab)</span></a>
-              </li>
-            ))}
+          <p className="mt-4 text-base text-ink-soft">No sign-up. About two minutes. No real money.</p>
+          <ul className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-lg font-bold" aria-label="The three things SaySafe does">
+            <li className="flex items-center gap-2"><MessageSquareWarning className="size-6 text-teal" aria-hidden />Check a message</li>
+            <li className="flex items-center gap-2"><Mic className="size-6 text-teal" aria-hidden />Shop by voice</li>
+            <li className="flex items-center gap-2"><Users className="size-6 text-teal" aria-hidden />Get trusted help</li>
           </ul>
-          <p className="mt-5 text-base text-ink-soft">Sources last checked 2 November 2026. SaySafe has not been evaluated in the field and does not claim to have prevented any amount of fraud.</p>
-        </details>
-      </section>
-
-      {/* Before / during / after */}
-      <section aria-labelledby="phases" className="mt-24">
-        <p className="text-teal font-bold uppercase tracking-[0.14em] text-sm">What it does</p>
-        <h2 id="phases" className="text-[2rem] md:text-[2.5rem] mt-2 max-w-2xl">One connected journey, not just a scam checker.</h2>
-        <div className="mt-8 grid md:grid-cols-3 gap-5">
-          {phases.map(({ icon: Icon, when, title, text }) => (
-            <Card key={title} className="p-7">
-              <span className="inline-grid place-items-center size-14 rounded-2xl bg-teal-soft text-teal"><Icon className="size-7" aria-hidden /></span>
-              <p className="mt-5 text-sm font-bold uppercase tracking-[0.12em] text-ink-soft">{when}</p>
-              <h3 className="text-2xl mt-1">{title}</h3>
-              <p className="mt-2 text-ink-soft text-lg">{text}</p>
-            </Card>
-          ))}
+        </div>
+        <div className="lg:col-span-6 relative fade-up">
+          <img src="/hero-mary.webp" alt="An older woman smiling at her phone at a sunny kitchen table" width={928} height={1152} className="w-full max-w-[34rem] ml-auto rounded-[2rem] object-cover aspect-[4/5]" />
+          <figure className="absolute -bottom-8 left-0 sm:left-4 lg:-left-10 w-[56%] max-w-[15rem]">
+            <Phone src="/screens/check-result.webp" alt="SaySafe result screen: Suspicious. This message may be a scam, with a spoken explanation." />
+            <figcaption className="mt-2 text-sm font-bold text-ink-soft">Real SaySafe screen</figcaption>
+          </figure>
         </div>
       </section>
 
-
-      {/* Differentiator */}
-      <section aria-labelledby="invoice" className="mt-24 grid md:grid-cols-[1fr_1.1fr] gap-10 items-start">
-        <div>
-          <p className="text-teal font-bold uppercase tracking-[0.14em] text-sm">The hard case</p>
-          <h2 id="invoice" className="text-[2rem] md:text-[2.5rem] mt-2">Even a genuine PayPal invoice can contain suspicious instructions.</h2>
-          <p className="mt-4 text-xl text-ink-soft">Fraudsters can send real invoices or payment requests through PayPal and hide an alarming note or a fake phone number inside. A link to paypal.com proves very little. SaySafe reads what the message asks you to do.</p>
-          <a className="mt-4 inline-block underline text-teal font-bold text-lg" href="https://www.paypal.com/ie/cshelp/article/what-are-invoice-scams-and-payment-request-scams-on-paypal-help1059" target="_blank" rel="noreferrer">PayPal’s guidance on invoice scams<span className="sr-only"> (opens in a new tab)</span></a>
-        </div>
-        <Card className="p-7">
-          <p className="text-sm font-bold uppercase tracking-[0.12em] text-ink-soft">Example SaySafe found in a test screenshot</p>
-          <blockquote className="mt-3 rounded-xl bg-paper border border-line p-4 text-lg">“If you did NOT authorise this purchase, call our PayPal billing department immediately at +1 (808) 555-0199.”</blockquote>
-          <ul className="mt-4 grid gap-2 text-lg">
-            <li className="flex gap-3"><MessageSquareWarning className="size-6 shrink-0 text-danger mt-0.5" aria-hidden />A phone number inside the invoice note, not one SaySafe could verify</li>
-            <li className="flex gap-3"><MessageSquareWarning className="size-6 shrink-0 text-danger mt-0.5" aria-hidden />Pressure to act now, for a purchase you may not recognise</li>
-            <li className="flex gap-3"><CircleDashed className="size-6 shrink-0 text-amber mt-0.5" aria-hidden />Unknown: whether the seller is genuine</li>
-          </ul>
-          <p className="mt-4 text-lg font-bold">Safe next step: don’t call. Open the PayPal app yourself, or ask family.</p>
-        </Card>
-      </section>
-
-      {/* Home screen preview */}
-      <section aria-labelledby="simple" className="mt-24 rounded-[2rem] bg-navy text-white p-8 md:p-12 grid md:grid-cols-2 gap-10 items-center">
-        <div>
-          <h2 id="simple" className="text-[2rem] md:text-[2.5rem]">Three big buttons. That’s the whole app.</h2>
-          <p className="mt-4 text-xl text-white/85">No menus to learn and no chatbot to argue with. Everything is spoken aloud with captions, and you can make the text bigger at any time.</p>
-        </div>
-        <ul className="grid gap-3" aria-label="The three actions on the home screen">
-          {[[MessageSquareWarning, 'Check a message'], [Mic, 'Shop by voice'], [Users, 'Get trusted help']].map(([Icon, label]: any) => (
-            <li key={label} className="flex items-center gap-4 rounded-2xl bg-white text-navy px-6 py-5 text-2xl font-bold"><Icon className="size-8 text-teal" aria-hidden />{label}</li>
-          ))}
+      {/* Proof strip */}
+      <section aria-label="What powers the demo" className="border-y border-line bg-paper">
+        <ul className="wrap py-6 flex flex-wrap justify-between gap-x-8 gap-y-3 text-base font-bold text-ink-soft">
+          <li>PayPal Orders v2 · sandbox</li><li>Groq AI · text and screenshots</li><li>Family approval enforced on the server</li><li>WCAG 2.2 AA · automated checks</li><li>Open source · MIT</li>
         </ul>
       </section>
 
-      {/* How to try */}
-      <section id="how" aria-labelledby="try" className="mt-24 scroll-mt-24">
-        <p className="text-teal font-bold uppercase tracking-[0.14em] text-sm">Try it</p>
-        <h2 id="try" className="text-[2rem] md:text-[2.5rem] mt-2">See it work in three steps.</h2>
-        <ol className="mt-8 grid md:grid-cols-3 gap-5">
-          {steps.map((s) => (
-            <li key={s.n}><Card as="div" className="p-7 h-full">
-              <span className="font-display text-5xl text-teal" aria-hidden>{s.n}</span>
-              <h3 className="text-2xl mt-2">{s.title}</h3>
-              <p className="mt-2 text-ink-soft text-lg">{s.text}</p>
-            </Card></li>
-          ))}
-        </ol>
-        <div className="mt-8 flex flex-wrap gap-4">
-          <Button onClick={() => start('/check', {})} busy={busy} icon={<MessageSquareWarning className="size-6" aria-hidden />}>Check a fake message</Button>
-          <Button variant="secondary" onClick={() => start('/shop', {})} disabled={busy} icon={<ShoppingBag className="size-6" aria-hidden />}>Shop by voice</Button>
-        </div>
-      </section>
-
-      {/* Promises */}
-      <section aria-labelledby="promises" className="mt-24 grid md:grid-cols-2 gap-10">
-        <div>
-          <h2 id="promises" className="text-[2rem] md:text-[2.5rem]">Our safety promises.</h2>
-          <ul className="mt-6 grid gap-4">
-            {promises.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex gap-4 text-xl"><Icon className="size-7 shrink-0 text-teal mt-0.5" aria-hidden />{text}</li>
-            ))}
-          </ul>
-        </div>
-        <Card className="p-7">
-          <h3 className="text-2xl">What’s real in this demo</h3>
-          <ul className="mt-4 grid gap-3 text-lg">
-            {real.map(([label, isReal, note]) => (
-              <li key={label} className="flex gap-3">
-                {isReal ? <CheckCircle2 className="size-6 shrink-0 text-teal mt-0.5" aria-label="Real" /> : <CircleDashed className="size-6 shrink-0 text-amber mt-0.5" aria-label="Simulated" />}
-                <span>{label}{note && <span className="text-ink-soft"> — {note}</span>}</span>
+      {/* Why */}
+      <section aria-labelledby="impact" className="wrap py-20 md:py-28 reveal">
+        <p className="eyebrow">Why SaySafe exists</p>
+        <h2 id="impact" className="display-2 mt-3 max-w-[20ch]">A moment of doubt shouldn’t cost someone their savings.</h2>
+        <dl className="mt-14 grid md:grid-cols-2 gap-12 md:gap-16">
+          <div className="border-t-2 border-navy pt-6">
+            <dt className="sr-only">United States, 2025</dt>
+            <dd className="font-display text-[4.5rem] md:text-[6.5rem] leading-[0.9] tracking-[-0.03em] text-navy">US$3B</dd>
+            <dd className="mt-5 text-xl text-ink-soft max-w-[32ch]">in fraud losses reported by US adults aged 60 and over in 2025. <a className="link" href={sources[0].url} target="_blank" rel="noreferrer">FTC<span className="sr-only"> (opens in a new tab)</span></a></dd>
+          </div>
+          <div className="border-t-2 border-navy pt-6">
+            <dt className="sr-only">Ireland, 2025</dt>
+            <dd className="font-display text-[4.5rem] md:text-[6.5rem] leading-[0.9] tracking-[-0.03em] text-navy">€179M</dd>
+            <dd className="mt-5 text-xl text-ink-soft max-w-[32ch]">in fraudulent payments reported in Ireland in 2025, all ages. <a className="link" href={sources[2].url} target="_blank" rel="noreferrer">Central Bank of Ireland<span className="sr-only"> (opens in a new tab)</span></a></dd>
+          </div>
+        </dl>
+        <details className="mt-12 border-t border-line pt-2">
+          <summary className="cursor-pointer text-xl font-bold min-h-14 flex items-center gap-2 text-teal">Explore the research</summary>
+          <p className="mt-4 text-lg text-ink-soft max-w-[65ch]">Each figure comes from a different reporting system with its own definitions, so they can’t be added together or ranked. Reports count complaints or cases, not people, and many scams are never reported. Only the US figures refer to older adults.</p>
+          <ul className="mt-6 grid md:grid-cols-2 gap-x-12">
+            {sources.map((x) => (
+              <li key={x.url} className="border-t border-line py-5">
+                <p className="text-sm font-bold uppercase tracking-[0.12em] text-ink-soft">{x.where} · 2025</p>
+                <p className="text-xl mt-1"><span className="font-bold text-navy">{x.fig}</span>: {x.what}.</p>
+                <a className="link mt-1 inline-block" href={x.url} target="_blank" rel="noreferrer">{x.src}<span className="sr-only"> (opens in a new tab)</span></a>
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-base text-ink-soft">Full list in the project’s STATUS file on GitHub.</p>
-        </Card>
+          <p className="mt-4 text-base text-ink-soft">Sources last checked 2 November 2026. SaySafe hasn’t been evaluated in the field and doesn’t claim to have prevented any fraud.</p>
+        </details>
       </section>
 
+      {/* Showcase 1: ScamLens */}
+      <Showcase id="scan" eyebrow="Before you pay · Check a message" title="Even a genuine PayPal invoice can carry a fake phone number."
+        screens={[{ src: '/screens/check-result.webp', alt: 'SaySafe result: Suspicious, this message may be a scam, with the reasons and a Read it to me again button.' }]}>
+        <p>Scammers send real invoices with an alarming note inside. A link to paypal.com proves little, so SaySafe reads what the message asks you to do.</p>
+        <blockquote className="mt-6 border-l-4 border-danger pl-5 text-lg italic">“If you did NOT authorise this purchase, call our PayPal billing department immediately at +1 (808) 555-0199.”<span className="block not-italic text-sm font-bold text-ink-soft mt-2">From SaySafe’s sample invoice</span></blockquote>
+        <ul className="mt-6 grid gap-3 text-lg">
+          <li className="flex gap-3"><TriangleAlert className="size-6 shrink-0 text-danger mt-0.5" aria-hidden /><span><b>Warning sign:</b> a phone number inside the note</span></li>
+          <li className="flex gap-3"><TriangleAlert className="size-6 shrink-0 text-danger mt-0.5" aria-hidden /><span><b>Warning sign:</b> pressure to act now</span></li>
+          <li className="flex gap-3"><CircleHelp className="size-6 shrink-0 text-amber mt-0.5" aria-hidden /><span><b>Unknown:</b> whether the seller is genuine</span></li>
+        </ul>
+        <a className="link mt-6 inline-block text-lg" href="https://www.paypal.com/ie/cshelp/article/what-are-invoice-scams-and-payment-request-scams-on-paypal-help1059" target="_blank" rel="noreferrer">PayPal’s guidance on invoice scams<span className="sr-only"> (opens in a new tab)</span></a>
+      </Showcase>
 
-      {/* Can / cannot */}
-      <section aria-labelledby="limits" className="mt-24">
-        <h2 id="limits" className="text-[2rem] md:text-[2.5rem]">What SaySafe can and cannot do.</h2>
-        <div className="mt-8 grid md:grid-cols-2 gap-5">
-          <Card className="p-7"><h3 className="text-2xl">It can</h3><ul className="mt-4 grid gap-3 text-lg">{can.map((t) => <li key={t} className="flex gap-3"><CheckCircle2 className="size-6 shrink-0 text-teal mt-0.5" aria-hidden />{t}</li>)}</ul></Card>
-          <Card className="p-7"><h3 className="text-2xl">It cannot</h3><ul className="mt-4 grid gap-3 text-lg">{cannot.map((t) => <li key={t} className="flex gap-3"><CircleDashed className="size-6 shrink-0 text-ink-soft mt-0.5" aria-hidden />{t}</li>)}</ul></Card>
+      {/* Showcase 2: Family */}
+      <Showcase id="family" dark flip eyebrow="While you pay · Get trusted help" title="Bigger purchases wait for someone you trust."
+        screens={[{ src: '/screens/family-waiting.webp', alt: 'Mary’s screen: Waiting for family, Simple Dial Microwave 20L, €120, with a Cancel this purchase button.', cap: 'Mary’s phone' }, { src: '/screens/family-request.webp', alt: 'Family member Alex’s screen: Above Mary’s limit of €75, the microwave for €120, with Approve and Decline buttons.', cap: 'Alex’s phone' }]}>
+        <p>Over Mary’s limit, SaySafe sends her family the exact item, shop and price. The answer applies only to that purchase and expires. Mary still approves at PayPal herself, so nobody can pay for her.</p>
+      </Showcase>
+
+      {/* Showcase 3: Checkout + receipt */}
+      <Showcase id="receipt" eyebrow="After you pay · A receipt you can hear" title="It says “paid” only after PayPal confirms it."
+        screens={[{ src: '/screens/receipt.webp', alt: 'SaySafe receipt: Paid, Easy-Pour Electric Kettle, €32.00 EUR, Receipt confirmed by PayPal, with order and transaction numbers.', cap: 'Sandbox payment, 2 Nov 2026' }]}>
+        <p>Mary approves on PayPal’s own page. SaySafe then captures the payment and shows the amount, the shop and PayPal’s transaction number, and reads them aloud.</p>
+        <p className="mt-5 rounded-2xl bg-amber-soft text-amber font-bold px-5 py-4 text-base">This screenshot is a real PayPal sandbox payment of €32.00 with test money. No real money moved.</p>
+      </Showcase>
+
+      {/* Showcase 4: Voice */}
+      <Showcase id="voice" dark flip eyebrow="Accessibility · Shop by voice" title="Just say what you need."
+        screens={[{ src: '/screens/shop-voice.webp', alt: 'SaySafe shopping screen: a large Tap to speak microphone button, a text box with I need a kettle, and the spoken reply shown as a caption.' }]}>
+        <p>Tap the big button and ask for “a reliable kettle under €40”, or type it instead. Every spoken reply is also shown as text, and you can make text bigger or switch to high contrast at any time.</p>
+        <p className="mt-5 text-base opacity-85">This screenshot used the typed request. Microphone use on real phones is still being tested.</p>
+      </Showcase>
+
+      {/* Journey */}
+      <section id="journey" aria-labelledby="try" className="wrap py-20 md:py-28 scroll-mt-24 reveal">
+        <p className="eyebrow">Try it yourself</p>
+        <h2 id="try" className="display-2 mt-3 max-w-[18ch]">Walk through Mary’s afternoon.</h2>
+        <ol className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-8">
+          {journey.map((t, i) => (
+            <li key={t} className="border-t border-line pt-5 flex gap-4 text-xl">
+              <span className="font-display text-3xl text-teal leading-none" aria-hidden>{i + 1}</span><span>{t}</span>
+            </li>
+          ))}
+        </ol>
+        <div className="mt-12 flex flex-wrap gap-4">
+          <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button>
+          <Button variant="secondary" onClick={() => start('/shop', {})} disabled={busy} icon={<ShoppingBag className="size-6" aria-hidden />}>Go straight to shopping</Button>
+        </div>
+      </section>
+
+      {/* Honesty */}
+      <section aria-labelledby="limits" className="bg-paper border-t border-line">
+        <div className="wrap py-20 md:py-28 grid lg:grid-cols-3 gap-12 reveal">
+          <div>
+            <h2 id="limits" className="display-3">What SaySafe can and cannot do</h2>
+            <p className="mt-4 text-lg text-ink-soft">SaySafe helps you spot warning signs and make more informed payment decisions. It never calls a payment request “safe”.</p>
+          </div>
+          <div>
+            <h3 className="text-2xl">It can</h3>
+            <ul className="mt-4 grid gap-3 text-lg">{can.map((t) => <li key={t} className="flex gap-3"><CheckCircle2 className="size-6 shrink-0 text-teal mt-0.5" aria-hidden />{t}</li>)}</ul>
+          </div>
+          <div>
+            <h3 className="text-2xl">It cannot</h3>
+            <ul className="mt-4 grid gap-3 text-lg">{cannot.map((t) => <li key={t} className="flex gap-3"><CircleX className="size-6 shrink-0 text-ink-soft mt-0.5" aria-hidden />{t}</li>)}</ul>
+          </div>
+          <div className="lg:col-span-3 border-t border-line pt-10 grid lg:grid-cols-3 gap-12">
+            <h3 className="display-3">What’s real in this demo</h3>
+            <ul className="lg:col-span-2 grid sm:grid-cols-2 gap-x-10 gap-y-3 text-lg">
+              {real.map(([label, isReal, note]) => (
+                <li key={label} className="flex gap-3">
+                  {isReal ? <CheckCircle2 className="size-6 shrink-0 text-teal mt-0.5" aria-hidden /> : <CircleDashed className="size-6 shrink-0 text-amber mt-0.5" aria-hidden />}
+                  <span><span className="sr-only">{isReal ? 'Real: ' : 'Not real yet: '}</span>{label}{note && <span className="text-ink-soft"> ({note})</span>}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </section>
 
       {/* Final CTA */}
-      <section className="mt-24 mb-6 rounded-[2rem] bg-teal-soft p-8 md:p-12 text-center">
-        <h2 className="text-[2rem] md:text-[2.5rem]">Shop simply. Pay safely.</h2>
-        <p className="mt-3 text-xl text-ink-soft">Try the full demo in about two minutes.</p>
-        <div className="mt-6 flex justify-center"><Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button></div>
+      <section className="bg-navy text-white">
+        <div className="wrap py-20 md:py-24 flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+          <h2 className="display-2 max-w-[16ch] text-white">Shop simply. Pay safely.</h2>
+          <Button onClick={() => start()} busy={busy} className="!bg-white !text-navy hover:!bg-teal-soft" icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button>
+        </div>
       </section>
     </Layout>
+  );
+}
+
+function Phone({ src, alt }: { src: string; alt: string }) {
+  return (
+    <div className="rounded-[2rem] bg-navy p-2 shadow-[0_24px_60px_-28px_rgb(21_40_59/0.55)]">
+      <img src={src} alt={alt} width={390} height={844} decoding="async" className="block w-full rounded-[1.5rem] bg-paper" />
+    </div>
+  );
+}
+
+function Showcase({ id, eyebrow, title, children, screens, dark, flip }: { id: string; eyebrow: string; title: string; children: ReactNode; screens: { src: string; alt: string; cap?: string }[]; dark?: boolean; flip?: boolean }) {
+  return (
+    <section aria-labelledby={id} className={dark ? 'bg-navy text-white' : ''}>
+      <div className="wrap py-20 md:py-28 grid lg:grid-cols-12 gap-12 lg:gap-16 items-center reveal">
+        <div className={`lg:col-span-6 ${flip ? 'lg:order-2' : ''} ${dark ? '[&_.link]:!text-white' : ''}`}>
+          <p className={`eyebrow ${dark ? '!text-teal-soft' : ''}`}>{eyebrow}</p>
+          <h2 id={id} className={`display-2 mt-3 ${dark ? 'text-white' : ''}`}>{title}</h2>
+          <div className={`mt-6 text-xl leading-relaxed max-w-[52ch] ${dark ? 'text-white/90' : 'text-ink-soft'}`}>{children}</div>
+        </div>
+        <div className={`lg:col-span-6 flex justify-center gap-5 ${flip ? 'lg:order-1' : ''}`}>
+          {screens.map((s) => (
+            <figure key={s.src} className={screens.length > 1 ? 'w-1/2 max-w-[15rem]' : 'w-[70%] max-w-[18rem]'}>
+              <Phone src={s.src} alt={s.alt} />
+              {s.cap && <figcaption className={`mt-3 text-center text-base font-bold ${dark ? 'text-white/85' : 'text-ink-soft'}`}>{s.cap}</figcaption>}
+            </figure>
+          ))}
+        </div>
+      </div>
+    </section>
   );
 }
