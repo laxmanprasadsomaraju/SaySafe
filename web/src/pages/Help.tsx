@@ -39,7 +39,7 @@ export default function Help() {
   if (!me) return <Layout><p>Loading…</p></Layout>;
   return (
     <Layout>
-      <PageTitle eyebrow="Trusted help" title="Help you can trust" lead="Every PayPal link here was checked by hand on PayPal's own website. I never give you phone numbers copied from messages." />
+      <PageTitle eyebrow="Trusted help" title="Help you can trust" lead="These links go straight to PayPal's own website. Type paypal.com yourself if you are ever unsure. I never give you phone numbers copied from messages." />
 
       {selected && (
         <Card className="p-6 md:p-8 mb-6 fade-up border-2 border-amber">

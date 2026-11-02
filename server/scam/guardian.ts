@@ -85,8 +85,14 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
         { role: 'user', content: `User's name: ${name}\nRule engine verdict: ${verdict}\nRule signals:\n${signalsBrief}\n\n<untrusted_message>\n${input.slice(0, 6000)}\n</untrusted_message>` },
       ], { fast: true, maxTokens: 700 });
       aiVerdict = res.data.verdict;
-      verdict = mergeVerdict(verdict, res.data.verdict);
-      aiReasons = res.data.reasons;
+      if (verdict === 'verified_official_contact') {
+        // Deterministic rules only verify a bare PayPal help/home page with zero warning signals.
+        // A model cannot see more than that, so its generic doubt must not contradict the check.
+        aiVerdict = verdict === mergeVerdict(verdict, res.data.verdict) ? aiVerdict : null;
+      } else {
+        verdict = mergeVerdict(verdict, res.data.verdict);
+        aiReasons = res.data.reasons;
+      }
       spoken = res.data.spoken_summary;
       Object.assign(ai, { used: true, provider: res.provider, model: res.model });
     } catch (e: any) {

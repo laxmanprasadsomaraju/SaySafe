@@ -250,5 +250,8 @@ export function decideVerdict(signals: Signal[], officialMatches: string[], link
 export function mergeVerdict(rules: Verdict, ai: Verdict | null | undefined): Verdict {
   const rank: Record<Verdict, number> = { verified_official_contact: 0, needs_verification: 1, suspicious: 2 };
   if (!ai || ai === 'verified_official_contact') return rules; // AI can never grant "verified"
+  // Rules only say "verified" for a bare official PayPal help/home page with no warning signals.
+  // A model's vague doubt about that can lower it to "needs checking", but not to "scam".
+  if (rules === 'verified_official_contact' && ai === 'suspicious') return 'needs_verification';
   return rank[ai] > rank[rules] ? ai : rules;
 }

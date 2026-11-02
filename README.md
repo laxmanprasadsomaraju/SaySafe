@@ -10,6 +10,8 @@ Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/)
 
 ---
 
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/laxmanprasadsomaraju/SaySafe)
+
 ## Why
 
 Most shopping assistants try to make paying *faster*. For many older people the problem is the opposite: fake "PayPal" texts, look-alike links, pressure to pay now, and checkouts that are hard to read. SaySafe makes paying **safer**:
@@ -24,12 +26,12 @@ Most shopping assistants try to make paying *faster*. For many older people the 
 
 | | Feature | Status |
 |---|---|---|
-| 🛡️ | **Scam Message Guardian** — paste text, a link, email or phone number, upload a screenshot, or read it aloud. Look-alike domains, brand-in-subdomain, punycode, `@` tricks, shorteners, IP links, urgency, gift-card and password requests, free-mail "support". Plain-English, spoken result with safe next steps. | ✅ Working |
-| ✅ | **Trusted official directory** — hand-verified PayPal help pages and the phishing report address, each with source URL and date. No scraped phone numbers. | ✅ Working |
-| 🎙️ | **Voice shopping** — "Find me a reliable kettle under €40." Groq Whisper speech-to-text, AI intent, spoken options, exact price and merchant read back. Text input everywhere too. | ✅ Working |
-| 💳 | **Real PayPal sandbox checkout** — server-side Orders v2, payer approval at PayPal, server-side verified capture, idempotent requests, spoken receipt from PayPal's capture data. | ✅ Working (sandbox) |
-| 👪 | **Family spending protection** — purchases above a limit (default €75) need a trusted relative's approval, bound to the exact basket, amount, currency and merchant, with expiry and replay protection. Family can never pay from the user's account. | ✅ Working |
-| 📦 | **Order problems** — "My kettle never arrived": receipt, seller first, then PayPal's official Resolution Centre. Never promises a refund. Demo-merchant refund via Payments API for our own sandbox shop. | ✅ Working |
+| 🛡️ | **Scam Message Guardian** — paste text, a link, email or phone number, upload a screenshot (vision: not yet tested live), or read it aloud. Look-alike domains, brand-in-subdomain, punycode, `@` tricks, shorteners, IP links, urgency, gift-card and password requests, free-mail "support". Plain-English, spoken result with safe next steps. | ✅ Text/links tested; screenshot pending |
+| ✅ | **Trusted official directory** — PayPal help pages fetched from paypal.com on 2026-11-02, plus the phishing report address. No scraped phone numbers. | ✅ Checked |
+| 🎙️ | **Voice shopping** — "Find me a reliable kettle under €40." Groq Whisper speech-to-text, AI intent, spoken options, exact price and merchant read back. Text input everywhere too. | ✅ Text tested; mic needs a real-device test |
+| 💳 | **Real PayPal sandbox checkout** — server-side Orders v2, payer approval at PayPal, server-side verified capture, idempotent requests, spoken receipt from PayPal's capture data. | ✅ Sandbox order + capture verified; buyer-login approval pending |
+| 👪 | **Family spending protection** — purchases above a limit (default €75) need a trusted relative's approval, bound to the exact basket, amount, currency and merchant, with expiry and replay protection. Family can never pay from the user's account. | ✅ Tested (HTTP + browser) |
+| 📦 | **Order problems** — "My kettle never arrived": receipt, seller first, then PayPal's official Resolution Centre. Never promises a refund. Demo-merchant refund via Payments API for our own sandbox shop. | 🟡 Built, refund not tested live |
 | 🔔 | **Verified webhooks** — PayPal signature verification, deduplication, amount checks, reconciliation. | ✅ Code + tests (needs `PAYPAL_WEBHOOK_ID` on deploy) |
 
 ## Accessibility
