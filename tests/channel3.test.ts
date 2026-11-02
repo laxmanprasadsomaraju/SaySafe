@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { normaliseProducts, searchChannel3, Channel3Error, describeDiscovery } from '../server/catalogue/channel3';
+import { normaliseProducts, searchChannel3, Channel3Error, describeDiscovery, relevant } from '../server/catalogue/channel3';
 
 const sample = {
   products: [
@@ -64,5 +64,14 @@ describe('Channel3 search client', () => {
   it('empty results are an empty list, not an error', async () => {
     const r = await searchChannel3('nothing', { fetchImpl: fake(200, { products: [] }) });
     expect(r.products).toEqual([]);
+  });
+});
+
+describe('relevance guard', () => {
+  it('drops products that mention none of the query words', () => {
+    const ps = normaliseProducts(sample, 'EUR', 150);
+    expect(relevant(ps, 'microwave')).toHaveLength(1);
+    expect(relevant(ps, 'microwaves')).toHaveLength(1);
+    expect(relevant(ps, 'flurbnog widget')).toHaveLength(0);
   });
 });

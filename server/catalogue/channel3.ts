@@ -127,9 +127,17 @@ export async function searchChannel3(
   if (res.status === 422 || res.status === 400) throw new Channel3Error('bad_request', 'That search could not be run.');
   if (!res.ok) throw new Channel3Error('upstream', `Product search failed (${res.status}).`);
   const raw = await res.json().catch(() => null);
-  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: normaliseProducts(raw, currency, maxPrice).slice(0, 6) };
+  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: relevant(normaliseProducts(raw, currency, maxPrice), q, new Map(((raw as any)?.products ?? []).filter((p: any) => typeof p?.id === 'string').map((p: any) => [p.id, String(p?.category?.title ?? '')]))).slice(0, 6) };
   if (!opts.fetchImpl) cache.set(cacheKey, { at: Date.now(), value });
   return value;
+}
+
+/** Keep products whose title or category mentions at least one meaningful query word (guards against nonsense matches). */
+export function relevant(products: DiscoveryProduct[], query: string, categories: Map<string, string> = new Map()): DiscoveryProduct[] {
+  const stem = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/(es|s)$/, '');
+  const words = query.split(/\s+/).map(stem).filter((w) => w.length >= 3 && !['under', 'for', 'the', 'and', 'with', 'cheap', 'best', 'find', 'need'].includes(w));
+  if (!words.length) return products;
+  return products.filter((p) => { const hay = `${p.title} ${categories.get(p.id) ?? ''}`.toLowerCase(); return words.some((w) => hay.includes(w)); });
 }
 
 /** Plain spoken summary. Never claims SaySafe sells or guarantees these items. */
