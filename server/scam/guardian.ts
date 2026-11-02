@@ -93,8 +93,7 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
         verdict = mergeVerdict(verdict, res.data.verdict);
         aiReasons = res.data.reasons;
       }
-      // If the model disagreed with a deterministic "official" match, don't speak its contradicting text.
-      spoken = verdict === 'verified_official_contact' && res.data.verdict !== 'verified_official_contact' ? '' : res.data.spoken_summary;
+      spoken = res.data.spoken_summary;
       Object.assign(ai, { used: true, provider: res.provider, model: res.model });
     } catch (e: any) {
       ai.error = String(e?.message ?? e).slice(0, 200);
