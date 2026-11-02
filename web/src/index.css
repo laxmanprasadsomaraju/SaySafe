@@ -81,7 +81,7 @@ main:focus, main:focus-visible { outline: none; }
 }
 
 /* ---------- Landing (public) ---------- */
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; scroll-padding-top: 6rem; } /* sticky header never hides an anchor or focused element */
 .wrap { width: 100%; max-width: 80rem; margin-inline: auto; padding-inline: 1.25rem; }
 @media (min-width: 768px) { .wrap { padding-inline: 2.5rem; } }
 .eyebrow { color: var(--color-teal); font-weight: 700; text-transform: uppercase; letter-spacing: .14em; font-size: .9375rem; }

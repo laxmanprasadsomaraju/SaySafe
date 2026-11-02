@@ -32,7 +32,9 @@ const big = await post(m, '/api/payments', { items: [{ productId: 'microwave', q
 await m.goto(`${BASE}/order/${big.body.request.id}`); await m.waitForLoadState('networkidle'); await m.waitForTimeout(600);
 await shot(m, 'family-waiting');
 await f.goto(BASE + '/family'); await f.waitForLoadState('networkidle'); await f.waitForTimeout(600);
-await shot(f, 'family-request', 'text=/Approve/');
+// Show the whole request card with both Approve and Decline fully in frame.
+await f.evaluate(() => { const d = [...document.querySelectorAll('button')].find((x) => /Decline/.test(x.textContent || '')); if (d) window.scrollBy(0, d.getBoundingClientRect().bottom - window.innerHeight + 32); });
+await shot(f, 'family-request');
 // 4. Real captured sandbox receipt
 if (process.env.RECEIPT_COOKIE && process.env.RECEIPT_ID) {
   const ctx = await b.newContext(phone);

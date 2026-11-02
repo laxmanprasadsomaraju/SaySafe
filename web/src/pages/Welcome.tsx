@@ -128,7 +128,7 @@ export default function Welcome() {
 
       {/* Showcase 2: Family */}
       <Showcase id="family" dark flip eyebrow="While you pay · Get trusted help" title="Bigger purchases wait for someone you trust."
-        screens={[{ src: '/screens/family-waiting.webp', alt: 'Mary’s screen: Waiting for family, Simple Dial Microwave 20L, €120, with a Cancel this purchase button.', cap: 'Mary’s phone' }, { src: '/screens/family-request.webp', alt: 'Family member Alex’s screen: Above Mary’s limit of €75, the microwave for €120, with Approve and Decline buttons.', cap: 'Alex’s phone' }]}>
+        screens={[{ src: '/screens/family-waiting.webp', alt: 'Mary’s screen: Waiting for family, Simple Dial Microwave 20L, €120, with a Cancel this purchase button.', cap: 'Mary’s phone: waiting' }, { src: '/screens/family-request.webp', alt: 'Family member Alex’s screen: Above Mary’s limit of €75, the microwave for €120, with Approve and Decline buttons.', cap: 'Alex’s phone: approves' }]}>
         <p>Over Mary’s limit, SaySafe sends her family the exact item, shop and price. The answer applies only to that purchase and expires. Mary still approves at PayPal herself, so nobody can pay for her.</p>
       </Showcase>
 
@@ -214,17 +214,18 @@ function Phone({ src, alt }: { src: string; alt: string }) {
 function Showcase({ id, eyebrow, title, children, screens, dark, flip }: { id: string; eyebrow: string; title: string; children: ReactNode; screens: { src: string; alt: string; cap?: string }[]; dark?: boolean; flip?: boolean }) {
   return (
     <section aria-labelledby={id} className={dark ? 'bg-navy text-white' : ''}>
-      <div className="wrap py-20 md:py-28 grid lg:grid-cols-12 gap-12 lg:gap-16 items-center reveal">
+      <div className="wrap py-14 sm:py-20 md:py-28 grid lg:grid-cols-12 gap-8 sm:gap-12 lg:gap-16 items-center reveal">
         <div className={`${screens.length > 1 ? 'lg:col-span-5' : 'lg:col-span-6'} ${flip ? 'lg:order-2' : ''} ${dark ? '[&_.link]:!text-white' : ''}`}>
           <p className={`eyebrow ${dark ? '!text-teal-soft' : ''}`}>{eyebrow}</p>
           <h2 id={id} className={`display-2 mt-3 ${dark ? 'text-white' : ''}`}>{title}</h2>
-          <div className={`mt-6 text-xl leading-relaxed max-w-[52ch] ${dark ? 'text-white/90' : 'text-ink-soft'}`}>{children}</div>
+          <div className={`mt-4 sm:mt-6 text-lg sm:text-xl leading-relaxed max-w-[52ch] ${dark ? 'text-white/90' : 'text-ink-soft'}`}>{children}</div>
         </div>
-        <div className={`${screens.length > 1 ? 'lg:col-span-7 flex flex-col sm:flex-row items-center sm:items-start' : 'lg:col-span-6 flex'} justify-center gap-8 sm:gap-6 ${flip ? 'lg:order-1' : ''}`}>
-          {screens.map((s) => (
-            <figure key={s.src} className={screens.length > 1 ? 'w-[86%] sm:w-1/2 max-w-[21rem]' : 'w-[86%] max-w-[22rem]'}>
+        <div className={`${screens.length > 1 ? 'lg:col-span-7 grid grid-cols-1 sm:grid-cols-2 justify-items-center items-start' : 'lg:col-span-6 flex justify-center'} gap-8 sm:gap-6 ${flip ? 'lg:order-1' : ''}`}>
+          {screens.map((s, i) => (
+            <figure key={s.src} className={screens.length > 1 ? 'w-[90%] sm:w-full max-w-[20rem] sm:max-w-[21rem]' : 'w-[84%] max-w-[22rem]'}>
+              {screens.length > 1 && s.cap && <figcaption className={`mb-3 flex items-center justify-center gap-2 text-base font-bold ${dark ? 'text-white' : 'text-ink'}`}><span aria-hidden className={`grid size-7 place-items-center rounded-full text-sm ${dark ? 'bg-white text-navy' : 'bg-navy text-white'}`}>{i + 1}</span>{s.cap}</figcaption>}
               <Phone src={s.src} alt={s.alt} />
-              {s.cap && <figcaption className={`mt-3 text-center text-base font-bold ${dark ? 'text-white/85' : 'text-ink-soft'}`}>{s.cap}</figcaption>}
+              {screens.length === 1 && s.cap && <figcaption className={`mt-3 text-center text-base font-bold ${dark ? 'text-white/85' : 'text-ink-soft'}`}>{s.cap}</figcaption>}
             </figure>
           ))}
         </div>
