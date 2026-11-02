@@ -5,7 +5,7 @@
  */
 import { parse as parseDomain } from 'tldts';
 import { domainToUnicode } from 'node:url';
-import { PROTECTED_BRANDS, TRUSTED_DOMAINS, TRUSTED_EMAILS, URL_SHORTENERS } from './directory.js';
+import { PROTECTED_BRANDS, TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES, URL_SHORTENERS, PAYPAL_USER_CONTENT_DOMAINS } from './directory.js';
 
 export type Severity = 'high' | 'medium' | 'info';
 export type Verdict = 'suspicious' | 'needs_verification' | 'verified_official_contact';
@@ -23,6 +23,8 @@ export interface ExtractedLink {
   hostname: string | null;
   registrableDomain: string | null;
   isOfficialPayPal: boolean;
+  /** For PayPal-owned links: a help page we verified, the home page, a page anyone can create (invoice, request, paypal.me), or another PayPal page. */
+  officialKind?: 'help' | 'home' | 'user_content' | 'other';
 }
 
 export interface RuleResult {
@@ -50,6 +52,15 @@ const SENSITIVE = [
 ];
 const GIFT_CARD = ['gift card', 'giftcard', 'itunes card', 'google play card', 'steam card', 'amazon voucher', 'crypto', 'bitcoin', 'usdt'];
 const PAY_DEMAND = ['pay', 'payment of', 'send €', 'send $', 'send £', 'refund fee', 'unlock fee', 'release fee', 'transfer'];
+const INVOICE_SCAM = [
+  'geek squad', 'norton', 'mcafee', 'bitcoin purchase', 'btc purchase', 'did not authorise', 'did not authorize',
+  "didn't authorise", "didn't authorize", 'not authorised', 'not authorized', 'if you did not make this',
+  'if this was not you', 'cancel this transaction', 'cancel this order', 'to dispute this', 'billing department',
+];
+// PayPal pages that ANY PayPal user can create and send: real PayPal URL, but not proof the sender is honest.
+const USER_CONTENT_PATH = /^\/(?:[a-z]{2}\/)?(?:invoice|invoices|request|myaccount\/transfer|paypalme|pools|donate|ncp|qrcodes|checkoutnow|webapps\/hermes|signin\/.*invoice)/i;
+const HOME_PATH = /^\/(?:[a-z]{2}(?:\/home)?\/?)?$/i;
+
 const CALL_US = ['call us', 'call our', 'contact our security team', 'call the number', 'ring us', 'phone us'];
 
 function norm(s: string) {
@@ -93,9 +104,20 @@ export function analyseLink(raw: string): { link: ExtractedLink; signals: Signal
   }
   const parsed = hostname ? parseDomain(hostname) : null;
   const registrable = parsed?.domain ?? null;
-  const official = isOfficialDomain(registrable);
+  const userContentDomain = !!registrable && PAYPAL_USER_CONTENT_DOMAINS.includes(registrable);
+  const official = isOfficialDomain(registrable) || userContentDomain;
   const link: ExtractedLink = { raw, hostname, registrableDomain: registrable, isOfficialPayPal: official };
   if (!hostname || !url) return { link, signals };
+  if (official) {
+    const bare = (url.origin + url.pathname).replace(/\/$/, '').toLowerCase();
+    if (TRUSTED_HELP_PAGES.some((p) => bare === p.value.replace(/\/$/, '').toLowerCase())) link.officialKind = 'help';
+    else if (userContentDomain || USER_CONTENT_PATH.test(url.pathname)) link.officialKind = 'user_content';
+    else if (HOME_PATH.test(url.pathname)) link.officialKind = 'home';
+    else link.officialKind = 'other';
+    if (link.officialKind === 'user_content') {
+      signals.push({ code: 'paypal_user_content', severity: 'medium', title: 'A real PayPal page that anyone can send', detail: 'Invoices, money requests and PayPal.me links are created by other users. A genuine PayPal address does not make the sender honest. Only pay if you expected it, and check inside the PayPal app.', evidence: hostname + url.pathname });
+    }
+  }
 
   // Raw credentials or @ trick: https://paypal.com@evil.com
   if (url.username || url.password || /@/.test(raw.replace(/^mailto:/i, '').split('/')[2] ?? '')) {
@@ -192,6 +214,11 @@ export function analyseText(input: string): RuleResult {
   const pay = hits(PAY_DEMAND);
   const amount = input.match(/[€$£]\s?\d[\d,.]*|\d[\d,.]*\s?(?:eur|euro|usd|gbp)/i);
   if (pay.length && amount) signals.push({ code: 'payment_demand', severity: 'medium', title: 'It demands a payment', detail: 'Check any payment request inside the PayPal app, never from a link.', evidence: amount[0] });
+  const inv = hits(INVOICE_SCAM);
+  if (inv.length) {
+    const strong = phones.length > 0 || links.some((l) => l.officialKind === 'user_content');
+    signals.push({ code: 'invoice_scam', severity: strong ? 'high' : 'medium', title: 'It looks like a fake invoice or charge', detail: 'Scammers send scary "you were charged" invoices so you call them. Check your real activity in the PayPal app. Never call a number on an invoice.', evidence: inv.slice(0, 3).join(', ') });
+  }
   const callUs = hits(CALL_US);
   if (callUs.length) signals.push({ code: 'call_us', severity: 'medium', title: 'It tells you to call or contact "support"', detail: 'Fake support lines are a common trick.', evidence: callUs.join(', ') });
   if (/\b(dear (customer|user|client|member))\b/.test(text)) signals.push({ code: 'generic_greeting', severity: 'info', title: 'It does not use your name', detail: 'Real PayPal emails usually greet you by your name.', evidence: 'dear customer' });
@@ -211,7 +238,8 @@ export function decideVerdict(signals: Signal[], officialMatches: string[], link
   if (high > 0 || med >= 2) return 'suspicious';
   const trimmed = input.trim();
   const isSingleToken = !/\s/.test(trimmed);
-  const allLinksOfficial = links.length > 0 && links.every((l) => l.isOfficialPayPal);
+  // Only pages we verified (help pages, home page) count. Invoices, requests and other PayPal pages never do.
+  const allLinksOfficial = links.length > 0 && links.every((l) => l.isOfficialPayPal && (l.officialKind === 'help' || l.officialKind === 'home'));
   if (isSingleToken && officialMatches.length > 0 && (links.length === 0 || allLinksOfficial) && med === 0) {
     return 'verified_official_contact';
   }

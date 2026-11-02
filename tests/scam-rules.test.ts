@@ -72,3 +72,18 @@ describe('AI may only escalate', () => {
   it('can escalate', () => expect(mergeVerdict('needs_verification', 'suspicious')).toBe('suspicious'));
   it('cannot grant verified', () => expect(mergeVerdict('needs_verification', 'verified_official_contact' as any)).toBe('needs_verification'));
 });
+
+describe('PayPal invoice and request scams', () => {
+  it('a lone real PayPal invoice link is not verified', () => {
+    expect(analyseText('https://www.paypal.com/invoice/p/#INV2-ABCD').verdict).toBe('needs_verification');
+  });
+  it('a paypal.me link is real PayPal but not verified', () => {
+    expect(analyseText('https://paypal.me/someone/50').verdict).toBe('needs_verification');
+  });
+  it('a fake "Geek Squad" invoice sent through real PayPal is suspicious', () => {
+    expect(analyseText('Invoice from Geek Squad €399 for renewal. If you did not authorise this call +1 808 555 0199. https://www.paypal.com/invoice/p/#INV2-XYZ').verdict).toBe('suspicious');
+  });
+  it('the official contact page is recognised', () => {
+    expect(analyseText('https://www.paypal.com/ie/cshelp/contact-us').verdict).toBe('verified_official_contact');
+  });
+});

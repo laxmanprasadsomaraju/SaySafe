@@ -77,6 +77,9 @@ export const TRUSTED_HELP_PAGES: TrustedResource[] = [
 /** Brands scammers impersonate, used for lookalike detection. */
 export const PROTECTED_BRANDS = ['paypal'];
 
+/** PayPal-owned domains whose pages are created by ordinary users (e.g. paypal.me/anyone). Never "verified". */
+export const PAYPAL_USER_CONTENT_DOMAINS = ['paypal.me'];
+
 /** Known URL shorteners: real links can use them, but they hide the destination. */
 export const URL_SHORTENERS = new Set([
   'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly',

@@ -65,6 +65,7 @@ export function createApp() {
   // CSRF: state-changing API calls must come from our own origin (cookies are SameSite=Lax too).
   app.use('/api', (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    if (req.get('sec-fetch-site') === 'cross-site') return res.status(403).json({ error: 'bad_origin' });
     const origin = req.get('origin');
     if (origin) {
       try {
