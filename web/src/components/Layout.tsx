@@ -29,7 +29,7 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
   useEffect(() => { localStorage.setItem('ss-voice', voiceOn ? 'on' : 'off'); if (!voiceOn) stopSpeaking(); }, [voiceOn]);
   useEffect(() => { stopSpeaking(); window.scrollTo(0, 0); document.getElementById('main')?.focus({ preventScroll: true }); }, [loc.pathname]);
 
-  const toggle = 'inline-flex items-center gap-2 rounded-full border-2 px-4 min-h-12 font-bold text-base';
+  const toggle = 'inline-flex items-center gap-2 rounded-full border-2 px-3 sm:px-4 min-h-12 font-bold text-[0.95rem] sm:text-base';
   return (
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Skip to main content</a>
@@ -40,11 +40,11 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
             {mode === 'elder' && loc.pathname !== '/home' && (
               <NavLink to="/home" className={`${toggle} border-teal text-teal`}><House className="size-5" aria-hidden />Home</NavLink>
             )}
-            <button type="button" className={`${toggle} ${large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={large} onClick={() => setLarge(!large)}><Type className="size-5" aria-hidden />Bigger text</button>
-            <button type="button" className={`${toggle} ${contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={contrast} onClick={() => setContrast(!contrast)}><Contrast className="size-5" aria-hidden />High contrast</button>
+            <button type="button" className={`${toggle} ${large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={large} onClick={() => setLarge(!large)}><Type className="size-5" aria-hidden />Bigger<span className="hidden sm:inline">&nbsp;text</span></button>
+            <button type="button" className={`${toggle} ${contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={contrast} onClick={() => setContrast(!contrast)}><Contrast className="size-5" aria-hidden />Contrast</button>
             {mode !== 'family' && (
-              <button type="button" className={`${toggle} ${voiceOn ? 'border-line' : 'bg-navy text-white border-navy'}`} aria-pressed={!voiceOn} onClick={() => setVoiceOn(!voiceOn)}>
-                {voiceOn ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}{voiceOn ? 'Voice on' : 'Voice off'}
+              <button type="button" className={`${toggle} ${voiceOn ? 'border-line' : 'bg-navy text-white border-navy'}`} aria-pressed={voiceOn} aria-label="Spoken replies" onClick={() => setVoiceOn(!voiceOn)}>
+                {voiceOn ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}{voiceOn ? 'Voice' : 'Muted'}
               </button>
             )}
           </nav>

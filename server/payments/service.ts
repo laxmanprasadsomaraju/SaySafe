@@ -238,7 +238,8 @@ function applyCaptureResult(r: any, orderOrCapture: any) {
   }
   const amt = Math.round(Number(capture.amount?.value) * 100);
   if (amt !== r.amount_cents || capture.amount?.currency_code !== r.currency) throw new PaymentError('amount_mismatch', 'Captured amount differs from approved amount.', 500);
-  const payee = orderOrCapture?.purchase_units?.[0]?.payee?.display_name ?? orderOrCapture?.purchase_units?.[0]?.payee?.email_address ?? 'SaySafe Demo Shop (sandbox)';
+  // Name the merchant as PayPal reports it; the sandbox business account has no display name, so fall back to our shop name.
+  const payee = orderOrCapture?.purchase_units?.[0]?.payee?.display_name ?? r.merchant;
   if (r.state === 'CAPTURE_PENDING') {
     transition(r, 'CAPTURED', 'paypal', { paypal_capture_id: capture.id, captured_amount: capture.amount.value, captured_currency: capture.amount.currency_code, payee_name: payee });
   }

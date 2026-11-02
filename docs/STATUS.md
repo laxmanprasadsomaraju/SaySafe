@@ -12,7 +12,10 @@ _Last updated: 2026-11-02 (Irish time)._
 - Elder Mode UI (home, check, shop, review, order/receipt, help) and Family Mode (pairing, approvals, limit, alerts, history).
 
 ## Implemented but unverified
-- Full buyer approval + capture in the sandbox via the browser (needs a sandbox personal buyer account run-through).
+- Real sandbox capture through SaySafe code verified 2026-11-02 (scripts/paypal-smoke.ts: order created, approved with PayPal test card, re-read and captured, EUR 32.00 COMPLETED).
+
+## Implemented but unverified (continued)
+- Buyer approval on PayPal's own page with a sandbox personal account (needs deployed URL for the return redirect).
 - Screenshot analysis with `qwen/qwen3.8-27b` (code done; live test pending).
 - Groq Whisper transcription from the browser microphone (needs a real mic test).
 - Webhook signature verification (needs deployed URL + `PAYPAL_WEBHOOK_ID`).

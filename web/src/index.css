@@ -65,6 +65,8 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing:
 }
 html.high-contrast :focus-visible { outline: 4px solid #000; }
 
+main:focus, main:focus-visible { outline: none; }
+
 .skip-link { position: absolute; left: -9999px; }
 .skip-link:focus { left: 1rem; top: 1rem; z-index: 50; background: var(--color-navy); color: white; padding: .75rem 1rem; border-radius: 12px; }
 

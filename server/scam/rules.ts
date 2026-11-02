@@ -136,7 +136,8 @@ export function analyseLink(raw: string): { link: ExtractedLink; signals: Signal
   return { link, signals };
 }
 
-function cap(s: string) { return s.charAt(0).toUpperCase() + s.slice(1); }
+const BRAND_NAMES: Record<string, string> = { paypal: 'PayPal' };
+function cap(s: string) { return BRAND_NAMES[s] ?? s.charAt(0).toUpperCase() + s.slice(1); }
 
 export function extract(text: string) {
   const links = Array.from(new Set((text.match(URL_RE) ?? []).filter((u) => !/@/.test(u.split('/')[0]) || /^https?:/i.test(u))));
