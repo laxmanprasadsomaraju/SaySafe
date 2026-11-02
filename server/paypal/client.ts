@@ -1,0 +1,113 @@
+/**
+ * PayPal REST (sandbox) client: OAuth, Orders v2, Payments (refund), webhook signature verification.
+ * Credentials come from env only and never reach the browser.
+ */
+const BASE = process.env.PAYPAL_API_BASE ?? 'https://api-m.sandbox.paypal.com';
+
+export function paypalConfigured() {
+  return Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+}
+
+let cached: { token: string; exp: number } | null = null;
+
+async function token(): Promise<string> {
+  if (cached && cached.exp > Date.now() + 60_000) return cached.token;
+  const id = process.env.PAYPAL_CLIENT_ID, secret = process.env.PAYPAL_CLIENT_SECRET;
+  if (!id || !secret) throw new Error('PayPal credentials missing (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET)');
+  const res = await fetch(`${BASE}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: { Authorization: 'Basic ' + Buffer.from(`${id}:${secret}`).toString('base64'), 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'grant_type=client_credentials',
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`PayPal OAuth failed: ${res.status}`);
+  const data = (await res.json()) as any;
+  cached = { token: data.access_token, exp: Date.now() + data.expires_in * 1000 };
+  return cached.token;
+}
+
+async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(20000),
+  });
+  const text = await res.text();
+  let data: any = null;
+  try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+  if (!res.ok) {
+    const err = new Error(`PayPal ${method} ${path} -> ${res.status} ${data?.name ?? ''} ${data?.details?.[0]?.issue ?? data?.message ?? ''}`.trim()) as Error & { status: number; data: any };
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+export interface OrderItem { name: string; unitAmountCents: number; quantity: number; sku: string }
+
+const money = (cents: number) => (cents / 100).toFixed(2);
+
+export async function createOrder(args: { requestId: string; items: OrderItem[]; currency: string; returnUrl: string; cancelUrl: string; brandName: string }) {
+  const total = args.items.reduce((s, i) => s + i.unitAmountCents * i.quantity, 0);
+  return call('POST', '/v2/checkout/orders', {
+    intent: 'CAPTURE',
+    purchase_units: [{
+      reference_id: args.requestId,
+      custom_id: args.requestId,
+      description: 'SaySafe demo purchase (sandbox)',
+      amount: { currency_code: args.currency, value: money(total), breakdown: { item_total: { currency_code: args.currency, value: money(total) } } },
+      items: args.items.map((i) => ({ name: i.name.slice(0, 127), sku: i.sku, quantity: String(i.quantity), unit_amount: { currency_code: args.currency, value: money(i.unitAmountCents) }, category: 'PHYSICAL_GOODS' })),
+    }],
+    payment_source: {
+      paypal: {
+        experience_context: {
+          brand_name: args.brandName,
+          user_action: 'PAY_NOW',
+          shipping_preference: 'NO_SHIPPING',
+          return_url: args.returnUrl,
+          cancel_url: args.cancelUrl,
+          landing_page: 'LOGIN',
+        },
+      },
+    },
+  }, { 'PayPal-Request-Id': `create-${args.requestId}` });
+}
+
+export const getOrder = (orderId: string) => call('GET', `/v2/checkout/orders/${encodeURIComponent(orderId)}`);
+
+/** Idempotent capture: PayPal-Request-Id makes retries safe. */
+export const captureOrder = (orderId: string, requestId: string) =>
+  call('POST', `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {}, { 'PayPal-Request-Id': `capture-${requestId}`, Prefer: 'return=representation' });
+
+export const refundCapture = (captureId: string, requestId: string) =>
+  call('POST', `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {}, { 'PayPal-Request-Id': `refund-${requestId}`, Prefer: 'return=representation' });
+
+/** Verify a webhook via PayPal's verify-webhook-signature API. */
+export async function verifyWebhook(headers: Record<string, string | string[] | undefined>, rawBody: string): Promise<boolean> {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  if (!webhookId) return false;
+  const h = (k: string) => String(headers[k] ?? '');
+  const data = await call('POST', '/v1/notifications/verify-webhook-signature', {
+    auth_algo: h('paypal-auth-algo'),
+    cert_url: h('paypal-cert-url'),
+    transmission_id: h('paypal-transmission-id'),
+    transmission_sig: h('paypal-transmission-sig'),
+    transmission_time: h('paypal-transmission-time'),
+    webhook_id: webhookId,
+    webhook_event: JSON.parse(rawBody),
+  });
+  return data?.verification_status === 'SUCCESS';
+}
+
+export function approveLink(order: any): string | null {
+  const l = (order?.links ?? []).find((x: any) => x.rel === 'payer-action' || x.rel === 'approve');
+  if (!l) return null;
+  // Only ever redirect to PayPal's own domains (no open redirect).
+  try {
+    const host = new URL(l.href).hostname;
+    if (host === 'www.sandbox.paypal.com' || host === 'www.paypal.com' || host.endsWith('.paypal.com')) return l.href;
+  } catch { /* ignore */ }
+  return null;
+}

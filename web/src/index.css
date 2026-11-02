@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+@import '@fontsource/atkinson-hyperlegible-next/400.css';
+@import '@fontsource/atkinson-hyperlegible-next/700.css';
+@import '@fontsource-variable/fraunces';
+
+/* ---------- Design tokens ---------- */
+@theme {
+  --color-ivory: #f7f8f4;
+  --color-paper: #ffffff;
+  --color-navy: #15283b;
+  --color-ink-soft: #3d4f61;
+  --color-line: #dfe5df;
+  --color-teal: #087d70;
+  --color-teal-deep: #06665c;
+  --color-teal-soft: #e4f3ef;
+  --color-amber: #b96816;
+  --color-amber-soft: #fbf0e2;
+  --color-danger: #b42332;
+  --color-danger-soft: #fbe9eb;
+
+  --font-sans: 'Atkinson Hyperlegible Next', system-ui, sans-serif;
+  --font-display: 'Fraunces Variable', Georgia, serif;
+
+  --text-body: 1.25rem;     /* 20px */
+  --text-lead: 1.375rem;    /* 22px */
+  --text-title: 2rem;       /* 32px */
+  --text-hero: 2.75rem;     /* 44px */
+
+  --radius-card: 1.25rem;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 2px rgb(21 40 59 / 0.04), 0 8px 24px -12px rgb(21 40 59 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(21 40 59 / 0.06), 0 18px 40px -18px rgb(8 125 112 / 0.35);
+}
+
+:root {
+  color-scheme: light;
+  font-size: 100%;
+}
+html.large-text { font-size: 118.75%; } /* ~19px base → all rem scale up */
+html.high-contrast {
+  --color-ivory: #ffffff;
+  --color-ink-soft: #15283b;
+  --color-line: #15283b;
+  --color-teal: #00564d;
+  --color-teal-deep: #003f38;
+  --color-amber: #7a3f00;
+  --color-danger: #8a0012;
+}
+
+body {
+  background: var(--color-ivory);
+  color: var(--color-navy);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; line-height: 1.15; }
+
+:focus-visible {
+  outline: 3px solid var(--color-teal);
+  outline-offset: 3px;
+  border-radius: 12px;
+}
+html.high-contrast :focus-visible { outline: 4px solid #000; }
+
+.skip-link { position: absolute; left: -9999px; }
+.skip-link:focus { left: 1rem; top: 1rem; z-index: 50; background: var(--color-navy); color: white; padding: .75rem 1rem; border-radius: 12px; }
+
+/* Microphone pulse while listening */
+@keyframes ring { 0% { box-shadow: 0 0 0 0 rgb(8 125 112 / .35); } 100% { box-shadow: 0 0 0 28px rgb(8 125 112 / 0); } }
+.mic-listening { animation: ring 1.4s ease-out infinite; }
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-up { animation: fade-up .35s ease-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

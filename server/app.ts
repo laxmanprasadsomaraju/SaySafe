@@ -1,0 +1,274 @@
+import express, { type Request, type Response, type NextFunction } from 'express';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cookieParser from 'cookie-parser';
+import multer from 'multer';
+import path from 'node:path';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import { z } from 'zod';
+import { db, audit } from './db/index.js';
+import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId } from './auth.js';
+import { scanMessage, extractFromImage, explainMore } from './scam/guardian.js';
+import { TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES } from './scam/directory.js';
+import { PRODUCTS, searchProducts, getProduct } from './catalogue/products.js';
+import { interpret, describeOptions, eur } from './ai/agent.js';
+import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from './ai/provider.js';
+import * as pay from './payments/service.js';
+import { paypalConfigured, verifyWebhook } from './paypal/client.js';
+import { SAMPLE_MESSAGES } from './scam/samples.js';
+
+export function createApp() {
+  const app = express();
+  app.set('trust proxy', 1);
+  app.disable('x-powered-by');
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        imgSrc: ["'self'", 'data:', 'blob:'],
+        mediaSrc: ["'self'", 'blob:'],
+        connectSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        fontSrc: ["'self'", 'data:'],
+        frameAncestors: ["'none'"],
+        formAction: ["'self'", 'https://www.sandbox.paypal.com', 'https://www.paypal.com'],
+      },
+    },
+    crossOriginEmbedderPolicy: false,
+  }));
+  app.use(cookieParser());
+
+  // Webhook needs the raw body for signature verification: register before json parser.
+  app.post('/api/paypal/webhook', express.raw({ type: 'application/json', limit: '200kb' }), async (req, res) => {
+    const raw = req.body instanceof Buffer ? req.body.toString('utf8') : '';
+    let event: any;
+    try { event = JSON.parse(raw); } catch { return res.status(400).end(); }
+    let verified = false;
+    try { verified = await verifyWebhook(req.headers as any, raw); } catch { verified = false; }
+    const id = String(event?.id ?? '');
+    if (!id) return res.status(400).end();
+    if (!verified) return res.status(400).json({ error: 'unverified' }); // never act on (or store) unverified events
+    const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, String(event.event_type ?? ''), String(event?.resource?.id ?? ''), raw.slice(0, 100000));
+    if (ins.changes === 0) return res.status(200).json({ ok: true, duplicate: true });
+    const outcome = pay.reconcileFromWebhook(event);
+    res.json({ ok: true, outcome });
+  });
+
+  app.use(express.json({ limit: '100kb' }));
+
+  const apiLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
+  const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
+  app.use('/api', apiLimiter);
+
+  // CSRF: state-changing API calls must come from our own origin (cookies are SameSite=Lax too).
+  app.use('/api', (req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    const origin = req.get('origin');
+    if (origin) {
+      try {
+        if (new URL(origin).host !== req.get('host')) return res.status(403).json({ error: 'bad_origin' });
+      } catch { return res.status(403).json({ error: 'bad_origin' }); }
+    }
+    next();
+  });
+
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
+  const originOf = (req: Request) => process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`;
+  const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
+
+  // ---------- Status ----------
+  app.get('/api/health', wrap(async (_req, res) => {
+    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), time: new Date().toISOString() });
+  }));
+  app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), demo: true }));
+
+  // ---------- Sessions ----------
+  app.post('/api/demo/start', (req, res) => {
+    const name = z.string().trim().min(1).max(40).catch('Mary').parse(req.body?.name);
+    const { householdId } = startDemoHousehold(res, name);
+    res.json({ ok: true, householdId: householdId.slice(0, 6) });
+  });
+  app.get('/api/me', (req, res) => {
+    const elder = readSession(req, 'elder');
+    const family = readSession(req, 'family');
+    res.json({ elder: elder && { name: elder.name }, family: family && { name: family.name } });
+  });
+  app.post('/api/logout', (req, res) => { logout(req, res, req.body?.role === 'family' ? 'family' : 'elder'); res.json({ ok: true }); });
+
+  app.post('/api/family/invite', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    res.json(createPairingCode(s.householdId, s.userId));
+  });
+  const pairLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10 });
+  app.post('/api/family/pair', pairLimiter, (req, res) => {
+    const code = String(req.body?.code ?? '');
+    const name = z.string().trim().min(1).max(40).catch('Alex').parse(req.body?.name);
+    const r = redeemPairingCode(res, code, name);
+    if (!r) return res.status(400).json({ error: 'bad_code', message: 'That code is wrong or has expired. Ask for a new one.' });
+    res.json({ ok: true });
+  });
+
+  // ---------- Scam guardian ----------
+  app.get('/api/trusted', (_req, res) => res.json({ domains: TRUSTED_DOMAINS, emails: TRUSTED_EMAILS, helpPages: TRUSTED_HELP_PAGES }));
+  app.get('/api/samples', (_req, res) => res.json(SAMPLE_MESSAGES));
+
+  app.post('/api/scan', aiLimiter, wrap(async (req, res) => {
+    const s = readSession(req, 'elder');
+    const text = z.string().trim().min(1).max(8000).parse(req.body?.text);
+    const result = await scanMessage(text, { userName: s?.name ?? 'Mary' });
+    const scanId = newId('scan');
+    db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
+    res.json({ scanId, ...result });
+  }));
+
+  app.post('/api/scan/image', aiLimiter, upload.single('image'), wrap(async (req, res) => {
+    const s = readSession(req, 'elder');
+    const f = (req as any).file as Express.Multer.File | undefined;
+    if (!f) return res.status(400).json({ error: 'no_image' });
+    const sig = f.buffer.subarray(0, 12).toString('hex');
+    const mime = sig.startsWith('89504e47') ? 'image/png' : sig.startsWith('ffd8ff') ? 'image/jpeg' : sig.startsWith('52494646') && f.buffer.subarray(8, 12).toString() === 'WEBP' ? 'image/webp' : null;
+    if (!mime) return res.status(400).json({ error: 'bad_image', message: 'Please upload a PNG, JPEG or WebP screenshot.' });
+    if (!aiConfigured()) return res.status(503).json({ error: 'ai_unavailable', message: 'Screenshot reading is not available right now. You can paste the text instead.' });
+    const extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`);
+    // The image is processed in memory and never stored.
+    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain });
+    const scanId = newId('scan');
+    db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
+    res.json({ scanId, ...result, extractedText: extracted.text });
+  }));
+
+  app.post('/api/scan/:id/share', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const info = db.prepare('UPDATE security_scans SET shared_with_family=1 WHERE id=? AND household_id=?').run(String(req.params.id), s.householdId);
+    if (!info.changes) return res.status(404).json({ error: 'not_found' });
+    audit(s.householdId, s.userId, 'scan.shared', String(req.params.id));
+    res.json({ ok: true });
+  });
+
+  app.post('/api/scan/explain', aiLimiter, wrap(async (req, res) => {
+    const q = z.string().trim().min(1).max(300).parse(req.body?.question);
+    const scan = req.body?.scan;
+    if (!aiConfigured() || !scan?.verdict) return res.json({ answer: 'Please do not use links or numbers from that message. Open the PayPal app yourself, or ask your family member.' });
+    res.json({ answer: await explainMore(q, scan, readSession(req, 'elder')?.name) });
+  }));
+
+  // ---------- Voice + assistant ----------
+  app.post('/api/voice/transcribe', aiLimiter, upload.single('audio'), wrap(async (req, res) => {
+    const f = (req as any).file as Express.Multer.File | undefined;
+    if (!f) return res.status(400).json({ error: 'no_audio' });
+    try {
+      const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm');
+      res.json({ text });
+    } catch (e) {
+      if (e instanceof AIUnavailableError) return res.status(503).json({ error: 'stt_unavailable', message: 'Voice is not available right now. You can type instead.' });
+      throw e;
+    }
+  }));
+
+  app.post('/api/assistant', aiLimiter, wrap(async (req, res) => {
+    const s = readSession(req, 'elder');
+    const name = s?.name ?? 'Mary';
+    const said = z.string().trim().min(1).max(4000).parse(req.body?.text);
+    const lastResults = z.array(z.string().max(100)).max(5).catch([]).parse(req.body?.lastResults);
+    const step = z.string().max(40).catch('home').parse(req.body?.step);
+    const { intent, ai } = await interpret(said, { name, lastResults, step });
+    let products: ReturnType<typeof searchProducts> = [];
+    let reply = intent.reply;
+    if (intent.action === 'shop') {
+      products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
+      reply = describeOptions(products, name);
+    }
+    res.json({ intent, products, reply, ai });
+  }));
+
+  // ---------- Shop ----------
+  app.get('/api/products', (req, res) => {
+    const q = String(req.query.q ?? '').slice(0, 100);
+    const max = req.query.max ? Math.round(Number(req.query.max) * 100) : null;
+    res.json(q ? searchProducts(q, max, 6) : PRODUCTS);
+  });
+  app.get('/api/products/:id', (req, res) => {
+    const p = getProduct(String(req.params.id));
+    if (!p) return res.status(404).json({ error: 'not_found' });
+    res.json(p);
+  });
+  app.post('/api/quote', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const q = pay.priceCart(req.body?.items);
+    const policy = pay.getPolicy(s.householdId);
+    res.json({ ...q, needsFamily: q.totalCents > policy.thresholdCents, thresholdCents: policy.thresholdCents, fees: [], spoken: `That's ${q.lines.map((l) => l.name).join(' and ')} for ${eur(q.totalCents)} from ${q.merchant}.` });
+  });
+
+  // ---------- Payments (elder) ----------
+  app.get('/api/payments', requireRole('elder'), (req, res) => res.json(pay.listRequests(sessionOf(req).householdId)));
+  app.get('/api/payments/:id', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(String(req.params.id), s.householdId);
+    if (!r) return res.status(404).json({ error: 'not_found' });
+    res.json(pay.publicView(r));
+  });
+  app.post('/api/payments', requireRole('elder'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    if (!paypalConfigured()) return res.status(503).json({ error: 'paypal_not_configured', message: 'PayPal sandbox is not connected yet.' });
+    const out = await pay.createRequest(s.householdId, s.userId, req.body?.items, String(req.body?.idempotencyKey ?? ''), originOf(req));
+    res.json(out);
+  }));
+  app.post('/api/payments/:id/checkout', requireRole('elder'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    const url = await pay.startPayPalCheckout(s.householdId, s.userId, String(req.params.id), originOf(req));
+    res.json({ approveUrl: url });
+  }));
+  app.post('/api/payments/:id/confirm', requireRole('elder'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    const orderId = z.string().regex(/^[A-Z0-9]{10,30}$/).parse(req.body?.orderId);
+    res.json(await pay.confirmAndCapture(s.householdId, s.userId, String(req.params.id), orderId));
+  }));
+  app.post('/api/payments/:id/cancel', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    res.json(pay.cancelRequest(s.householdId, s.userId, String(req.params.id)));
+  });
+
+  // ---------- Family ----------
+  app.get('/api/family/overview', requireRole('family'), (req, res) => {
+    const s = sessionOf(req);
+    const elder = db.prepare('SELECT u.name FROM households h JOIN users u ON u.id=h.elder_id WHERE h.id=?').get(s.householdId) as any;
+    const scans = db.prepare('SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id=? AND shared_with_family=1 ORDER BY created_at DESC LIMIT 10').all(s.householdId);
+    res.json({ me: { name: s.name }, elder: { name: elder?.name }, policy: pay.getPolicy(s.householdId), requests: pay.listRequests(s.householdId), alerts: scans });
+  });
+  app.post('/api/family/policy', requireRole('family'), (req, res) => {
+    const s = sessionOf(req);
+    const eurVal = z.number().min(0).max(500).parse(req.body?.thresholdEur);
+    pay.setThreshold(s.householdId, Math.round(eurVal * 100), s.userId);
+    res.json(pay.getPolicy(s.householdId));
+  });
+  app.post('/api/family/requests/:id/decision', requireRole('family'), (req, res) => {
+    const s = sessionOf(req);
+    const decision = z.enum(['approve', 'decline']).parse(req.body?.decision);
+    const approvalId = z.string().min(5).max(40).parse(req.body?.approvalId);
+    res.json(pay.decide(s.householdId, s.userId, String(req.params.id), approvalId, decision, req.body?.reason));
+  });
+  app.post('/api/family/requests/:id/refund', requireRole('family'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    res.json(await pay.merchantRefund(s.householdId, `demo-merchant:${s.userId}`, String(req.params.id)));
+  }));
+
+  // ---------- Static web app ----------
+  const dist = path.resolve('web/dist');
+  if (fs.existsSync(dist)) {
+    app.use(express.static(dist, { index: false, maxAge: '1h' }));
+    app.get(/^\/(?!api\/).*/, (_req, res) => res.sendFile(path.join(dist, 'index.html')));
+  }
+
+  // ---------- Errors ----------
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'invalid_input', message: 'Some details were missing or not valid.' });
+    if (err instanceof pay.PaymentError) return res.status(err.status).json({ error: err.code, message: err.message });
+    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'too_large', message: 'That file is too large (max 4 MB).' });
+    const ref = crypto.randomBytes(4).toString('hex');
+    console.error(`[${ref}]`, err?.message ?? err);
+    res.status(500).json({ error: 'server_error', message: 'Something went wrong on our side. Nothing was charged.', ref });
+  });
+  return app;
+}
