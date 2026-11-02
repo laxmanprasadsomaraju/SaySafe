@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ShoppingBag, Users, ArrowRight, MessageSquareWarning, Mic, CheckCircle2, CircleDashed, CircleX, CircleHelp, TriangleAlert } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, SandboxBadge } from '../components/ui';
@@ -56,6 +56,7 @@ export default function Welcome() {
           <div className="mt-9 flex flex-wrap items-center gap-4">
             <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button>
             <a href="#journey" className="inline-flex items-center min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline">See how it works</a>
+            <Link to="/guide" className="inline-flex items-center min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline">How to use it</Link>
           </div>
           {err && <p role="alert" className="mt-4 text-danger font-bold">{err}</p>}
           <p className="mt-4 text-base text-ink-soft">No sign-up. About two minutes. No real money.</p>

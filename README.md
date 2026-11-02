@@ -1,42 +1,71 @@
 # SaySafe — AI Payment Guardian for Everyone
 
-**Shop simply. Pay safely.**
+**Pay with confidence, not doubt.**
 
-SaySafe is a voice-first assistant that helps older adults shop, spot scams, verify official PayPal contacts and make protected PayPal payments — with a trusted family member one tap away.
+SaySafe helps older adults check suspicious payment messages, shop by voice and pay through a genuine PayPal checkout, with a trusted family member brought in for bigger purchases.
 
-Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/). Open source under the MIT licence.
+**Live demo:** https://saysafe.onrender.com · **How to use it:** https://saysafe.onrender.com/guide
 
-> Demo payments use the **PayPal sandbox**. No real money moves.
+Built for the [PayPal AI Hackathon 2026](https://paypalaihackathon.devpost.com/). Open source under the MIT licence. Not affiliated with or endorsed by PayPal.
+
+> All payments use the **PayPal sandbox**. No real money moves.
 
 ---
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/laxmanprasadsomaraju/SaySafe)
+## Try it in two minutes
 
-## Why
+1. Open https://saysafe.onrender.com and choose **Try it free as Mary**. No sign-up. The free host sleeps when idle, so the first visit can take about a minute.
+2. **Check a message:** use the sample invoice, or paste a text, link, email or phone number. You get a verdict, the evidence and safe next steps.
+3. **Shop by voice:** say or type "I need a kettle". SaySafe reads back the exact item, shop and price.
+4. **Pay with PayPal:** pick something under €75 and approve with a PayPal **sandbox personal** account. SaySafe re-reads the order from PayPal before saying "paid".
+5. **Family approval:** in *Get trusted help*, create an invite and open it on a second device. Back as Mary, choose the €120 microwave. The family member approves or declines the exact item and price, and Mary still approves at PayPal herself.
 
-Most shopping assistants try to make paying *faster*. For many older people the problem is the opposite: fake "PayPal" texts, look-alike links, pressure to pay now, and checkouts that are hard to read. SaySafe makes paying **safer**:
+The step-by-step guide is also in the app at `/guide`.
+
+## The journey
+
+Explain the evidence → offer verification or family review → enforce safeguards on the server → genuine PayPal Orders v2 checkout → receipt confirmed from PayPal's capture data.
 
 - **AI interprets.** Natural speech in, a clear proposed action out.
-- **Security rules evaluate.** Deterministic link, domain and wording checks — the AI can only make a verdict *stricter*, never "safe".
-- **The user authorises.** Every payment is approved by the payer at PayPal.
-- **PayPal processes.** Real Orders v2 sandbox checkout.
-- **The backend verifies.** Capture only after re-reading the order from PayPal and re-checking policy.
+- **Rules decide.** Deterministic link, domain and wording checks. The AI can only make a verdict *stricter*, never "safe".
+- **The payer authorises.** Every payment is approved by the payer at PayPal. Family approval never replaces it.
+- **The server verifies.** Capture happens only after re-reading the order from PayPal and re-checking amount, currency, item and policy. Requests are idempotent.
 
-## Features
+## What is tested, and how
 
-| | Feature | Status |
+Status as of 2 November 2026. Labels describe only what has actually been run.
+
+| Capability | Status | Evidence |
 |---|---|---|
-| 🛡️ | **Scam Message Guardian** — paste text, a link, email or phone number, upload a screenshot (vision: not yet tested live), or read it aloud. Look-alike domains, brand-in-subdomain, punycode, `@` tricks, shorteners, IP links, urgency, gift-card and password requests, free-mail "support". Plain-English, spoken result with safe next steps. | ✅ Text/links tested; screenshot pending |
-| ✅ | **Trusted official directory** — PayPal help pages fetched from paypal.com on 2026-11-02, plus the phishing report address. No scraped phone numbers. | ✅ Checked |
-| 🎙️ | **Voice shopping** — "Find me a reliable kettle under €40." Groq Whisper speech-to-text, AI intent, spoken options, exact price and merchant read back. Text input everywhere too. | ✅ Text tested; mic needs a real-device test |
-| 💳 | **Real PayPal sandbox checkout** — server-side Orders v2, payer approval at PayPal, server-side verified capture, idempotent requests, spoken receipt from PayPal's capture data. | ✅ Sandbox order + capture verified; buyer-login approval pending |
-| 👪 | **Family spending protection** — purchases above a limit (default €75) need a trusted relative's approval, bound to the exact basket, amount, currency and merchant, with expiry and replay protection. Family can never pay from the user's account. | ✅ Tested (HTTP + browser) |
-| 📦 | **Order problems** — "My kettle never arrived": receipt, seller first, then PayPal's official Resolution Centre. Never promises a refund. Demo-merchant refund via Payments API for our own sandbox shop. | 🟡 Built, refund not tested live |
-| 🔔 | **Verified webhooks** — PayPal signature verification, deduplication, amount checks, reconciliation. | ✅ Code + tests (needs `PAYPAL_WEBHOOK_ID` on deploy) |
+| Scam check (text, links, email, phone) | ✅ Tested | Unit tests and live Groq AI. AI doubt lowers a "verified" result to "needs checking" (test added). |
+| Screenshot scanning | 🟡 Partly tested | Live Groq vision on generated test images, not real-world screenshots. |
+| PayPal sandbox checkout on the live site | ✅ Tested | Buyer approved on PayPal's sandbox page. Return URL captured €32.00 and showed the receipt. Reload showed the same receipt with no second charge. |
+| PayPal cancel on the live site | ✅ Tested | "Cancel and return" came back to SaySafe in the waiting state, with nothing charged. |
+| Server-side order checks | ✅ Tested | Wrong, tampered or mismatched PayPal order IDs are rejected, including on already-paid purchases. |
+| Family approval rules | ✅ Tested | Bound to the exact basket, amount, currency and merchant, with expiry and replay protection. Tested over HTTP and in the browser with two separate sessions. Two physical devices: pending. |
+| Verified webhooks | 🟡 Code tested | Signature verified with PayPal before acting, unverified → 400, duplicates ignored. Webhook registered for the live URL. A live event is still to be confirmed. |
+| Spoken receipt | 🟡 Partly tested | The receipt text and "Read my receipt" button were checked in a live browser. Audio still needs a check on a real device. |
+| Microphone input | ⏳ Pending | Needs a test on a real laptop and phone. Typed input uses the same assistant path and is tested. |
+| Refunds (demo shop only) | ⏳ Built, not tested live | |
+| Accessibility | ✅ Tested | axe WCAG 2.2 A/AA: 0 violations on all app screens at 320px and 390px in default, high-contrast and large-text modes. No horizontal overflow. |
+| Automated tests | ✅ Passing | 56 unit and security tests, 12-step browser end-to-end test, TypeScript, production build. |
 
-## Accessibility
+## Deploy your own (Render, free)
 
-WCAG 2.2 AA target: 20 px+ body text, 56–64 px buttons, Atkinson Hyperlegible font, visible focus, full keyboard use, skip link, captions for everything spoken, *Bigger text* and *High contrast* toggles, reduced-motion support, voice optional on every screen, no colour-only meaning.
+1. Fork this repo, or use it directly, since it's public.
+2. In Render, choose **New → Web Service → Public Git Repository** and paste the repo URL. You can also connect GitHub, which turns on auto-deploys.
+3. Settings: runtime **Node**, build `npm ci && npm run build`, start `npm start`, health check `/api/health`, instance type **Free**.
+4. Environment variables:
+   - `NODE_VERSION=22`
+   - `PAYPAL_API_BASE=https://api-m.sandbox.paypal.com`
+   - `PAYPAL_CREDENTIALS=CLIENT_ID:SECRET` (or `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`)
+   - `GROQ_API_KEY`
+   - `PAYPAL_WEBHOOK_ID`, set after you register a webhook for `https://<your-app>/api/paypal/webhook`
+5. Open `https://<your-app>/api/health`. It should report PayPal sandbox and Groq as configured.
+
+A `render.yaml` Blueprint is included as well.
+
+**Free-plan caveat:** Render's free instances sleep after 15 minutes idle and use a temporary disk, so the SQLite demo data (demo sessions, pending family approvals, local payment records) resets on sleep, restart or redeploy. PayPal's own records are never affected. A purchase in progress during a reset can't be completed and simply expires at PayPal unpaid, so no money is captured. For a persistent deployment, use a paid instance with a persistent disk and set `DATABASE_FILE=/var/data/saysafe.db`. No code changes are needed.
 
 ## Architecture
 
@@ -52,20 +81,24 @@ web (React + Vite + Tailwind)  ──►  server (Express, TypeScript)
 
 Payment states: `DRAFT → RISK_REVIEW → (BLOCKED | FAMILY_APPROVAL_PENDING → FAMILY_APPROVED | ) → PAYER_APPROVAL_PENDING → PAYER_APPROVED → CAPTURE_PENDING → CAPTURED (→ REFUNDED)`, plus `FAILED` and `CANCELLED`. Illegal transitions throw; every change is optimistic-locked and written to an audit log. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Run it
+## Run it locally
 
 ```bash
 cp .env.example .env      # add PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, GROQ_API_KEY
 npm install
 npm run dev               # web on :5173, API on :8787
-npm test                  # unit + policy tests
+npm test                  # unit, policy and security tests
+node scripts/e2e-browser.mjs        # browser end-to-end (needs a running server and Playwright)
+node scripts/qa-screens.mjs         # axe + layout checks on every app screen
 ```
-
-Production: `npm run build && npm start` (serves the web app and API on `PORT`). A `render.yaml` is included.
 
 **Getting keys (free):**
 - PayPal sandbox: [developer.paypal.com](https://developer.paypal.com/dashboard/) → Apps & Credentials → Sandbox → Create App. Use a sandbox *personal* account to approve test payments.
 - Groq: [console.groq.com/keys](https://console.groq.com/keys).
+
+## Accessibility
+
+WCAG 2.2 AA target: large body text, 48 px+ touch targets, Atkinson Hyperlegible font, visible focus, full keyboard use, a skip link, captions for everything spoken, *Bigger text* and *High contrast* toggles, reduced-motion support, voice optional on every screen, and no colour-only meaning.
 
 ## AI tools used
 
@@ -78,6 +111,10 @@ Production: `npm run build && npm start` (serves the web app and API on `PORT`).
 
 AI never authorises payments · family approval never replaces payer approval · no "95% safe" scores · unknown links are "unknown", never "safe" · we never open links found in messages · prices always come from the server · no secrets in the browser.
 
+## Safety rules we never break
+
+AI never authorises payments · family approval never replaces payer approval · no "95% safe" scores · unknown links are "unknown", never "safe" · we never open links found in messages · prices always come from the server · no secrets in the browser.
+
 ## Known limitations
 
-See [docs/STATUS.md](docs/STATUS.md). SaySafe is a hackathon project and not affiliated with or endorsed by PayPal.
+See [docs/STATUS.md](docs/STATUS.md). SaySafe is a hackathon project and is not affiliated with or endorsed by PayPal.

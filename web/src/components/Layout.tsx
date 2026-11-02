@@ -55,7 +55,7 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
       <footer className="border-t border-line text-ink-soft text-base">
         <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : 'max-w-5xl'} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
           <p>SaySafe — Shop simply. Pay safely. Demo uses the PayPal sandbox; no real money moves.</p>
-          <p>Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
+          <p><Link className="underline" to="/guide">How to use SaySafe</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
         </div>
       </footer>
     </div>
