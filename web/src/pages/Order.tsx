@@ -50,10 +50,13 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
 
   // Poll while waiting for family or for a pending capture.
   useEffect(() => {
-    if (!r || !['FAMILY_APPROVAL_PENDING', 'CAPTURE_PENDING'].includes(r.state)) return;
+    if (!r) return;
+    const waitingNotice = r.state === 'CAPTURED' && r.receipt && !r.receipt.webhookConfirmed;
+    if (!['FAMILY_APPROVAL_PENDING', 'CAPTURE_PENDING'].includes(r.state) && !waitingNotice) return;
     const t = setInterval(load, 4000);
-    return () => clearInterval(t);
-  }, [r?.state]); // eslint-disable-line
+    const stop = waitingNotice ? setTimeout(() => clearInterval(t), 120_000) : undefined;
+    return () => { clearInterval(t); if (stop) clearTimeout(stop); };
+  }, [r?.state, r?.receipt?.webhookConfirmed]); // eslint-disable-line
 
   useEffect(() => {
     if (!r || spoke.current) return;
@@ -104,6 +107,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
                 <dt className="text-ink-soft">PayPal order</dt><dd className="font-bold break-all">{r.receipt.orderId}</dd>
                 <dt className="text-ink-soft">Transaction</dt><dd className="font-bold break-all">{r.receipt.captureId}</dd>
               </dl>
+              <p className="mt-3 text-base text-ink-soft">{r.receipt.webhookConfirmed ? 'PayPal also sent a signed notice confirming this capture.' : 'Checked directly with PayPal. PayPal’s signed notice usually follows within a minute.'}</p>
             </div>
           )}
         </Card>

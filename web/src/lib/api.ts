@@ -31,7 +31,7 @@ export interface PaymentRequest {
   merchant: string; amountCents: number; currency: string;
   risk: { ok: boolean; needsFamily: boolean; reasons: string[] } | null;
   approval: { id: string; status: string; expiresAt: number; decidedAt: string | null; reason: string | null } | null;
-  receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string } | null;
+  receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string; webhookConfirmed?: boolean } | null;
   createdAt: string; updatedAt: string;
 }
 

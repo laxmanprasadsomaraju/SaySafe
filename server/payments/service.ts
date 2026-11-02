@@ -93,7 +93,7 @@ export function publicView(r: any) {
     currency: r.currency,
     risk: r.risk_json ? JSON.parse(r.risk_json) : null,
     approval: approval ? { id: approval.id, status: effectiveApprovalStatus(approval), expiresAt: approval.expires_at, decidedAt: approval.decided_at, reason: approval.reason } : null,
-    receipt: r.state === 'CAPTURED' || r.state === 'REFUNDED' ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id } : null,
+    receipt: r.state === 'CAPTURED' || r.state === 'REFUNDED' ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id, webhookConfirmed: Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id)) } : null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
