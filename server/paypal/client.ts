@@ -4,15 +4,22 @@
  */
 const BASE = process.env.PAYPAL_API_BASE ?? 'https://api-m.sandbox.paypal.com';
 
+/** PAYPAL_CLIENT_ID + PAYPAL_CLIENT_SECRET, or a single PAYPAL_CREDENTIALS="id:secret". */
+function creds() {
+  const combined = process.env.PAYPAL_CREDENTIALS;
+  if (combined && combined.includes(':')) { const i = combined.indexOf(':'); return { id: combined.slice(0, i).trim(), secret: combined.slice(i + 1).trim() }; }
+  return { id: process.env.PAYPAL_CLIENT_ID, secret: process.env.PAYPAL_CLIENT_SECRET };
+}
+
 export function paypalConfigured() {
-  return Boolean(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
+  const c = creds(); return Boolean(c.id && c.secret);
 }
 
 let cached: { token: string; exp: number } | null = null;
 
 async function token(): Promise<string> {
   if (cached && cached.exp > Date.now() + 60_000) return cached.token;
-  const id = process.env.PAYPAL_CLIENT_ID, secret = process.env.PAYPAL_CLIENT_SECRET;
+  const { id, secret } = creds();
   if (!id || !secret) throw new Error('PayPal credentials missing (PAYPAL_CLIENT_ID / PAYPAL_CLIENT_SECRET)');
   const res = await fetch(`${BASE}/v1/oauth2/token`, {
     method: 'POST',
