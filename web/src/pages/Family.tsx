@@ -77,9 +77,9 @@ export default function Family() {
           {pending.map((r) => (
             <Card key={r.id} as="article" className="p-6 border-2 border-amber fade-up">
               <div className="flex flex-wrap justify-between gap-2"><p className="font-bold text-amber">Above {o.elder.name}'s limit of {eur(o.policy.thresholdCents)}</p><SandboxBadge /></div>
-              <div className="mt-4 flex gap-4 items-center">
+              <div className="mt-4 flex flex-wrap gap-4 items-center">
                 <img src={`/products/${r.items[0].image}`} alt="" className="size-20 rounded-2xl object-cover bg-teal-soft" />
-                <div className="flex-1"><h3 className="text-xl">{r.items.map((i) => `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`).join(', ')}</h3><p className="text-ink-soft text-lg">{r.merchant}</p></div>
+                <div className="flex-1 min-w-[9rem]"><h3 className="text-xl">{r.items.map((i) => `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`).join(', ')}</h3><p className="text-ink-soft text-lg">{r.merchant}</p></div>
                 <p className="font-display text-3xl font-semibold">{eur(r.amountCents)}</p>
               </div>
               <p className="mt-3 text-base text-ink-soft">Expires at {new Date(r.approval!.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Your answer applies only to this exact item and price.</p>

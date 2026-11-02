@@ -199,8 +199,8 @@ export async function startPayPalCheckout(householdId: string, actor: string, re
 /** Called after PayPal redirects back. Never trusts the redirect: re-reads the order from PayPal, re-checks policy, then captures. */
 export async function confirmAndCapture(householdId: string, actor: string, requestId: string, orderIdFromRedirect: string) {
   let r = load(requestId, householdId);
-  if (r.state === 'CAPTURED') return publicView(r);
   if (!r.paypal_order_id || r.paypal_order_id !== orderIdFromRedirect) throw new PaymentError('order_mismatch', 'This PayPal order does not belong to this purchase.', 409);
+  if (r.state === 'CAPTURED') return publicView(r);
   const order = await paypal.getOrder(r.paypal_order_id);
   const pu = order?.purchase_units?.[0];
   const value = Math.round(Number(pu?.amount?.value) * 100);

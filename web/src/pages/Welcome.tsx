@@ -67,7 +67,7 @@ export default function Welcome() {
         </div>
         <div className="lg:col-span-6 relative fade-up">
           <img src="/hero-mary.webp" alt="An older woman smiling at her phone at a sunny kitchen table" width={928} height={1152} className="w-full max-w-[34rem] ml-auto rounded-[2rem] object-cover aspect-[4/5]" />
-          <figure className="absolute -bottom-8 left-0 sm:left-4 lg:-left-10 w-[56%] max-w-[15rem]">
+          <figure className="absolute -bottom-8 left-0 sm:left-4 lg:-left-10 w-[58%] max-w-[17.5rem]">
             <Phone src="/screens/check-result.webp" alt="SaySafe result screen: Suspicious. This message may be a scam, with a spoken explanation." />
             <figcaption className="mt-2 text-sm font-bold text-ink-soft">Real SaySafe screen</figcaption>
           </figure>
@@ -215,14 +215,14 @@ function Showcase({ id, eyebrow, title, children, screens, dark, flip }: { id: s
   return (
     <section aria-labelledby={id} className={dark ? 'bg-navy text-white' : ''}>
       <div className="wrap py-20 md:py-28 grid lg:grid-cols-12 gap-12 lg:gap-16 items-center reveal">
-        <div className={`lg:col-span-6 ${flip ? 'lg:order-2' : ''} ${dark ? '[&_.link]:!text-white' : ''}`}>
+        <div className={`${screens.length > 1 ? 'lg:col-span-5' : 'lg:col-span-6'} ${flip ? 'lg:order-2' : ''} ${dark ? '[&_.link]:!text-white' : ''}`}>
           <p className={`eyebrow ${dark ? '!text-teal-soft' : ''}`}>{eyebrow}</p>
           <h2 id={id} className={`display-2 mt-3 ${dark ? 'text-white' : ''}`}>{title}</h2>
           <div className={`mt-6 text-xl leading-relaxed max-w-[52ch] ${dark ? 'text-white/90' : 'text-ink-soft'}`}>{children}</div>
         </div>
-        <div className={`lg:col-span-6 flex justify-center gap-5 ${flip ? 'lg:order-1' : ''}`}>
+        <div className={`${screens.length > 1 ? 'lg:col-span-7 flex flex-col sm:flex-row items-center sm:items-start' : 'lg:col-span-6 flex'} justify-center gap-8 sm:gap-6 ${flip ? 'lg:order-1' : ''}`}>
           {screens.map((s) => (
-            <figure key={s.src} className={screens.length > 1 ? 'w-1/2 max-w-[15rem]' : 'w-[70%] max-w-[18rem]'}>
+            <figure key={s.src} className={screens.length > 1 ? 'w-[86%] sm:w-1/2 max-w-[21rem]' : 'w-[86%] max-w-[22rem]'}>
               <Phone src={s.src} alt={s.alt} />
               {s.cap && <figcaption className={`mt-3 text-center text-base font-bold ${dark ? 'text-white/85' : 'text-ink-soft'}`}>{s.cap}</figcaption>}
             </figure>

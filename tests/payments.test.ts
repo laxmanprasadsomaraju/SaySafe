@@ -71,6 +71,8 @@ describe('happy path under threshold', () => {
     expect(done.receipt?.amount).toBe('32.00');
     // duplicate confirm is idempotent
     expect((await pay.confirmAndCapture(hh, u, request.id, orderId.o)).state).toBe('CAPTURED');
+    // A different PayPal order id must never unlock an already-captured receipt.
+    await expect(pay.confirmAndCapture(hh, u, request.id, 'OTHERORDER999')).rejects.toThrow(/does not belong/);
   });
 
   it('idempotency key returns the same request', async () => {

@@ -35,11 +35,11 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Skip to main content</a>
       <header className="border-b border-line bg-ivory/90 backdrop-blur sticky top-0 z-20">
-        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : 'max-w-5xl'} px-4 sm:px-5 py-3 flex items-center gap-2 justify-between`}>
+        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : 'max-w-5xl'} px-4 sm:px-5 py-3 flex flex-wrap items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home"><Logo /></Link>
-          <nav aria-label="Display settings" className="flex gap-1.5 sm:gap-2">
+          <nav aria-label="Display settings" className="flex flex-wrap gap-1.5 sm:gap-2">
             {mode === 'elder' && loc.pathname !== '/home' && (
-              <NavLink to="/home" className={`${toggle} border-teal text-teal`}><House className="size-5" aria-hidden />Home</NavLink>
+              <NavLink to="/home" className={`${toggle} border-teal text-teal`}><House className="size-5" aria-hidden /><span className={lbl}>Home</span></NavLink>
             )}
             <button type="button" className={`${toggle} ${large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={large} onClick={() => setLarge(!large)}><Type className="size-5" aria-hidden /><span className={lbl}>Bigger text</span></button>
             <button type="button" className={`${toggle} ${contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={contrast} onClick={() => setContrast(!contrast)}><Contrast className="size-5" aria-hidden /><span className={lbl}>Contrast</span></button>
