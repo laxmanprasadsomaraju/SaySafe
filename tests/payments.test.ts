@@ -192,12 +192,24 @@ describe('webhooks', () => {
     db.prepare("UPDATE payment_requests SET state='CAPTURE_PENDING' WHERE id=?").run(request.id);
     const ev = { event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAPX', custom_id: request.id, amount: { value: '19.00', currency_code: 'EUR' } } };
     expect(pay.reconcileFromWebhook(ev)).toBe('captured');
-    expect(pay.reconcileFromWebhook(ev)).toBe('no_change');
+    expect(pay.reconcileFromWebhook(ev)).toBe('already_captured');
   });
   it('rejects webhook with wrong amount', async () => {
     const { hh, u } = household();
     const { request } = await pay.createRequest(hh, u, [{ productId: 'pill-organiser', quantity: 1 }], key(), ORIGIN);
     db.prepare("UPDATE payment_requests SET state='CAPTURE_PENDING' WHERE id=?").run(request.id);
     expect(pay.reconcileFromWebhook({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'C', custom_id: request.id, amount: { value: '1.00', currency_code: 'EUR' } } })).toBe('amount_mismatch');
+  });
+  it('correlates order id and capture id; duplicates of a captured payment change nothing', async () => {
+    const { hh, u } = household();
+    const { request } = await pay.createRequest(hh, u, [{ productId: 'pill-organiser', quantity: 1 }], key(), ORIGIN);
+    db.prepare("UPDATE payment_requests SET state='CAPTURE_PENDING', paypal_order_id='ORD-1' WHERE id=?").run(request.id);
+    const mk = (cap: string, order: string) => ({ event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: cap, custom_id: request.id, amount: { value: '19.00', currency_code: 'EUR' }, supplementary_data: { related_ids: { order_id: order } } } });
+    expect(pay.reconcileFromWebhook(mk('CAP-1', 'ORD-OTHER'))).toBe('order_mismatch');
+    expect(pay.reconcileFromWebhook(mk('CAP-1', 'ORD-1'))).toBe('captured');
+    expect(pay.reconcileFromWebhook(mk('CAP-1', 'ORD-1'))).toBe('already_captured');
+    expect(pay.reconcileFromWebhook(mk('CAP-2', 'ORD-1'))).toBe('capture_id_mismatch');
+    const row = db.prepare('SELECT state, paypal_capture_id FROM payment_requests WHERE id=?').get(request.id) as any;
+    expect(row).toEqual({ state: 'CAPTURED', paypal_capture_id: 'CAP-1' });
   });
 });

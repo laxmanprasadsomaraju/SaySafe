@@ -254,6 +254,12 @@ export function reconcileFromWebhook(event: any) {
   if (!requestId) return 'ignored';
   const r = db.prepare('SELECT * FROM payment_requests WHERE id=?').get(requestId) as any;
   if (!r) return 'unknown_request';
+  // Correlate: a capture event must belong to the PayPal order we created for this request.
+  const orderId = res?.supplementary_data?.related_ids?.order_id;
+  if (type?.startsWith('PAYMENT.CAPTURE.') && orderId && r.paypal_order_id && orderId !== r.paypal_order_id) return 'order_mismatch';
+  if (type === 'PAYMENT.CAPTURE.COMPLETED' && r.state === 'CAPTURED') {
+    return r.paypal_capture_id === res?.id ? 'already_captured' : 'capture_id_mismatch';
+  }
   if (type === 'PAYMENT.CAPTURE.COMPLETED' && r.state === 'CAPTURE_PENDING') {
     const amt = Math.round(Number(res.amount?.value) * 100);
     if (amt !== r.amount_cents || res.amount?.currency_code !== r.currency) return 'amount_mismatch';
