@@ -1,3 +1,4 @@
+import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -26,7 +27,7 @@ export function createApp() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        imgSrc: ["'self'", 'data:', 'blob:'],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://cdn.trychannel3.com'],
         mediaSrc: ["'self'", 'blob:'],
         connectSrc: ["'self'"],
         scriptSrc: ["'self'"],
@@ -81,9 +82,9 @@ export function createApp() {
 
   // ---------- Status ----------
   app.get('/api/health', wrap(async (_req, res) => {
-    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), time: new Date().toISOString() });
+    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, time: new Date().toISOString() });
   }));
-  app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), demo: true }));
+  app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), channel3Configured: channel3Configured(), demo: true }));
 
   // ---------- Sessions ----------
   app.post('/api/demo/start', (req, res) => {
@@ -182,6 +183,24 @@ export function createApp() {
       reply = describeOptions(products, name);
     }
     res.json({ intent, products, reply, ai });
+  }));
+
+  // ---------- Real product discovery (Channel3). Discovery only: purchases happen on the retailer's site. ----------
+  app.post('/api/discover', aiLimiter, wrap(async (req, res) => {
+    const s = readSession(req, 'elder');
+    const said = z.string().trim().min(1).max(400).parse(req.body?.text);
+    const { intent, ai } = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
+    const query = (intent.action === 'shop' && intent.query) ? intent.query : said;
+    const maxPrice = intent.action === 'shop' && intent.max_price_eur ? intent.max_price_eur : null;
+    try {
+      const result = await searchChannel3(query, { maxPrice, userId: s?.householdId });
+      res.json({ ...result, reply: describeDiscovery(result), ai });
+    } catch (e) {
+      if (!(e instanceof Channel3Error)) throw e;
+      const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
+      if (e.retryAfter) res.setHeader('Retry-After', String(e.retryAfter));
+      res.status(status).json({ error: `channel3_${e.code}`, message: `${e.message} The SaySafe Demo Shop still works.` });
+    }
   }));
 
   // ---------- Shop ----------

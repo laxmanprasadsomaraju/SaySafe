@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageSquareWarning, ShoppingBag, LifeBuoy, Keyboard, ChevronRight, Clock } from 'lucide-react';
+import { MessageSquareWarning, ShoppingBag, LifeBuoy, Keyboard, ChevronRight, Clock, Store } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card, MicButton, Caption, Button } from '../components/ui';
 import { api, eur, type PaymentRequest } from '../lib/api';
@@ -41,6 +41,7 @@ export default function Home() {
   const actions = [
     { to: '/check', icon: MessageSquareWarning, title: 'Check a message', text: 'Is this text, email or link really from PayPal?' },
     { to: '/shop', icon: ShoppingBag, title: 'Shop by voice', text: 'Find something and pay safely with PayPal.' },
+    { to: '/discover', icon: Store, title: 'Compare real shops', text: 'See real prices from Irish shops. You buy on their site.' },
     { to: '/help', icon: LifeBuoy, title: 'Get trusted help', text: 'Official PayPal help, order problems, or your family.' },
   ];
   if (!me) return <Layout><p>Loading…</p></Layout>;
@@ -66,7 +67,7 @@ export default function Home() {
         <div className="w-full max-w-xl"><Caption text={caption} /></div>
       </div>
 
-      <nav aria-label="Main actions" className="mt-10 grid md:grid-cols-3 gap-5">
+      <nav aria-label="Main actions" className="mt-10 grid md:grid-cols-2 gap-5">
         {actions.map(({ to, icon: Icon, title, text }) => (
           <button key={to} onClick={() => nav(to)} className="group text-left bg-paper rounded-[var(--radius-card)] border-2 border-line hover:border-teal shadow-[var(--shadow-card)] p-6 min-h-44 flex flex-col">
             <span className="size-14 rounded-2xl bg-teal-soft grid place-items-center"><Icon className="size-8 text-teal" aria-hidden /></span>

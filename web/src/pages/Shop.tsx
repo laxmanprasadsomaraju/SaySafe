@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Star, ShieldCheck, Users, ArrowLeft, Lock } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, MicButton, Caption, Notice, SandboxBadge } from '../components/ui';
@@ -85,6 +85,7 @@ export default function Shop() {
         </div>
       )}
       {err && <div className="mt-6"><Notice tone="danger" title={err} /></div>}
+      {!quote && <p className="mt-6 text-lg text-ink-soft">This is the SaySafe Demo Shop: demo products, real PayPal sandbox payments. <Link to="/discover" className="font-bold text-teal underline underline-offset-4">Compare real shops instead</Link></p>}
 
       {!quote && products.length > 0 && (
         <section aria-label="Options" className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
