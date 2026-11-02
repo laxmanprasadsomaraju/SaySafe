@@ -37,3 +37,10 @@ _Last updated: 2026-11-02 (Irish time). "Verified" means we ran it; anything els
 ## Risks
 - Render free instances sleep and use an ephemeral disk; demo data resets on restart.
 - Groq free-tier limits apply; the app falls back to rules-only when AI is unavailable.
+
+## Buyer approval on PayPal's hosted sandbox page — VERIFIED (2026-11-02 22:04 UTC)
+- SaySafe request `pay_kPyY4csvcw_9`, PayPal order `8C464471GW754914U`, EUR 32.00.
+- Sandbox personal buyer logged in on www.sandbox.paypal.com, PayPal Balance, "Complete Purchase".
+- Before approval, confirm returned 409 `not_approved`. After approval, confirm captured: capture `7GW748197L509353B`, state CAPTURED, EUR 32.00.
+- Second confirm: same capture returned, no second charge.
+- Open: return redirect to SaySafe's own page and spoken receipt not yet tested in browser (redirect target was localhost); a confirm with a mismatched orderId on an already-captured request returns the stored receipt instead of rejecting — tighten.
