@@ -1,55 +1,82 @@
 import { ExternalLink } from 'lucide-react';
 import { Card, Notice } from './ui';
-import type { ScanResultV2, FindingBasis } from '../lib/api';
+import type { ScanResultV2, ScanEvidence } from '../lib/api';
 
-const BASIS: Record<FindingBasis, string> = {
-  deterministic_rule: 'Deterministic rule',
-  ai_judgement: 'AI judgement',
-  independently_verified: 'Independently verified',
-};
+const CLASS_HELP = {
+  observable: 'Plain facts about what is in the message. Not a judgement.',
+  rule: 'SaySafe’s fixed safety rules. The quoted words are what each rule matched.',
+  ai: 'What the AI model pointed out. Only shown when it quoted the exact words from the message.',
+} as const;
 
-function BasisTag({ basis }: { basis: FindingBasis }) {
-  return <span className="ml-2 inline-block rounded-full border border-line px-2 py-0.5 text-sm font-bold text-ink-soft align-middle">{BASIS[basis]}</span>;
+function Quote({ children }: { children: string }) {
+  return <q className="bg-ivory rounded px-1 break-words">{children}</q>;
 }
 
-/** Findings with exact evidence, what could not be verified, and safe next steps. All text is rendered as text (React escapes it). */
+/** Fallback for results from an older server that has no evidence classes. */
+function legacyEvidence(r: ScanResultV2): ScanEvidence {
+  return {
+    observable: [],
+    rule: r.signals.map((s) => ({ code: s.code, severity: s.severity, title: s.title, quote: s.evidence, detail: s.detail })),
+    ai: r.aiReasons.map((x) => ({ category: 'ai', categoryLabel: 'AI interpretation', quote: '', explanation: x })),
+    labels: { observable: 'What is in the message', rule: 'SaySafe rule checks that matched', ai: 'AI interpretation (quoted from the message)' },
+  };
+}
+
+/** "Why this was flagged" (three evidence classes with quotes), what could not be verified, and safe next steps. All text is rendered as text (React escapes it). */
 export function ScanDetails({ result }: { result: ScanResultV2 }) {
-  const top = result.signals.filter((s) => s.severity !== 'info').sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : 1));
-  const minor = result.signals.filter((s) => s.severity === 'info');
+  const ev = result.evidence ?? legacyEvidence(result);
+  const rules = [...ev.rule].sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : b.severity === 'high' ? 1 : a.severity === 'medium' ? -1 : 1));
+  const flagged = result.verdict !== 'no_obvious_warning_signs';
+  const any = ev.observable.length + rules.length + ev.ai.length > 0;
   return (
     <>
       {result.disclosure && <Notice tone="info" title="What this result means">{result.disclosure}</Notice>}
-      {(top.length > 0 || minor.length > 0 || result.aiReasons.length > 0) && (
+      {any && (
         <Card className="p-6">
-          <h3 className="text-2xl">Why</h3>
-          {top.length > 0 && (
-            <ul className="mt-3 space-y-4">
-              {top.map((s, i) => (
-                <li key={i} className="flex gap-3">
-                  <span className={`mt-2 size-3 rounded-full shrink-0 ${s.severity === 'high' ? 'bg-danger' : 'bg-amber'}`} aria-hidden />
-                  <div className="min-w-0">
-                    <p className="font-bold">{s.title}<span className="sr-only"> ({s.severity === 'high' ? 'strong warning' : 'warning'})</span>{s.basis && <BasisTag basis={s.basis} />}</p>
-                    {s.evidence && <p className="text-base mt-1 break-words"><span className="font-bold">Found in the message:</span> <q className="bg-ivory rounded px-1">{s.evidence}</q></p>}
-                    <p className="text-ink-soft text-lg">{s.detail}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          {minor.length > 0 && (
-            <div className="mt-4">
-              <p className="text-base font-bold">Also noticed:</p>
-              <ul className="mt-1 space-y-1 text-base text-ink-soft">
-                {minor.map((s, i) => <li key={i} className="break-words">{s.title}{s.evidence ? <>: <q>{s.evidence}</q></> : null}</li>)}
+          <h3 className="text-2xl">{flagged ? 'Why this was flagged' : 'What SaySafe looked at'}</h3>
+          {rules.length > 0 && (
+            <section className="mt-4" aria-labelledby="ev-rule">
+              <h4 id="ev-rule" className="text-xl font-bold">{ev.labels.rule}</h4>
+              <p className="text-base text-ink-soft">{CLASS_HELP.rule}</p>
+              <ul className="mt-3 space-y-4">
+                {rules.map((s, i) => (
+                  <li key={i} className="flex gap-3">
+                    <span className={`mt-2 size-3 rounded-full shrink-0 ${s.severity === 'high' ? 'bg-danger' : s.severity === 'medium' ? 'bg-amber' : 'bg-line'}`} aria-hidden />
+                    <div className="min-w-0">
+                      <p className="font-bold">{s.title}<span className="sr-only"> ({s.severity === 'high' ? 'strong warning' : s.severity === 'medium' ? 'warning' : 'note'})</span></p>
+                      {s.quote && <p className="text-base mt-1"><span className="font-bold">Matched:</span> <Quote>{s.quote}</Quote></p>}
+                      {s.severity !== 'info' && <p className="text-ink-soft text-lg">{s.detail}</p>}
+                    </div>
+                  </li>
+                ))}
               </ul>
-            </div>
+            </section>
           )}
-          {result.aiReasons.length > 0 && (
-            <div className="mt-4 border-t border-line pt-4">
-              <p className="text-base font-bold">The AI model also said <BasisTag basis="ai_judgement" /></p>
-              <ul className="mt-1 list-disc pl-6 text-base text-ink-soft">{result.aiReasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
-            </div>
+          {ev.ai.length > 0 && (
+            <section className="mt-5 border-t border-line pt-4" aria-labelledby="ev-ai">
+              <h4 id="ev-ai" className="text-xl font-bold">{ev.labels.ai}</h4>
+              <p className="text-base text-ink-soft">{CLASS_HELP.ai}</p>
+              <ul className="mt-3 space-y-3">
+                {ev.ai.map((r, i) => (
+                  <li key={i}>
+                    <p className="font-bold">{r.categoryLabel}</p>
+                    {r.quote && <p className="text-base mt-1"><span className="font-bold">Quoted:</span> <Quote>{r.quote}</Quote></p>}
+                    <p className="text-ink-soft text-lg">{r.explanation}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
+          {ev.observable.length > 0 && (
+            <section className="mt-5 border-t border-line pt-4" aria-labelledby="ev-obs">
+              <h4 id="ev-obs" className="text-xl font-bold">{ev.labels.observable}</h4>
+              <p className="text-base text-ink-soft">{CLASS_HELP.observable}</p>
+              <ul className="mt-2 space-y-1 text-base">
+                {ev.observable.map((o, i) => <li key={i} className="break-words">{o.text}{o.quote ? <> <Quote>{o.quote}</Quote></> : null}</li>)}
+              </ul>
+            </section>
+          )}
+          {result.ai?.mode === 'rules_only' && <p className="mt-4 text-base text-ink-soft">The AI model was not used for this result. Everything above comes from SaySafe’s fixed rules.</p>}
         </Card>
       )}
       <Card className="p-6">

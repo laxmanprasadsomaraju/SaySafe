@@ -45,7 +45,7 @@ describe('scam eval (offline deterministic layer)', async () => {
   it('every "No obvious warning signs" result carries the disclosure', async () => {
     for (const c of cases.filter((x) => x.expected === 'no_obvious_warning_signs')) {
       const r = await scanMessage(c.text);
-      if (r.verdict === 'no_obvious_warning_signs') expect(r.disclosure).toBe("SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.");
+      if (r.verdict === 'no_obvious_warning_signs') expect(r.disclosure).toBe("No concerning signs were found in what you shared. This isn't a guarantee it's safe.");
     }
   });
 });

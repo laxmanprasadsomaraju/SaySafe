@@ -80,7 +80,7 @@ export function buildShareText(r: ShareInput): string {
   }
   const lines = [`SaySafe check: ${LABEL[v]}`];
   if (v === 'no_obvious_warning_signs') {
-    lines.push("SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.");
+    lines.push("No concerning signs were found in what you shared. This isn't a guarantee it's safe.");
   } else if (phrases.length) {
     lines.push(`Warning signs: ${phrases.join('; ')}.`);
   }

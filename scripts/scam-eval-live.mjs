@@ -4,7 +4,7 @@
  * model for the two screenshot fixtures). Costs real API calls; goes slowly (max 2 in parallel)
  * to avoid 429s.
  *
- *   NODE_USE_ENV_PROXY=1 GROQ_API_KEY=... npx tsx scripts/scam-eval-live.mjs [--only=cases|holdout|images] [--from=0 --to=20] [--out=path.json]
+ *   NODE_USE_ENV_PROXY=1 GROQ_API_KEY=... npx tsx scripts/scam-eval-live.mjs [--only=cases|holdout|heldout-v2|images (comma list)] [--parallel<=3] [--gap=ms] [--from=0 --to=20] [--out=path.json]
  *   (--from/--to slice the selected set so long runs can be split; merge with --merge=a.json,b.json --out=all.json)
  *
  * The set is small and author-written. Report counts, not "accuracy".
@@ -24,8 +24,8 @@ const args = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/
 const only = args.only;
 const out = args.out ?? path.join(root, 'tests/fixtures/scam-eval/live-results.json');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const CONCURRENCY = 2;
-const GAP_MS = 1500;
+const CONCURRENCY = Math.min(3, Number(args.parallel ?? 2)); // never more than 3 at once (Groq 429s)
+const GAP_MS = Number(args.gap ?? 2500);
 
 function summaryOf(rows) {
   const ok = rows.filter((r) => r.actual !== 'error');
@@ -79,7 +79,8 @@ async function evalSet(file) {
     const row = {
       id: c.id, category: c.category, truth: c.truth, expected: c.expected, actual: r.verdict,
       aiUsed: r.ai.used, aiModel: r.ai.model ?? null, aiError: r.ai.error ?? null,
-      aiReasons: r.aiReasons, ms: Date.now() - t0,
+      aiReasons: r.aiReasons, aiMode: r.ai.mode ?? null, aiAttempts: r.ai.attempts ?? null, aiRaised: r.ai.raised ?? null,
+      aiEvidence: r.evidence?.ai ?? [], aiDropped: r.ai.droppedReasons ?? [], ms: Date.now() - t0,
       note: r.signals.filter((s) => s.severity !== 'info').map((s) => s.code).join(','),
     };
     console.log(`  [${i + 1}/${cases.length}] ${c.id}: expected ${c.expected}, got ${r.verdict}${r.ai.used ? '' : ` (AI not used: ${r.ai.error ?? 'unknown'})`}`);
@@ -112,8 +113,8 @@ async function evalImages() {
 }
 
 const report = { ranAt: new Date().toISOString(), textModel: PRIMARY.fastModel, visionModel: PRIMARY.visionModel, sets: {} };
-for (const [name, fn] of [['cases', () => evalSet('cases.json')], ['holdout', () => evalSet('holdout.json')], ['images', evalImages]]) {
-  if (only && only !== name) continue;
+for (const [name, fn] of [['cases', () => evalSet('cases.json')], ['holdout', () => evalSet('holdout.json')], ['heldout-v2', () => evalSet('heldout-v2.json')], ['images', evalImages]]) {
+  if (only ? !only.split(',').includes(name) : name === 'heldout-v2') continue; // heldout-v2 only on request
   console.log(`\n== ${name} ==`);
   const rows = await fn();
   const { s, json } = summaryOf(rows);

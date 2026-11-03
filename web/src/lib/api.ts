@@ -117,4 +117,13 @@ export interface ScanResultV2 extends Omit<ScanResult, 'verdict' | 'signals'> {
   signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string; basis?: FindingBasis }[];
   nextSteps: { id: string; text: string; url?: string; urlLabel?: string }[];
   couldNotVerify: string[];
+  /** Three evidence classes (since scam-calibrate). Older servers do not send it. */
+  evidence?: ScanEvidence;
+  ai: { used: boolean; model?: string; mode?: 'ai_checked' | 'rules_only'; raised?: boolean };
+}
+export interface ScanEvidence {
+  observable: { kind: 'link' | 'phone' | 'email' | 'amount' | 'screenshot' | 'scam_list'; text: string; quote?: string }[];
+  rule: { code: string; severity: 'high' | 'medium' | 'info'; title: string; quote?: string; detail: string }[];
+  ai: { category: string; categoryLabel: string; quote: string; explanation: string }[];
+  labels: { observable: string; rule: string; ai: string };
 }

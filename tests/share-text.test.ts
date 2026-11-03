@@ -21,7 +21,7 @@ describe('WhatsApp share text', () => {
   });
   it('carries the disclosure for "No obvious warning signs"', () => {
     const t = buildShareText({ verdict: 'no_obvious_warning_signs', signals: [] });
-    expect(t).toContain("SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.");
+    expect(t).toContain("No concerning signs were found in what you shared. This isn't a guarantee it's safe.");
   });
   it('maps legacy verdicts', () => expect(buildShareText({ verdict: 'needs_verification', signals: [] })).toContain('Needs checking'));
   it('sanitizer strips IDs, emails, phone numbers and URLs but keeps the SaySafe link', () => {

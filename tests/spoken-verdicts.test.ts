@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spokenScam } from '../web/src/lib/spoken';
+import { vouchesOrInstructs } from '../server/ai/outputGuard';
 
 describe('spokenScam uses the three public verdicts (and maps legacy codes)', () => {
   it('speaks the verdict label first and never says "safe"', () => {
@@ -10,8 +11,10 @@ describe('spokenScam uses the three public verdicts (and maps legacy codes)', ()
     expect(n.startsWith('Needs checking.')).toBe(true);
     expect(n).toContain('or numbers');
     expect(o.startsWith('No obvious warning signs.')).toBe(true);
-    expect(o).toContain("can't confirm who sent this");
-    for (const t of [s, n, o]) expect(t).not.toMatch(/\bsafe\b/i);
+    expect(o).toContain("This isn't a guarantee it's safe.");
+    // The only "safe" allowed is inside the fixed denial "This isn't a guarantee it's safe."
+    for (const t of [s, n, o]) expect(t.replace("This isn't a guarantee it's safe.", '')).not.toMatch(/\bsafe\b/i);
+    for (const t of [s, n, o]) expect(vouchesOrInstructs(t)).toBe(false);
   });
   it('maps legacy and unknown codes like normalizeVerdict()', () => {
     expect(spokenScam({ verdict: 'needs_verification' }).startsWith('Needs checking.')).toBe(true);

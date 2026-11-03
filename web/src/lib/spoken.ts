@@ -15,7 +15,7 @@ export function spokenScam(r: { verdict: string; phonePolicy?: string | null }):
   if (v === 'suspicious')
     return `Suspicious. This message may be a scam. Don't click its links, call its numbers, or pay anything. Open PayPal yourself, or ask your family member.`;
   if (v === 'no_obvious_warning_signs')
-    return `No obvious warning signs. SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.`;
+    return `No obvious warning signs. No concerning signs were found in what you shared. This isn't a guarantee it's safe. Check anything about money in the official PayPal app.`;
   return `Needs checking. I can't confirm this message is real. Don't use its links${r.phonePolicy ? ' or numbers' : ''}. Open the PayPal app yourself to check.`;
 }
 

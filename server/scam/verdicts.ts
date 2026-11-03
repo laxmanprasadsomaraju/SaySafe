@@ -20,7 +20,7 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
 };
 
 export const NO_WARNING_DISCLOSURE =
-  "SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.";
+  "No concerning signs were found in what you shared. This isn't a guarantee it's safe.";
 
 export const VERDICT_RANK: Record<Verdict, number> = { no_obvious_warning_signs: 0, needs_checking: 1, suspicious: 2 };
 
@@ -57,7 +57,8 @@ export type Basis = 'deterministic_rule' | 'ai_judgement' | 'independently_verif
 export const BASIS_LABEL: Record<Basis, string> = {
   deterministic_rule: 'Deterministic rule',
   ai_judgement: 'AI judgement',
-  independently_verified: 'Independently verified',
+  // Code kept for stored data; the label never says "verified" (only a scam list uses it, for a link).
+  independently_verified: 'Independent scam list',
 };
 
 export interface PolicySignal {
@@ -98,27 +99,4 @@ export function decideFromSignals(signals: PolicySignal[], links: PolicyLink[], 
   return 'no_obvious_warning_signs';
 }
 
-/** What the model may say about a message. It can only say suspicious or needs_verification. */
-export interface AiOpinion {
-  verdict: 'suspicious' | 'needs_verification' | string;
-  asks_for?: string[];
-}
-
-const RISKY_ASK = /pay|money|fund|transfer|card|bank|code|otp|pin\b|password|passcode|login|log in|sign in|call|phone|ring|gift|voucher|crypto|bitcoin|remote|anydesk|teamviewer|install|personal|identity|id\b|details|refund|fee|invoice/i;
-
-/**
- * AI may raise the verdict, never lower it.
- * - AI "suspicious" raises needs_checking to suspicious, and no_obvious_warning_signs to needs_checking.
- * - AI "needs_verification" is the model's floor (it is told it may never say anything better),
- *   so on its own it carries no information. It raises "no obvious warning signs" to
- *   "needs checking" only when the model also names something risky the message asks for.
- */
-export function mergeWithAi(rules: Verdict, ai: AiOpinion | null | undefined): Verdict {
-  if (!ai) return rules;
-  // One step up at most when the rules found nothing at all: the model is only allowed to say
-  // "suspicious" or "needs_verification", and in the live eval it called plain receipts
-  // "suspicious". Its doubt alone moves "no obvious warning signs" to "needs checking".
-  if (ai.verdict === 'suspicious') return rules === 'no_obvious_warning_signs' ? 'needs_checking' : 'suspicious';
-  if (rules === 'no_obvious_warning_signs' && (ai.asks_for ?? []).some((a) => RISKY_ASK.test(a))) return 'needs_checking';
-  return rules;
-}
+// The AI merge (evidence-gated, raise-only) lives in aiEvidence.ts: raiseWithEvidence().

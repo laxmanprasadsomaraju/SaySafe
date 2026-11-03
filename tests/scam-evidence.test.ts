@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { analyseText, extract } from '../server/scam/rules';
 import { quoteSpan, truncateSafe, escapeHtml, extractPhones, extractLinks, nextStepsFor, couldNotVerify, SAFE_NEXT_STEPS } from '../server/scam/evidence';
-import { normalizeVerdict, toLegacyVerdict, decideFromSignals, mergeWithAi } from '../server/scam/verdicts';
+import { normalizeVerdict, toLegacyVerdict, decideFromSignals } from '../server/scam/verdicts';
+import { raiseWithEvidence } from '../server/scam/aiEvidence';
 
 const codes = (t: string) => analyseText(t).signals.map((s) => s.code);
 
@@ -67,13 +68,18 @@ describe('verdict policy', () => {
     expect(decideFromSignals([{ code: 'a', severity: 'medium', family: 'payment' }, { code: 'b', severity: 'medium', family: 'contact' }], [])).toBe('needs_checking');
     expect(decideFromSignals([{ code: 'a', severity: 'medium', family: 'payment' }, { code: 'b', severity: 'medium', family: 'pressure' }], [])).toBe('suspicious');
   });
-  it('AI raises but never lowers', () => {
-    expect(mergeWithAi('suspicious', { verdict: 'needs_verification' })).toBe('suspicious');
-    expect(mergeWithAi('needs_checking', { verdict: 'suspicious' })).toBe('suspicious');
-    expect(mergeWithAi('no_obvious_warning_signs', { verdict: 'suspicious' })).toBe('needs_checking');
-    expect(mergeWithAi('no_obvious_warning_signs', { verdict: 'needs_verification', asks_for: [] })).toBe('no_obvious_warning_signs');
-    expect(mergeWithAi('no_obvious_warning_signs', { verdict: 'needs_verification', asks_for: ['bank card details'] })).toBe('needs_checking');
-    expect(mergeWithAi('needs_checking', { verdict: 'no_obvious_warning_signs' })).toBe('needs_checking');
+  it('AI raises (one step, only with validated evidence) but never lowers', () => {
+    const ok = [{ category: 'secrecy' as const, categoryLabel: 'x', quote: 'q', explanation: 'e' }];
+    const money = [{ category: 'payment_request' as const, categoryLabel: 'x', quote: 'q', explanation: 'e' }];
+    expect(raiseWithEvidence('suspicious', { verdict: 'needs_checking' }, ok)).toBe('suspicious');
+    expect(raiseWithEvidence('suspicious', { verdict: 'no_extra_concern' }, [])).toBe('suspicious');
+    expect(raiseWithEvidence('needs_checking', { verdict: 'suspicious' }, ok)).toBe('suspicious');
+    expect(raiseWithEvidence('needs_checking', { verdict: 'suspicious' }, money)).toBe('needs_checking');
+    expect(raiseWithEvidence('needs_checking', { verdict: 'suspicious' }, [])).toBe('needs_checking');
+    expect(raiseWithEvidence('no_obvious_warning_signs', { verdict: 'suspicious' }, ok)).toBe('needs_checking');
+    expect(raiseWithEvidence('no_obvious_warning_signs', { verdict: 'suspicious' }, [])).toBe('no_obvious_warning_signs');
+    expect(raiseWithEvidence('no_obvious_warning_signs', { verdict: 'no_extra_concern' }, ok)).toBe('no_obvious_warning_signs');
+    expect(raiseWithEvidence('needs_checking', null, ok)).toBe('needs_checking');
   });
 });
 

@@ -18,13 +18,16 @@ const UNSAFE = [
 
 const NEGATED_DISCLOSURE = /(?:\bcan['’]?t|\bcannot|\bcan not|\bcould ?n['’]?t|\bcould not|\b(?:is |are |am |was )?unable to|\b(?:is |are |am )?not able to|\bno way to|\b(?:does|do|did) ?n['’]?t|\b(?:does|do|did) not|\bwon['’]?t|\bwill not|\bnever)\s+(?:independently\s+|actually\s+|yet\s+)?(?:confirm|verify|check|tell|know|say|guarantee|prove|promise|vouch)\b[^,;.!?\n]*?(?=\s*(?:[,;.!?\n]|\bbut\b|\bhowever\b|\bso\b|$))/gi;
 
+/** "This isn't a guarantee it's safe" denies safety; it does not assert it. */
+const NOT_A_GUARANTEE = /\b(?:is ?n['’]?t|is not|not|no|never)\s+(?:a\s+|any\s+)?(?:guarantee|promise|proof)\b[^,;.!?\n]*?(?=\s*(?:[,;.!?\n]|\bbut\b|\bhowever\b|\bso\b|$))/gi;
+
 export function vouchesOrInstructs(text: string | null | undefined): boolean {
   if (!text) return false;
   // 1) Negated disclosures: "SaySafe can't confirm who sent this or whether a payment is real".
   //    The clause governed by "can't/cannot/not/unable to confirm|verify|…" is a statement of what we
   //    do NOT know, so it is removed up to the next clause break. The clause stops at , ; . ! ? and at
   //    "but"/"however"/"so", so "I can't confirm it, but it is safe to pay" is still caught.
-  let t = text.replace(NEGATED_DISCLOSURE, ' ');
+  let t = text.replace(NEGATED_DISCLOSURE, ' ').replace(NOT_A_GUARANTEE, ' ');
   // 2) Other negated forms are the safe direction: "is not safe", "isn't genuine", "don't click the link".
   t = t.replace(/(\bnot|n['’]t|\bnever|\bno longer)\s+\w+/gi, ' ');
   return UNSAFE.some((re) => re.test(t));

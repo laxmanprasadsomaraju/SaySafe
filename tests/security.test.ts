@@ -179,7 +179,7 @@ describe('prompt injection', () => {
       expect(['suspicious', 'needs_checking', 'no_obvious_warning_signs']).toContain(r.body.verdict);
       expect(['Suspicious', 'Needs checking', 'No obvious warning signs']).toContain(r.body.verdictLabel);
       expect(JSON.stringify(r.body)).not.toMatch(/"verdict":"(safe|legitimate)"/);
-      if (r.body.verdict === 'no_obvious_warning_signs') expect(r.body.disclosure).toMatch(/can't confirm who sent this/);
+      if (r.body.verdict === 'no_obvious_warning_signs') expect(r.body.disclosure).toBe("No concerning signs were found in what you shared. This isn't a guarantee it's safe.");
       expect(r.body.couldNotVerify.length).toBeGreaterThan(0);
     }
   });
