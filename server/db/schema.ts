@@ -119,6 +119,74 @@ CREATE TABLE IF NOT EXISTS user_preferences (
   profile_json TEXT NOT NULL CHECK (length(profile_json) <= 4096),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Payment companion (elder-only, household-scoped; never read by family endpoints, insights or activity).
+-- Column names avoid SQL keywords (the hosted Turso replica upper-cased keyword keys).
+CREATE TABLE IF NOT EXISTS companion_payments (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  owner_id TEXT NOT NULL,
+  recipient TEXT NOT NULL CHECK (length(recipient) <= 80),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  currency TEXT NOT NULL,
+  paid_on TEXT NOT NULL,
+  pay_method TEXT NOT NULL,
+  memo TEXT CHECK (memo IS NULL OR length(memo) <= 200),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_companion_payments_hh ON companion_payments(household_id);
+CREATE TABLE IF NOT EXISTS companion_subscriptions (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  owner_id TEXT NOT NULL,
+  merchant TEXT NOT NULL CHECK (length(merchant) <= 80),
+  amount_cents INTEGER NOT NULL CHECK (amount_cents > 0),
+  currency TEXT NOT NULL,
+  billing_cycle TEXT NOT NULL CHECK (billing_cycle IN ('weekly','monthly','yearly')),
+  next_on TEXT,
+  memo TEXT CHECK (memo IS NULL OR length(memo) <= 200),
+  sub_state TEXT NOT NULL DEFAULT 'tracking' CHECK (sub_state IN ('tracking','instructions_opened','user_reported_cancelled','cancellation_requested','provider_confirmed')),
+  -- manual = entered by the user (external merchant); paypal_sandbox_subscription = SaySafe Demo Membership.
+  source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual','paypal_sandbox_subscription')),
+  evidence_note TEXT,
+  confirmed_on TEXT,
+  confirmed_by TEXT CHECK (confirmed_by IS NULL OR confirmed_by IN ('user','paypal_api','paypal_webhook')),
+  stopped_at TEXT,
+  paypal_subscription_id TEXT UNIQUE,
+  paypal_status TEXT,
+  paypal_approve_url TEXT,
+  last_checked_at TEXT,
+  webhook_verified INTEGER NOT NULL DEFAULT 0,
+  cancel_state TEXT NOT NULL DEFAULT 'none' CHECK (cancel_state IN ('none','in_progress','retry_needed','confirmed')),
+  cancel_error TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  -- provider_confirmed is only ever set for the PayPal subscription, by the server, after PayPal answered.
+  CHECK (sub_state <> 'provider_confirmed' OR source = 'paypal_sandbox_subscription')
+);
+CREATE INDEX IF NOT EXISTS idx_companion_subscriptions_hh ON companion_subscriptions(household_id);
+-- Single-use, short-lived confirmation tokens for cancelling the Demo Membership (a tap, never a spoken "yes").
+CREATE TABLE IF NOT EXISTS companion_cancel_tokens (
+  token_hash TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL,
+  subscription_id TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS companion_contacts (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  owner_id TEXT NOT NULL,
+  display_name TEXT NOT NULL CHECK (length(display_name) <= 60),
+  relation TEXT,
+  phone TEXT,
+  email TEXT,
+  memo TEXT CHECK (memo IS NULL OR length(memo) <= 200),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_companion_contacts_hh ON companion_contacts(household_id);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   household_id TEXT,
@@ -131,7 +199,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `;
 
 /** Every table the app owns, in an order that respects foreign keys (parents first). Used by backup/migration scripts. */
-export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'] as const;
+export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'companion_payments', 'companion_subscriptions', 'companion_contacts', 'companion_cancel_tokens', 'audit_log'] as const;
 
 export function initSchema(db: Db) {
   db.exec(SCHEMA_SQL);
