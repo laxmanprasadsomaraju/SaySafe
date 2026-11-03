@@ -10,7 +10,8 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Volume2, Accessibility, Languages, ShoppingBag, Users, Lock, LifeBuoy, BarChart3, ChevronRight, MessageCircle, Smartphone, Cloud, RotateCcw } from 'lucide-react';
+import { Volume2, Accessibility, Languages, ShoppingBag, Users, Lock, LifeBuoy, BarChart3, ChevronRight, MessageCircle, Smartphone, Cloud, RotateCcw, Brain } from 'lucide-react';
+import { MemoryBody } from '../components/MemorySection';
 import { Layout } from '../components/Layout';
 import { card, cardPad, panel, linkRow, linkBtn, btnSecondary, btnDanger, btnDangerSolid, btnPrimarySm, btnOutlineTeal, switchBtn, eyebrow } from '../components/ds';
 import { VoiceSettings, LanguageSetting, MuteSwitch } from '../components/VoiceBar';
@@ -371,6 +372,13 @@ export default function Profile() {
     </Section>
   );
 
+  // "What SaySafe remembers": elder only, off by default, saved to the account (never visible to family).
+  const memory = !family && (
+    <Section key="memory" id="memory-h" icon={Brain} title="What SaySafe remembers" where={<Where account />}>
+      <MemoryBody />
+    </Section>
+  );
+
   return (
     <Layout mode={family ? 'family' : 'elder'}>
       <header>
@@ -386,7 +394,7 @@ export default function Profile() {
       <Group id="personal-h" title="Personal experience" lead="How SaySafe speaks, looks and answers. Saved on this device."
         left={voice ? [voice] : [a11y]} right={voice ? [a11y, lang] : []} />
       <Group id="account-h" title="Account & preferences" lead={family ? 'Your role in the household, and your privacy.' : 'What SaySafe remembers for you, who helps you, and your data.'}
-        left={family ? [familyCard] : [shopping, familyCard, sharingCard]} right={[privacy]} />
+        left={family ? [familyCard] : [shopping, familyCard, sharingCard]} right={memory ? [privacy, memory] : [privacy]} />
       <DemoAndHelp family={family} />
     </Layout>
   );
