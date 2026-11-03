@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX, RefreshCw, ShieldCheck, CircleDashed } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
-import { api, eur, type PaymentRequest, type PaymentState } from '../lib/api';
+import { api, eur, type PaymentRequest, type PaymentState, type PaymentTimeline, type ReconcileOutcome } from '../lib/api';
 import { speak } from '../lib/voice';
 import { useMe } from '../lib/session';
 
@@ -21,6 +21,49 @@ export function spokenReceipt(r: PaymentRequest) {
   return `Your payment of ${amt} to ${r.receipt.payee.replace(' (sandbox)', '')} was successful. This was a PayPal sandbox payment, so no real money moved.`;
 }
 
+const RECONCILABLE: PaymentState[] = ['PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'CAPTURE_PENDING'];
+
+function outcomeText(o: ReconcileOutcome): string {
+  return ({
+    captured: 'PayPal confirms this payment was captured.',
+    buyer_approved: 'PayPal shows you approved this payment. Nothing has been taken yet: tap “Finish payment” when you are ready.',
+    cancelled: 'PayPal shows this order was cancelled or has expired. No money was taken.',
+    pending: 'PayPal has not finished this yet. Nothing more is needed from you right now.',
+    unknown: 'I could not reach PayPal just now. Nothing was changed. You can check again in a moment.',
+    mismatch: 'PayPal’s details do not match this purchase, so I have not marked it as paid.',
+    no_change: 'Up to date with PayPal.', throttled: 'Up to date with PayPal.', not_applicable: 'Up to date with PayPal.',
+  } as Record<ReconcileOutcome, string>)[o];
+}
+
+const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString('en-IE', { dateStyle: 'medium', timeStyle: 'medium' }) : '');
+
+function Timeline({ t }: { t: PaymentTimeline }) {
+  if (!t.events.length && !t.pending.length) return null;
+  return (
+    <section className="mt-6" aria-labelledby="evidence-h">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="evidence-h" className="font-bold text-xl">Payment evidence</h2>
+        <span className="text-sm font-bold text-ink-soft">{t.label}</span>
+      </div>
+      <ol className="mt-3 space-y-3">
+        {t.events.map((e) => (
+          <li key={e.kind} className="flex gap-3">
+            <ShieldCheck className={`size-6 shrink-0 mt-0.5 ${e.verified ? 'text-teal' : 'text-danger'}`} aria-hidden />
+            <div>
+              <p className="font-bold">{e.label} <span className="font-normal text-ink-soft">· {when(e.paypalTime ?? e.at)}{e.paypalTime ? ' (PayPal time)' : ''}</span></p>
+              <p className="text-base text-ink-soft">Source: {e.source}</p>
+              <p className="text-base text-ink-soft">{e.verified ? 'Verified: ' : 'Not verified: '}{e.verification}</p>
+            </div>
+          </li>
+        ))}
+        {t.pending.map((p) => (
+          <li key={p} className="flex gap-3 text-ink-soft"><CircleDashed className="size-6 shrink-0 mt-0.5" aria-hidden /><p>{p}</p></li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 /** Shows one purchase. Also handles the return from PayPal (/checkout/return?rid=..&token=ORDERID). */
 export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) {
   const me = useMe('elder');
@@ -32,20 +75,41 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const spoke = useRef(false);
+  const [checking, setChecking] = useState(false);
+  const [checkMsg, setCheckMsg] = useState<string | null>(null);
 
-  const load = () => api<PaymentRequest>(`/api/payments/${id}`).then(setR).catch((e) => setErr(e.message));
+  const load = () => api<PaymentRequest>(`/api/payments/${id}`).then((x) => { setR(x); return x; }).catch((e) => { setErr(e.message); return null; });
+  /** Read-only check with PayPal (never captures). Runs on load for unfinished payments and from the button. */
+  const checkWithPayPal = async (manual = false) => {
+    setChecking(true);
+    try {
+      const out = await api<{ outcome: ReconcileOutcome; request: PaymentRequest }>(`/api/payments/${id}/reconcile`, { body: {} });
+      setR(out.request);
+      if (manual || !['no_change', 'throttled', 'not_applicable', 'pending'].includes(out.outcome)) setCheckMsg(outcomeText(out.outcome));
+    } catch (e: any) { if (manual) setErr(e.message); }
+    finally { setChecking(false); }
+  };
+  const finish = async () => {
+    setBusy(true); setErr(null);
+    try { setR(await api<PaymentRequest>(`/api/payments/${id}/finish`, { body: {} })); await load(); }
+    catch (e: any) { setErr(e.message); await load(); }
+    finally { setBusy(false); }
+  };
 
   useEffect(() => {
     if (!me || !id) return;
     if (fromPayPal) {
       const token = sp.get('token');
-      if (!token) { setErr('PayPal did not send back an order reference. Nothing was charged.'); load(); return; }
+      if (!token) { setErr('PayPal did not send back an order reference. Nothing was charged.'); load().then((x) => { if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); }); return; }
       setBusy(true);
       api<PaymentRequest>(`/api/payments/${id}/confirm`, { body: { orderId: token }, idempotent: true })
-        .then((x) => { setR(x); nav(`/order/${id}`, { replace: true }); })
+        .then((x) => { setR(x); nav(`/order/${id}`, { replace: true }); load(); })
         .catch((e) => { setErr(e.message); load(); })
         .finally(() => setBusy(false));
-    } else load();
+    } else {
+      // Also the path for a lost redirect: opening /order/:id directly asks PayPal what really happened.
+      load().then((x) => { if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); });
+    }
   }, [me, id]); // eslint-disable-line
 
   // Poll while waiting for family or for a pending capture.
@@ -53,7 +117,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
     if (!r) return;
     const waitingNotice = r.state === 'CAPTURED' && r.receipt && !r.receipt.webhookConfirmed;
     if (!['FAMILY_APPROVAL_PENDING', 'CAPTURE_PENDING'].includes(r.state) && !waitingNotice) return;
-    const t = setInterval(load, 4000);
+    const t = setInterval(() => (r.state === 'CAPTURE_PENDING' ? checkWithPayPal() : load()), r.state === 'CAPTURE_PENDING' ? 6000 : 4000);
     const stop = waitingNotice ? setTimeout(() => clearInterval(t), 120_000) : undefined;
     return () => { clearInterval(t); if (stop) clearTimeout(stop); };
   }, [r?.state, r?.receipt?.webhookConfirmed]); // eslint-disable-line
@@ -107,17 +171,22 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
                 <dt className="text-ink-soft">PayPal order</dt><dd className="font-bold break-all">{r.receipt.orderId}</dd>
                 <dt className="text-ink-soft">Transaction</dt><dd className="font-bold break-all">{r.receipt.captureId}</dd>
               </dl>
-              <p className="mt-3 text-base text-ink-soft">{r.receipt.webhookConfirmed ? 'PayPal also sent a signed notice confirming this capture.' : 'Checked directly with PayPal. PayPal’s signed notice usually follows within a minute.'}</p>
+              <p className="mt-3 text-base text-ink-soft">{r.receipt.webhookConfirmed ? 'PayPal also sent a signed notice confirming this capture.' : 'Checked directly with PayPal. Signed PayPal notice not received yet.'}</p>
             </div>
           )}
+          {r.timeline && <Timeline t={r.timeline} />}
         </Card>
         <div className="space-y-4">
           {r.state === 'FAMILY_APPROVAL_PENDING' && <Notice tone="warn" title="Waiting for your family member">I've sent them the exact item, shop and price. This page updates by itself.</Notice>}
           {r.state === 'FAMILY_APPROVED' && <Notice tone="ok" title="Your family member said yes.">You still approve the payment yourself at PayPal.</Notice>}
+          {checkMsg && <Notice tone={checkMsg.startsWith('PayPal’s details') ? 'danger' : 'info'} title={checkMsg} />}
+          {r.state === 'PAYER_APPROVED' && <Notice tone="info" title="Approved at PayPal, not paid yet.">Nothing is taken until you tap “Finish payment”. I check the amount and any family approval again first.</Notice>}
+          {r.state === 'PAYER_APPROVED' && <Button className="w-full" onClick={finish} busy={busy}>Finish payment</Button>}
           {r.state === 'BLOCKED' && <Notice tone="danger" title="Stopped for your safety">{r.risk?.reasons.join(' ')}</Notice>}
           {r.state === 'CANCELLED' && r.approval?.status === 'declined' && <Notice tone="info" title="Your family member said no this time.">{r.approval.reason ?? 'Maybe talk it over together.'}</Notice>}
           {(r.state === 'FAMILY_APPROVED' || r.state === 'PAYER_APPROVAL_PENDING') && <Button className="w-full" onClick={checkout} busy={busy}>Continue to PayPal</Button>}
-          {['FAMILY_APPROVAL_PENDING', 'FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING'].includes(r.state) && <Button className="w-full" variant="secondary" onClick={cancel} disabled={busy}>Cancel this purchase</Button>}
+          {RECONCILABLE.includes(r.state) && <Button className="w-full" variant="secondary" icon={<RefreshCw className="size-6" aria-hidden />} onClick={() => checkWithPayPal(true)} busy={checking} disabled={busy}>Check with PayPal</Button>}
+          {['FAMILY_APPROVAL_PENDING', 'FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING', 'PAYER_APPROVED'].includes(r.state) && <Button className="w-full" variant="secondary" onClick={cancel} disabled={busy}>Cancel this purchase</Button>}
           {paid && <Button className="w-full" variant="secondary" icon={<Volume2 className="size-6" aria-hidden />} onClick={() => speak(spokenReceipt(r))}>Read my receipt</Button>}
           {paid && <Button className="w-full" variant="ghost" icon={<PackageX className="size-6" aria-hidden />} onClick={() => nav('/help', { state: { problem: true, requestId: r.id } })}>Problem with this order?</Button>}
           <Button className="w-full" variant="ghost" onClick={() => nav('/home')}>Back to home</Button>

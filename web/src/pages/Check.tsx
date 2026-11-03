@@ -115,6 +115,7 @@ export default function Check() {
                 <p className="mt-3 text-[length:var(--text-lead)]">{result.spokenSummary}</p>
                 <button onClick={() => speak(result.spokenSummary)} className="mt-3 inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-12"><Volume2 className="size-5" aria-hidden />Read it to me again</button>
               </div>
+              {result.aiNotice && <Notice tone="info" title={result.aiNotice}>This result comes from SaySafe's built-in safety checks only. The safe steps are the same.</Notice>}
               {result.ocrUncertain && <Notice tone="warn" title="Some letters in the screenshot were hard to read.">Please check the address carefully, or paste the text instead.</Notice>}
               {top.length > 0 && (
                 <Card className="p-6">

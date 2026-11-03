@@ -3,6 +3,7 @@ import { analyseText, mergeVerdict, type RuleResult, type Verdict } from './rule
 import { chat, chatJSON, aiConfigured } from '../ai/provider.js';
 import { TRUSTED_HELP_PAGES, PAYPAL_PHONE_POLICY } from './directory.js';
 import { checkReputation, type ReputationResult } from './reputation.js';
+import { vouchesOrInstructs } from '../ai/outputGuard.js';
 
 const AiAssessment = z.object({
   verdict: z.enum(['suspicious', 'needs_verification']),
@@ -90,7 +91,8 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
       const before = verdict;
       verdict = mergeVerdict(verdict, res.data.verdict);
       if (verdict !== 'verified_official_contact' || before !== 'verified_official_contact') aiReasons = res.data.reasons;
-      spoken = res.data.spoken_summary;
+      spoken = vouchesOrInstructs(res.data.spoken_summary) ? '' : res.data.spoken_summary; // never let model text vouch for safety or say "pay"
+      aiReasons = aiReasons.filter((x) => !vouchesOrInstructs(x));
       Object.assign(ai, { used: true, provider: res.provider, model: res.model });
     } catch (e: any) {
       ai.error = String(e?.message ?? e).slice(0, 200);
