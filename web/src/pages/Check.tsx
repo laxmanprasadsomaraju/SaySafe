@@ -10,6 +10,7 @@ import { Shield } from 'lucide-react';
 import { ScanDetails } from '../components/ScanDetails';
 import { ShareWarning } from '../components/ShareWarning';
 import { takeSharedText } from '../lib/shareTarget';
+import type { ScanResultV2, ScanVerdict } from '../lib/api';
 
 const VERDICT = {
   suspicious: { icon: ShieldAlert, cls: 'bg-danger-soft border-danger', ic: 'text-danger', label: 'Suspicious' },
@@ -68,7 +69,7 @@ export default function Check() {
   const share = async () => { if (!result) return; await api(`/api/scan/${result.scanId}/share`, { body: {} }); setShared(true); };
 
   if (!me) return <Layout><p>Loading…</p></Layout>;
-  const v = result ? VERDICT[result.verdict] : null;
+  const v = result ? VERDICT[result.verdict as unknown as ScanVerdict] : null;
   const top = result?.signals.filter((s) => s.severity !== 'info') ?? [];
   const minor = result?.signals.filter((s) => s.severity === 'info') ?? [];
   return (
@@ -122,7 +123,7 @@ export default function Check() {
                 <button onClick={() => speak(result.spokenSummary)} className="mt-3 inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-12"><Volume2 className="size-5" aria-hidden />Read it to me again</button>
               </div>
               {result.ocrUncertain && <Notice tone="warn" title="Some letters in the screenshot were hard to read.">Please check the address carefully, or paste the text instead.</Notice>}
-              <ScanDetails result={result} />
+              <ScanDetails result={result as unknown as ScanResultV2} />
               <Card className="p-6">
                 <h3 className="text-2xl">Get help</h3>
                 <div className="mt-4 flex flex-col gap-3">
@@ -131,7 +132,7 @@ export default function Check() {
                 </div>
                 {result.phonePolicy && <p className="mt-4 text-base text-ink-soft">{result.phonePolicy}</p>}
               </Card>
-              <ShareWarning result={result} />
+              <ShareWarning result={result as unknown as ScanResultV2} />
             </div>
           )}
         </div>

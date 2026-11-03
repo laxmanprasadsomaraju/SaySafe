@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { MessageCircle, Share2, Copy, Check } from 'lucide-react';
 import { Button, Card } from './ui';
 import { buildShareText, whatsappUrl } from '../lib/shareText';
-import type { ScanResult } from '../lib/api';
+import type { ScanResultV2 } from '../lib/api';
 
 /**
  * Optional "Share warning on WhatsApp". Shows exactly what will be shared first.
  * wa.me without a number: the person picks the contact inside WhatsApp. Nothing is sent by SaySafe.
  */
-export function ShareWarning({ result }: { result: ScanResult }) {
+export function ShareWarning({ result }: { result: ScanResultV2 }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const text = buildShareText(result);

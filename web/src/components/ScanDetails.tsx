@@ -1,6 +1,6 @@
 import { ExternalLink } from 'lucide-react';
 import { Card, Notice } from './ui';
-import type { ScanResult, FindingBasis } from '../lib/api';
+import type { ScanResultV2, FindingBasis } from '../lib/api';
 
 const BASIS: Record<FindingBasis, string> = {
   deterministic_rule: 'Deterministic rule',
@@ -13,7 +13,7 @@ function BasisTag({ basis }: { basis: FindingBasis }) {
 }
 
 /** Findings with exact evidence, what could not be verified, and safe next steps. All text is rendered as text (React escapes it). */
-export function ScanDetails({ result }: { result: ScanResult }) {
+export function ScanDetails({ result }: { result: ScanResultV2 }) {
   const top = result.signals.filter((s) => s.severity !== 'info').sort((a, b) => (a.severity === b.severity ? 0 : a.severity === 'high' ? -1 : 1));
   const minor = result.signals.filter((s) => s.severity === 'info');
   return (

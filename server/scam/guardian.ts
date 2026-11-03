@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { analyseText, type RuleResult, type Verdict } from './rules.js';
-import { mergeWithAi, normalizeVerdict, toLegacyVerdict, VERDICT_LABEL, NO_WARNING_DISCLOSURE, type LegacyVerdict } from './verdicts.js';
+import { mergeWithAi, toLegacyVerdict, VERDICT_LABEL, NO_WARNING_DISCLOSURE, type LegacyVerdict } from './verdicts.js';
 import { nextStepsFor, couldNotVerify, type NextStep } from './evidence.js';
 import { chat, chatJSON, aiConfigured } from '../ai/provider.js';
 import { TRUSTED_HELP_PAGES, PAYPAL_PHONE_POLICY } from './directory.js';
@@ -78,7 +78,8 @@ function fallbackSpoken(name: string, v: Verdict, r: RuleResult) {
 
 export async function scanMessage(input: string, opts: { userName?: string; extractedFromImage?: boolean; ocrUncertain?: boolean } = {}): Promise<ScanResult> {
   const name = opts.userName ?? 'Mary';
-  const rules = analyseText(input, { ocrUncertain: opts.ocrUncertain });
+  const rules = analyseText(input);
+  const has = { links: rules.links.length > 0, phones: rules.phones.length > 0, emails: rules.emails.length > 0, money: rules.signals.some((s) => s.family === 'payment' || s.family === 'charge'), fromImage: opts.extractedFromImage };
   const reputation = await checkReputation(rules.links.map((l) => l.raw));
   for (const rep of reputation) {
     if (rep.listed) rules.signals.unshift({ code: 'threat_intel', severity: 'high', family: 'intel', basis: rep.source === 'SaySafe local list' ? 'deterministic_rule' : 'independently_verified', title: 'This link is on a known scam list', detail: `Reported by ${rep.source}.`, evidence: rep.url });
@@ -101,6 +102,10 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
       aiVerdict = res.data.verdict;
       // AI may raise the verdict, never lower it, and can never grant "no obvious warning signs".
       verdict = mergeWithAi(verdict, res.data);
+      // Compare the model's words with the final verdict in public codes. The model can only mean
+      // "suspicious" or "needs checking", so its own summary is never used for "no obvious warning
+      // signs" (that one must carry the fixed disclosure).
+      aiVerdict = res.data.verdict === 'suspicious' ? 'suspicious' : 'needs_checking';
       if (verdict !== 'no_obvious_warning_signs') aiReasons = res.data.reasons;
       spoken = res.data.spoken_summary;
       Object.assign(ai, { used: true, provider: res.provider, model: res.model });
@@ -109,8 +114,7 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
     }
   }
   // Spoken words must always match the FINAL verdict, never a softer AI opinion.
-  if (!spoken || normalizeVerdict(aiVerdict) !== verdict || verdict === 'no_obvious_warning_signs') spoken = fallbackSpoken(name, verdict, rules);
-  const has = { links: rules.links.length > 0, phones: rules.phones.length > 0, emails: rules.emails.length > 0, money: rules.signals.some((s) => s.family === 'payment' || s.family === 'charge'), fromImage: opts.extractedFromImage };
+  if (!spoken || aiVerdict !== verdict) spoken = fallbackSpoken(name, verdict, rules);
 
   return {
     verdict,
