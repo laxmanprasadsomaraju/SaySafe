@@ -43,6 +43,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/" element={<Welcome />} />
         <Route path="/home" element={<Home />} />
         <Route path="/check" element={<Check />} />
+        <Route path="/check/share" element={<Check />} />
         <Route path="/shop" element={<Shop />} />
         <Route path="/order/:id" element={<Order />} />
         <Route path="/checkout/return" element={<ReturnGate />} />

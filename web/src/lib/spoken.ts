@@ -2,15 +2,21 @@
  * Short spoken summaries, built separately from what is on screen.
  * The screen always shows the full detail; speech says only what matters first.
  */
-import type { PaymentRequest, ScanResult } from './api';
+import type { PaymentRequest } from './api';
+import { shareVerdict } from './shareText';
 
-/** Scam result: risk level, then the single most important protective action. Never shortened past meaning. */
-export function spokenScam(r: Pick<ScanResult, 'verdict' | 'phonePolicy'>): string {
-  if (r.verdict === 'suspicious')
-    return `This message may be a scam. Don't click its links, call its numbers, or pay anything. Open PayPal yourself, or ask your family member.`;
-  if (r.verdict === 'verified_official_contact')
-    return `This matches an official PayPal contact, but that alone doesn't prove the message is genuine. Check any payment inside the PayPal app yourself.`;
-  return `I can't confirm this message is real. Don't use its links${r.phonePolicy ? ' or numbers' : ''}. Open the PayPal app yourself to check.`;
+/**
+ * Scam result: verdict label, then the single most important protective action. Never shortened past meaning.
+ * Accepts the three public verdicts and the legacy codes (mapped the same way as the server's normalizeVerdict).
+ * Never says "safe": the best it can say is "No obvious warning signs", always with the disclosure.
+ */
+export function spokenScam(r: { verdict: string; phonePolicy?: string | null }): string {
+  const v = shareVerdict(r.verdict);
+  if (v === 'suspicious')
+    return `Suspicious. This message may be a scam. Don't click its links, call its numbers, or pay anything. Open PayPal yourself, or ask your family member.`;
+  if (v === 'no_obvious_warning_signs')
+    return `No obvious warning signs. SaySafe can't confirm who sent this or whether a payment is real. Check in the official PayPal app.`;
+  return `Needs checking. I can't confirm this message is real. Don't use its links${r.phonePolicy ? ' or numbers' : ''}. Open the PayPal app yourself to check.`;
 }
 
 const euro = (v: string | number) => { const n = Number(v); return `€${n.toFixed(n % 1 ? 2 : 0)}`; };

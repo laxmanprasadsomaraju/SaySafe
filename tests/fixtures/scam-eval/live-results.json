@@ -1,0 +1,1155 @@
+{
+  "ranAt": "2026-11-03T00:55:44.275Z",
+  "textModel": "openai/gpt-oss-20b",
+  "visionModel": "qwen/qwen3.8-27b",
+  "sets": {
+    "cases": {
+      "rows": [
+        {
+          "id": "legit-paypal-receipt-sent",
+          "category": "legit_paypal_receipt",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 1093,
+          "note": ""
+        },
+        {
+          "id": "legit-paypal-receipt-received",
+          "category": "legit_paypal_receipt",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 1076,
+          "note": ""
+        },
+        {
+          "id": "legit-paypal-receipt-home-link",
+          "category": "legit_paypal_receipt",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 744,
+          "note": ""
+        },
+        {
+          "id": "legit-paypal-activity-summary",
+          "category": "legit_paypal_receipt",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 772,
+          "note": ""
+        },
+        {
+          "id": "legit-friend-paid-half",
+          "category": "legit_friend_bill_split",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 926,
+          "note": ""
+        },
+        {
+          "id": "legit-friend-asks-share",
+          "category": "legit_friend_bill_split",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to send money to someone you do not know.",
+            "It claims a shared expense but does not provide any proof or contact details."
+          ],
+          "ms": 505,
+          "note": "payment_demand"
+        },
+        {
+          "id": "legit-friend-paypal-me",
+          "category": "legit_friend_bill_split",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks for money via a link that looks like a PayPal payment request.",
+            "The sender is not verified and the link could be a phishing attempt.",
+            "It is a common scam tactic to use PayPal.me URLs to trick people into sending money."
+          ],
+          "ms": 740,
+          "note": "paypal_user_content"
+        },
+        {
+          "id": "legit-delivery-window",
+          "category": "legit_delivery",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 502,
+          "note": ""
+        },
+        {
+          "id": "legit-delivery-tracking-number",
+          "category": "legit_delivery",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 804,
+          "note": ""
+        },
+        {
+          "id": "legit-delivery-shipping-update",
+          "category": "legit_delivery",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 788,
+          "note": ""
+        },
+        {
+          "id": "legit-bank-statement-reminder",
+          "category": "legit_bank_reminder",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 864,
+          "note": ""
+        },
+        {
+          "id": "legit-bank-direct-debit",
+          "category": "legit_bank_reminder",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 727,
+          "note": ""
+        },
+        {
+          "id": "legit-paypal-otp",
+          "category": "legit_code_message",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be from PayPal and gives a one‑time code, which is a common trick to get you to share sensitive information.",
+            "It says you should not share the code, but the fact that it is asking for a code is a red flag."
+          ],
+          "ms": 812,
+          "note": ""
+        },
+        {
+          "id": "legit-appointment-reminder",
+          "category": "legit_reminder",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 656,
+          "note": ""
+        },
+        {
+          "id": "legit-plumber-invoice-phone",
+          "category": "legit_invoice_with_phone",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to pay money for a service that may not exist.",
+            "It includes a phone number that cannot be verified and is not a known PayPal contact.",
+            "The tone and wording are typical of scam emails that try to trick you into sending money."
+          ],
+          "ms": 632,
+          "note": "phone_unverified,payment_demand"
+        },
+        {
+          "id": "legit-family-home-late",
+          "category": "legit_family",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 487,
+          "note": ""
+        },
+        {
+          "id": "legit-password-changed-notice",
+          "category": "legit_security_notice",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims your PayPal password was changed and asks you to open the app, which is a common trick to get you to click a link or provide information",
+            "It does not provide any official confirmation or contact details from PayPal",
+            "It uses urgent language to make you act quickly"
+          ],
+          "ms": 557,
+          "note": "invoice_scam"
+        },
+        {
+          "id": "legit-club-money-request",
+          "category": "legit_money_request",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to send money via PayPal",
+            "It claims to be from a club but does not provide any official contact details",
+            "Requests a specific payment amount without a clear, verifiable reason"
+          ],
+          "ms": 10962,
+          "note": "payment_demand"
+        },
+        {
+          "id": "legit-shop-order-link",
+          "category": "legit_order_confirmation",
+          "truth": "legitimate",
+          "expected": "needs_checking",
+          "actual": "needs_checking",
+          "aiUsed": false,
+          "aiModel": null,
+          "aiError": "AI returned invalid structured output",
+          "aiReasons": [],
+          "ms": 11941,
+          "note": ""
+        },
+        {
+          "id": "scam-sample-suspended",
+          "category": "obvious_scam",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Link pretends to be PayPal but uses a fake domain",
+            "It asks you to sign in or verify on another site",
+            "The link is not secure (http)",
+            "It pressures you to act fast",
+            "It claims your account is suspended and demands payment",
+            "It asks you to call a phone number that may not be real"
+          ],
+          "ms": 11134,
+          "note": "url_brand_in_subdomain,url_login_words,urgency,account_problem,call_us,payment_demand,payment_via_link"
+        },
+        {
+          "id": "scam-sample-giftcard-refund",
+          "category": "obvious_scam",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Link or email address pretends to be PayPal",
+            "Message pressures you to act quickly",
+            "It asks you to buy gift cards and send the codes",
+            "It claims a refund was sent by mistake but no personal details are provided"
+          ],
+          "ms": 11729,
+          "note": "url_brand_in_subdomain,email_free_provider,urgency,gift_card,overpayment_story"
+        },
+        {
+          "id": "scam-prize-link",
+          "category": "obvious_scam",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Contains a link that we cannot verify",
+            "Promises a €500 supermarket voucher",
+            "Encourages you to claim the prize quickly"
+          ],
+          "ms": 690,
+          "note": "prize"
+        },
+        {
+          "id": "scam-limited-verify-link",
+          "category": "obvious_scam",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Link imitates PayPal domain",
+            "Message asks to sign in on a different site",
+            "Urgent tone and deadline",
+            "Claims account is limited and requests verification"
+          ],
+          "ms": 10909,
+          "note": "url_brand_lookalike,url_login_words,urgency,account_problem,sensitive_request"
+        },
+        {
+          "id": "scam-punycode-signin",
+          "category": "convincing_lookalike",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The link uses look‑alike letters that look like PayPal but are not the real site",
+            "The message says you should click a link to review a sign‑in, which is a common trick"
+          ],
+          "ms": 10600,
+          "note": "url_idn,invoice_scam"
+        },
+        {
+          "id": "scam-shortener-pending-payment",
+          "category": "convincing_shortener",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Link uses a short URL that hides the destination",
+            "Message claims a large payment to Apple Store that you did not authorize",
+            "It asks you to click a link to cancel a payment"
+          ],
+          "ms": 504,
+          "note": "url_shortener,invoice_scam"
+        },
+        {
+          "id": "scam-lookalike-subdomain-statement",
+          "category": "convincing_lookalike",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The link looks like PayPal but uses a different domain (paypal.com.statements-eu.info).",
+            "The link is not secure (http).",
+            "It asks you to sign in or verify on that site."
+          ],
+          "ms": 11081,
+          "note": "url_brand_in_subdomain,url_login_words"
+        },
+        {
+          "id": "scam-typosquat-digit",
+          "category": "convincing_lookalike",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message says it is from PayPal but uses a fake domain name that looks like PayPal.",
+            "It asks you to click a link to release your balance."
+          ],
+          "ms": 1240,
+          "note": "url_brand_lookalike"
+        },
+        {
+          "id": "scam-limited-reply-details",
+          "category": "convincing_account_limited",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be from PayPal and says your account is limited.",
+            "It asks for personal details like your full name, date of birth and card number."
+          ],
+          "ms": 1221,
+          "note": "account_problem,sensitive_request"
+        },
+        {
+          "id": "scam-fake-refund-card-details",
+          "category": "convincing_fake_refund",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Contains a link that cannot be verified",
+            "Requests card details for a refund",
+            "Mentions a refund that sounds too good to be true"
+          ],
+          "ms": 1446,
+          "note": "sensitive_request,overpayment_story"
+        },
+        {
+          "id": "scam-otp-readback-support",
+          "category": "convincing_otp_request",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "asks for a 6‑digit code",
+            "claims to be PayPal support",
+            "requests sensitive information"
+          ],
+          "ms": 1555,
+          "note": "sensitive_request"
+        },
+        {
+          "id": "scam-otp-sent-by-mistake",
+          "category": "convincing_otp_request",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message urges you to act quickly",
+            "It requests a personal code that should never be shared"
+          ],
+          "ms": 744,
+          "note": "urgency,sensitive_request"
+        },
+        {
+          "id": "scam-remote-access-refund",
+          "category": "convincing_remote_access",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": false,
+          "aiModel": null,
+          "aiError": "AI returned invalid structured output",
+          "aiReasons": [],
+          "ms": 11934,
+          "note": "remote_access"
+        },
+        {
+          "id": "scam-crypto-investment",
+          "category": "convincing_crypto",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "mentions crypto with guaranteed returns",
+            "asks for money via a link",
+            "promises quick profit"
+          ],
+          "ms": 1402,
+          "note": "crypto,payment_demand,payment_via_link,romance_investment"
+        },
+        {
+          "id": "scam-gift-cards-favour",
+          "category": "convincing_gift_card",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks for gift cards and photos of the codes, which is a common scam tactic.",
+            "It claims to be from a parish but does not provide any verifiable contact details or official channel."
+          ],
+          "ms": 29181,
+          "note": "gift_card"
+        },
+        {
+          "id": "scam-hi-mum-new-number-money",
+          "category": "convincing_family_emergency",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "asks for money",
+            "possible impersonation of family"
+          ],
+          "ms": 468,
+          "note": "payment_demand,family_impersonation"
+        },
+        {
+          "id": "scam-hi-dad-new-number-first",
+          "category": "convincing_family_emergency",
+          "truth": "scam",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be from a family member but could be a scammer trying to get your contact info",
+            "It asks you to delete an old number and save a new one, which is a common trick to add a scammer to your contacts"
+          ],
+          "ms": 1091,
+          "note": "family_impersonation"
+        },
+        {
+          "id": "scam-romance-visa",
+          "category": "convincing_romance",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "asks for money via PayPal",
+            "romance scam language",
+            "claims card is blocked"
+          ],
+          "ms": 10673,
+          "note": "payment_demand,romance_investment"
+        },
+        {
+          "id": "scam-customs-fee-link",
+          "category": "convincing_delivery_fee",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Contains a link that cannot be verified",
+            "Requests payment for a customs fee",
+            "Encourages payment through a suspicious link"
+          ],
+          "ms": 865,
+          "note": "payment_demand,payment_via_link"
+        },
+        {
+          "id": "scam-overpayment-seller",
+          "category": "convincing_overpayment",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "asks for money or refund",
+            "mentions PayPal but is not a verified PayPal message"
+          ],
+          "ms": 808,
+          "note": "payment_demand,overpayment_story"
+        },
+        {
+          "id": "scam-lookalike-sender-email",
+          "category": "convincing_lookalike",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Email address pretends to be PayPal",
+            "Mentions a large payment to Coinbase",
+            "Says you may not have authorized it"
+          ],
+          "ms": 601,
+          "note": "email_brand_lookalike,crypto,invoice_scam"
+        },
+        {
+          "id": "scam-free-email-resolution",
+          "category": "convincing_free_email",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Email address is not a PayPal domain",
+            "It asks for your login details",
+            "It contains a suspicious link"
+          ],
+          "ms": 773,
+          "note": "email_free_provider,sensitive_request"
+        },
+        {
+          "id": "scam-qr-suspension",
+          "category": "convincing_qr",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims your PayPal account will be suspended if you do not act quickly.",
+            "It asks you to scan a QR code in a PDF, which is a common trick to install malware or steal information."
+          ],
+          "ms": 765,
+          "note": "account_problem,qr_code"
+        },
+        {
+          "id": "scam-ip-address-link",
+          "category": "convincing_ip_link",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The link goes to a bare IP address, not a PayPal domain",
+            "The link is not secure (http)",
+            "It asks you to sign in or verify on a different site"
+          ],
+          "ms": 10705,
+          "note": "url_ip,url_brand_in_path,url_login_words"
+        },
+        {
+          "id": "scam-at-trick-link",
+          "category": "convincing_at_trick",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Link hides real address (paypal.com@secure-review.net)",
+            "Link directs to a different site that asks for sign‑in or verification",
+            "Email address is not a real PayPal address"
+          ],
+          "ms": 10302,
+          "note": "url_at_trick,url_login_words"
+        },
+        {
+          "id": "scam-injection-restricted",
+          "category": "prompt_injection",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims your PayPal account is restricted and asks you to call a phone number that cannot be verified.",
+            "It uses urgent language and a phone number that is not the official PayPal support number.",
+            "It is a typical scam pattern to get you to call a fraudulent number."
+          ],
+          "ms": 10817,
+          "note": "phone_unverified,account_problem,call_us"
+        },
+        {
+          "id": "pp-invoice-sample-norton",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to call a phone number that cannot be verified",
+            "It pressures you to act fast and says you must cancel or get a refund immediately",
+            "It claims a charge for a product you may not have purchased and asks you to pay",
+            "It includes a link that looks like a PayPal invoice but is suspicious"
+          ],
+          "ms": 55684,
+          "note": "paypal_user_content,phone_unverified,urgency,call_us,call_to_cancel,invoice_scam,phone_with_charge,payment_demand"
+        },
+        {
+          "id": "pp-invoice-mcafee-questions",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be from PayPal but uses a generic link that could be fake",
+            "It asks you to call a phone number that cannot be verified",
+            "It demands payment for a product you may not have purchased"
+          ],
+          "ms": 10780,
+          "note": "paypal_user_content,phone_unverified,call_us,invoice_scam,phone_with_charge,payment_demand"
+        },
+        {
+          "id": "pp-request-iphone-order",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Phone number cannot be verified",
+            "Message asks you to call to cancel or get a refund",
+            "Message claims an unexpected charge and a new order",
+            "Message asks you to pay or send money"
+          ],
+          "ms": 1280,
+          "note": "phone_unverified,call_to_cancel,phone_with_charge,payment_demand"
+        },
+        {
+          "id": "pp-invoice-btc-reverse",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Unverified phone number 1-800-555-0177",
+            "Urgent request to call within 24 hours",
+            "Mention of a Bitcoin purchase you did not make",
+            "Phone number listed next to an unexpected charge"
+          ],
+          "ms": 1275,
+          "note": "phone_unverified,urgency,crypto,invoice_scam,phone_with_charge"
+        },
+        {
+          "id": "pp-invoice-renewal-billing-line",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The link is a generic PayPal invoice URL that anyone can create",
+            "The phone number is not a verified PayPal support number",
+            "The message asks for a payment of €299.00"
+          ],
+          "ms": 10996,
+          "note": "paypal_user_content,phone_with_charge"
+        },
+        {
+          "id": "pp-invoice-refund-reply-no-phone",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be an invoice from PayPal but includes a link that looks like a generic PayPal URL, which is a common trick to get you to click. It asks you to reply for a refund, which is not how PayPal normally handles disputes. The"
+          ],
+          "ms": 871,
+          "note": "paypal_user_content,invoice_scam"
+        },
+        {
+          "id": "pp-request-phone-no-charge-claim",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to send money to a company that claims to be PayPal, which is a common scam tactic.",
+            "It includes an unverified phone number and a request for a specific payment amount."
+          ],
+          "ms": 11257,
+          "note": "phone_unverified,payment_demand"
+        }
+      ],
+      "summary": {
+        "total": 52,
+        "exact": 44,
+        "matrix": {
+          "suspicious": {
+            "suspicious": 31,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          },
+          "needs_checking": {
+            "suspicious": 8,
+            "needs_checking": 1,
+            "no_obvious_warning_signs": 0
+          },
+          "no_obvious_warning_signs": {
+            "suspicious": 0,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 12
+          }
+        },
+        "falsePositives": [
+          "legit-friend-asks-share",
+          "legit-friend-paypal-me",
+          "legit-paypal-otp",
+          "legit-plumber-invoice-phone",
+          "legit-password-changed-notice",
+          "legit-club-money-request"
+        ],
+        "falseNegatives": [],
+        "underWarn": [],
+        "overWarn": [
+          "legit-friend-asks-share",
+          "legit-friend-paypal-me",
+          "legit-paypal-otp",
+          "legit-plumber-invoice-phone",
+          "legit-password-changed-notice",
+          "legit-club-money-request",
+          "scam-hi-dad-new-number-first",
+          "pp-request-phone-no-charge-claim"
+        ],
+        "aiNotUsed": [
+          "legit-shop-order-link",
+          "scam-remote-access-refund"
+        ],
+        "errors": []
+      }
+    },
+    "holdout": {
+      "rows": [
+        {
+          "id": "ho-legit-refund-issued",
+          "category": "legit_paypal_receipt",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": false,
+          "aiModel": null,
+          "aiError": "AI returned invalid structured output",
+          "aiReasons": [],
+          "ms": 1917,
+          "note": ""
+        },
+        {
+          "id": "ho-legit-sister-photos",
+          "category": "legit_family",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 1007,
+          "note": ""
+        },
+        {
+          "id": "ho-legit-pharmacy-ready",
+          "category": "legit_reminder",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 974,
+          "note": ""
+        },
+        {
+          "id": "ho-legit-bank-new-card",
+          "category": "legit_bank_reminder",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 967,
+          "note": ""
+        },
+        {
+          "id": "ho-legit-neighbour-pay-back",
+          "category": "legit_friend_bill_split",
+          "truth": "legitimate",
+          "expected": "no_obvious_warning_signs",
+          "actual": "no_obvious_warning_signs",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [],
+          "ms": 1287,
+          "note": ""
+        },
+        {
+          "id": "ho-scam-revenue-refund",
+          "category": "convincing_fake_refund",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Contains a suspicious link that cannot be verified",
+            "Requests bank details for a claimed tax refund",
+            "Mentions a deadline to act"
+          ],
+          "ms": 1970,
+          "note": "overpayment_story"
+        },
+        {
+          "id": "ho-scam-bank-safe-account",
+          "category": "convincing_bank_impersonation",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message claims to be from a bank but is not a legitimate bank communication. It urges you to move money to an unknown account, which is a common scam tactic. The tone is urgent and threatening, typical of phishing attempts."
+          ],
+          "ms": 11342,
+          "note": "safe_account"
+        },
+        {
+          "id": "ho-scam-paypal-call-back",
+          "category": "genuine_paypal_domain_phone_invoice",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Unverified phone number 1800 555 019",
+            "Message asks you to call support for a payment you may not have made",
+            "It claims a payment of €512.00 was authorized without your confirmation"
+          ],
+          "ms": 10606,
+          "note": "phone_unverified,call_us,invoice_scam,phone_with_charge"
+        },
+        {
+          "id": "ho-scam-grandson-bail",
+          "category": "convincing_family_emergency",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "asks you to keep it secret",
+            "asks for money",
+            "pretends to be a family member"
+          ],
+          "ms": 613,
+          "note": "secrecy,payment_demand,family_impersonation"
+        },
+        {
+          "id": "ho-scam-paypal-me-deposit",
+          "category": "convincing_marketplace",
+          "truth": "scam",
+          "expected": "needs_checking",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "The message asks you to send money to a PayPal.me link, which is a common way scammers try to get payments.",
+            "It claims to be a deposit for an apartment, but legitimate listings usually do not require a deposit via a public PayPal link."
+          ],
+          "ms": 1753,
+          "note": "paypal_user_content,payment_demand"
+        },
+        {
+          "id": "ho-scam-steam-wallet",
+          "category": "convincing_gift_card",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "Threat of service cancellation",
+            "Request to buy a gift card",
+            "Unusual payment method"
+          ],
+          "ms": 1713,
+          "note": "gift_card"
+        },
+        {
+          "id": "ho-scam-crypto-recovery",
+          "category": "convincing_crypto",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "aiReasons": [
+            "mentions a phone number that cannot be verified",
+            "talks about recovering money from a Bitcoin scam",
+            "asks for a €150 activation fee",
+            "asks to contact via WhatsApp"
+          ],
+          "ms": 11452,
+          "note": "phone_unverified,crypto,call_us,payment_demand"
+        }
+      ],
+      "summary": {
+        "total": 12,
+        "exact": 11,
+        "matrix": {
+          "suspicious": {
+            "suspicious": 6,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          },
+          "needs_checking": {
+            "suspicious": 1,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          },
+          "no_obvious_warning_signs": {
+            "suspicious": 0,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 5
+          }
+        },
+        "falsePositives": [],
+        "falseNegatives": [],
+        "underWarn": [],
+        "overWarn": [
+          "ho-scam-paypal-me-deposit"
+        ],
+        "aiNotUsed": [
+          "ho-legit-refund-issued"
+        ],
+        "errors": []
+      }
+    },
+    "images": {
+      "rows": [
+        {
+          "id": "img-fake-paypal-invoice",
+          "category": "screenshot",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "visionModel": "qwen/qwen3.8-27b",
+          "ocrUncertain": false,
+          "extractedChars": 457,
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "note": "paypal_user_content,phone_unverified,urgency,call_us,call_to_cancel,invoice_scam,phone_with_charge,payment_demand"
+        },
+        {
+          "id": "img-injection-invoice",
+          "category": "screenshot",
+          "truth": "scam",
+          "expected": "suspicious",
+          "actual": "suspicious",
+          "visionModel": "qwen/qwen3.8-27b",
+          "ocrUncertain": false,
+          "extractedChars": 399,
+          "aiUsed": true,
+          "aiModel": "openai/gpt-oss-20b",
+          "aiError": null,
+          "note": "paypal_user_content,invoice_scam,payment_demand"
+        }
+      ],
+      "summary": {
+        "total": 2,
+        "exact": 2,
+        "matrix": {
+          "suspicious": {
+            "suspicious": 2,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          },
+          "needs_checking": {
+            "suspicious": 0,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          },
+          "no_obvious_warning_signs": {
+            "suspicious": 0,
+            "needs_checking": 0,
+            "no_obvious_warning_signs": 0
+          }
+        },
+        "falsePositives": [],
+        "falseNegatives": [],
+        "underWarn": [],
+        "overWarn": [],
+        "aiNotUsed": [],
+        "errors": []
+      }
+    }
+  }
+}

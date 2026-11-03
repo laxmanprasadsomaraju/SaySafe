@@ -103,3 +103,18 @@ export interface ScanResult {
 }
 
 export const newKey = () => (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now()).replace(/[^A-Za-z0-9_-]/g, '');
+
+/** Scan result as the server sends it since the scam-audit branch (three public verdicts, evidence, limits). */
+export type ScanVerdict = 'suspicious' | 'needs_checking' | 'no_obvious_warning_signs';
+export type FindingBasis = 'deterministic_rule' | 'ai_judgement' | 'independently_verified';
+export interface ScanResultV2 extends Omit<ScanResult, 'verdict' | 'signals'> {
+  verdict: ScanVerdict;
+  verdictLabel: string;
+  /** suspicious | needs_verification | verified_official_contact, for older clients. */
+  legacyVerdict?: 'suspicious' | 'needs_verification' | 'verified_official_contact';
+  /** Always set when verdict is no_obvious_warning_signs. */
+  disclosure: string | null;
+  signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string; basis?: FindingBasis }[];
+  nextSteps: { id: string; text: string; url?: string; urlLabel?: string }[];
+  couldNotVerify: string[];
+}

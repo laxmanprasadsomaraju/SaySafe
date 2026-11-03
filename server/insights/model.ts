@@ -9,6 +9,7 @@
  *  - No writes. No new tables.
  */
 import { db } from '../db/index.js';
+import { normalizeVerdict } from '../scam/verdicts.js';
 import { computeKpis, STATE_LABELS, type InsightEvent, type InsightPayment, type InsightScan, type InsightsPayload } from '../../shared/insights.js';
 
 const toIso = (sqlite: string | null | undefined) => (sqlite ? new Date(sqlite.includes('T') ? sqlite : `${sqlite.replace(' ', 'T')}Z`).toISOString() : null);
@@ -71,7 +72,7 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
     'SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id = ? AND shared_with_family = 1 ORDER BY created_at DESC LIMIT 200',
   ).all(householdId) as any[]).map((s) => {
     const createdAt = toIso(s.created_at)!;
-    return { id: s.id, createdAt, day: dayOf(createdAt), verdict: s.verdict, excerpt: excerpt(String(s.summary ?? '')) };
+    return { id: s.id, createdAt, day: dayOf(createdAt), verdict: normalizeVerdict(s.verdict), excerpt: excerpt(String(s.summary ?? '')) };
   });
 
   // Timeline from audit_log for this household: purchase steps, family decisions, PayPal confirmations, shared scans.

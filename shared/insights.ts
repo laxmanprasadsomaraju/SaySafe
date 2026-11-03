@@ -36,7 +36,8 @@ export interface InsightPayment {
   awaitingMyDecision: boolean;
 }
 
-export type ScanVerdict = 'suspicious' | 'needs_verification' | 'verified_official_contact' | string;
+/** Public verdict codes (server/scam/verdicts.ts). Stored legacy codes are mapped with normalizeVerdict() before they get here. */
+export type ScanVerdict = 'suspicious' | 'needs_checking' | 'no_obvious_warning_signs';
 
 export interface InsightScan {
   id: string;
