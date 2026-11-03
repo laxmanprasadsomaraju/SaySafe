@@ -33,9 +33,19 @@ const ok = (n, pass, info = '') => { results.push({ n, pass: pass === 'manual' ?
 const sql = (q) => (HOSTED ? null : execFileSync('sqlite3', [DB, q]).toString().trim());
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const b = await chromium.launch(HOSTED && process.env.HTTPS_PROXY ? { proxy: { server: process.env.HTTPS_PROXY } } : {});
+// Egress proxy (sandbox/CI): used for the hosted app, and locally with USE_PROXY=1 so real retailer images load.
+const proxyOf = (u) => { if (!u) return undefined; const x = new URL(u); return { server: `${x.protocol}//${x.host}`, username: decodeURIComponent(x.username), password: decodeURIComponent(x.password), bypass: '127.0.0.1,localhost' }; };
+const b = await chromium.launch(HOSTED && process.env.HTTPS_PROXY ? { proxy: proxyOf(process.env.HTTPS_PROXY) } : {});
+// Locally with USE_PROXY=1: real retailer images (from the listings) are fetched through the egress proxy with curl.
+const { execFile } = await import('node:child_process');
+const viaCurl = (url) => new Promise((res) => execFile('curl', ['-sSL', '-m', '20', url], { encoding: 'buffer', maxBuffer: 20e6 }, (e, out) => res(e ? null : out)));
 const ctx = async (w = 390) => {
   const c = await b.newContext({ viewport: { width: w, height: 844 }, reducedMotion: 'reduce' });
+  if (!HOSTED && process.env.USE_PROXY === '1') await c.route(/^https:\/\//, async (r) => {
+    if (r.request().resourceType() !== 'image') return r.continue();
+    const body = await viaCurl(r.request().url());
+    return body ? r.fulfill({ status: 200, body }) : r.abort();
+  });
   await c.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: false, rate: 0.95, readAll: false, lang: 'en' })));
   return c;
 };
