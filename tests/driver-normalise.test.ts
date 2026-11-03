@@ -19,3 +19,8 @@ describe('normaliseRow (libsql replica row shapes)', () => {
     expect(normaliseRow(null, cols)).toBeUndefined();
   });
 });
+describe('normaliseRow keeps camelCase aliases', () => {
+  it('does not lower-case familyId', () => {
+    expect(normaliseRow({ familyId: 'f', ACTION: 'a' }, ['familyId', 'action'])).toEqual({ familyId: 'f', action: 'a' });
+  });
+});

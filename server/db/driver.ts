@@ -101,15 +101,15 @@ export function normaliseRow(row: unknown, columns: string[] | null): Record<str
   if (row == null) return undefined;
   if (Array.isArray(row)) {
     if (!columns || columns.length !== row.length) return undefined;
-    return Object.fromEntries(columns.map((c, i) => [c.toLowerCase(), row[i]]));
+    return Object.fromEntries(columns.map((c, i) => [c, row[i]]));
   }
   if (typeof row !== 'object') return undefined;
   const r = cleanRow(row as Record<string, unknown>);
-  // The hosted Turso embedded replica returned `ACTION` for `action` (SQL keyword upper-cased). Every SaySafe
-  // column is lower-case snake_case, so fold any upper-case key to lower-case when that key is not already present.
+  // The hosted Turso embedded replica returned `ACTION` for `action` (SQL keyword upper-cased). SaySafe columns
+  // are lower-case snake_case (aliases may be camelCase, which stay), so fold only ALL-CAPS keys to lower-case when that key is not already present.
   for (const k of Object.keys(r)) {
     const lk = k.toLowerCase();
-    if (lk !== k && !(lk in r)) { r[lk] = r[k]; delete r[k]; }
+    if (lk !== k && k === k.toUpperCase() && !(lk in r)) { r[lk] = r[k]; delete r[k]; }
   }
   if (columns && columns.length && !columns.some((c) => c in r)) {
     // keyed differently (e.g. table-qualified or positional keys): map by position over the column list
@@ -121,7 +121,7 @@ export function normaliseRow(row: unknown, columns: string[] | null): Record<str
 }
 
 function columnNames(stmt: any): string[] | null {
-  try { const cols = stmt.columns?.(); return Array.isArray(cols) ? cols.map((c: any) => String(c?.name ?? c).toLowerCase()) : null; } catch { return null; }
+  try { const cols = stmt.columns?.(); return Array.isArray(cols) ? cols.map((c: any) => { const n = String(c?.name ?? c); return n === n.toUpperCase() ? n.toLowerCase() : n; }) : null; } catch { return null; }
 }
 
 function wrapStatement(stmt: any): Statement {
