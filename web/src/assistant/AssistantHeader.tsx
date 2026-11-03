@@ -5,10 +5,11 @@
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Menu, X, RotateCcw, SlidersHorizontal, Type, Contrast, Volume2, VolumeX } from 'lucide-react';
-import { VoiceSettings } from '../components/VoiceBar';
+import { ArrowLeft, Menu, X, RotateCcw, SlidersHorizontal, Type, Contrast } from 'lucide-react';
+import { VoiceSettings, MuteSwitch } from '../components/VoiceBar';
 import { useDisplay, setDisplay } from '../lib/display';
 import { useSpeech, speech } from '../lib/voice';
+import { switchBtn } from '../components/ds';
 
 export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; voice?: boolean }) {
   const loc = useLocation();
@@ -27,7 +28,7 @@ export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; vo
     return () => window.removeEventListener('keydown', onKey, true);
   }, [open]);
   const item = 'w-full flex items-center gap-3 min-h-12 px-4 rounded-2xl font-bold text-left hover:bg-teal-soft';
-  const sw = (on: boolean) => `shrink-0 min-h-11 min-w-16 px-3 rounded-full border-2 font-bold ${on ? 'bg-navy text-white border-navy' : 'bg-paper border-line'}`;
+  const sw = switchBtn;
   return (
     <div className="relative">
       <div className="flex items-center gap-2">
@@ -50,12 +51,7 @@ export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; vo
               <button type="button" className={item} aria-expanded={panel === 'voice'} onClick={() => setPanel(panel === 'voice' ? null : 'voice')}><SlidersHorizontal className="size-5 text-teal" aria-hidden />Voice settings</button>
               {panel === 'voice' && (
                 <div className="px-2 pb-2">
-                  <div className="flex items-center justify-between gap-3 py-2">
-                    <span className="font-bold">Spoken replies</span>
-                    <button type="button" role="switch" aria-checked={!s.prefs.muted} disabled={!s.supported} onClick={() => speech.toggleMute()} className={sw(!s.prefs.muted)}>
-                      {s.prefs.muted ? <><VolumeX className="size-5 inline" aria-hidden /> Off</> : <><Volume2 className="size-5 inline" aria-hidden /> On</>}
-                    </button>
-                  </div>
+                  <MuteSwitch />
                   {s.canReplay && <button type="button" className={item} onClick={() => speech.replay()}><RotateCcw className="size-5 text-teal" aria-hidden />Replay the last reply</button>}
                   <VoiceSettings />
                 </div>

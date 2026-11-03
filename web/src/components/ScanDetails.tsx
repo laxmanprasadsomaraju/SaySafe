@@ -89,7 +89,7 @@ export function ScanDetails({ result }: { result: ScanResultV2 }) {
           {result.nextSteps.map((s) => (
             <li key={s.id}>
               {s.text}
-              {s.url && <> <a href={s.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-bold text-teal underline underline-offset-4">{s.urlLabel}<ExternalLink className="size-4" aria-hidden /><span className="sr-only"> (opens in a new tab)</span></a></>}
+              {s.url && <> <a href={s.url} target="_blank" rel="noopener noreferrer" className="font-bold text-teal underline underline-offset-4">{s.urlLabel}<ExternalLink className="inline size-4 ml-1 align-[-2px]" aria-hidden /><span className="sr-only"> (opens in a new tab)</span></a></>}
             </li>
           ))}
         </ol>

@@ -12,3 +12,7 @@ playwright-report/
 test-results/
 .DS_Store
 backups/
+
+# visual regression failures (baselines are committed)
+tests/visual/*.actual.png
+tests/visual/*.diff.png

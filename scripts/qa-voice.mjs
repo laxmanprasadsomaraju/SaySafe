@@ -111,7 +111,7 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
 
     // Read everything mode: reads each listing, still stoppable instantly.
     await p.getByRole('button', { name: 'Voice settings' }).click();
-    await p.getByLabel(/Read everything/).check();
+    await p.getByLabel(/Read entire results/).check();
     await p.getByRole('button', { name: 'Voice settings' }).click();
     const nRA = await p.evaluate(() => window.__tts.log.length);
     await p.fill('#dq', 'Find me a microwave under €150');

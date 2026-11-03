@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SpeechController, splitSentences, AUTO_MAX_CHARS, type SpeechEnv } from '../web/src/lib/speech';
+import { SpeechController, splitSentences, AUTO_MAX_CHARS, voiceEffect, type SpeechEnv } from '../web/src/lib/speech';
 
 /** A fake speechSynthesis that records calls and lets the test finish utterances. */
 function fakeEnv(opts: { store?: Record<string, string> } = {}) {
@@ -83,14 +83,39 @@ describe('speech controller', () => {
     expect(speaks).toEqual(['speak:A one.', 'speak:B two.', 'speak:B two.']);
   });
 
-  it('mute stops speech and blocks automatic speech; Read aloud (user) unmutes', async () => {
+  it('mute stops speech and blocks automatic speech; Read aloud (user) plays once and stays muted', async () => {
     s.speak('Talking now.');
     s.mute();
     expect(f.log.at(-1)).toBe('cancel');
     expect(await s.speak('Auto reply.')).toBe(false);
+    expect(await s.speak('Watch out: scam.', { priority: 'critical' })).toBe(false);
     expect(s.getSnapshot().status).toBe('muted');
     expect(await s.speak('Read this.', { priority: 'user' })).toBe(true);
-    expect(s.getSnapshot().prefs.muted).toBe(false);
+    // The saved setting and the switch keep saying Muted: pressing Read aloud never flips it behind the user's back.
+    expect(s.getSnapshot().prefs.muted).toBe(true);
+    expect(JSON.parse(f.store['ss-voice-prefs']).muted).toBe(true);
+    f.finish();
+    expect(s.getSnapshot().status).toBe('muted');
+    expect(await s.speak('Next auto reply.')).toBe(false);
+  });
+
+  it('muted keeps the automatic choices saved; unmuting brings them back without re-ticking anything', async () => {
+    s.setPrefs({ autoSpeak: true, readAll: true });
+    s.mute();
+    expect(voiceEffect(s.getSnapshot().prefs)).toMatchObject({ playback: 'muted', autoShort: 'saved-muted', readAll: 'saved-muted' });
+    expect(voiceEffect(s.getSnapshot().prefs).note).toMatch(/saved, but nothing plays until you turn playback on/);
+    expect(await s.speak('Short reply.')).toBe(false);
+    const reloaded = new SpeechController(f.env); // persisted exactly as shown
+    expect(reloaded.getSnapshot().prefs).toMatchObject({ muted: true, autoSpeak: true, readAll: true });
+    s.unmute();
+    expect(voiceEffect(s.getSnapshot().prefs)).toMatchObject({ playback: 'on', autoShort: 'on', readAll: 'on', note: null });
+    expect(await s.speak('Short reply.')).toBe(true);
+  });
+
+  it('voiceEffect: automatic options that are off read as off, whatever playback is; unsupported says so', () => {
+    expect(voiceEffect({ muted: false, autoSpeak: false, readAll: false })).toMatchObject({ playback: 'on', autoShort: 'off', readAll: 'off' });
+    expect(voiceEffect({ muted: true, autoSpeak: false, readAll: false })).toMatchObject({ autoShort: 'off', readAll: 'off' });
+    expect(voiceEffect({ muted: false, autoSpeak: true, readAll: false }, false)).toMatchObject({ playback: 'unavailable' });
   });
 
   it('no automatic reading of long text; long text needs an explicit request', async () => {

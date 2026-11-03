@@ -111,7 +111,7 @@ export default function Family() {
             <Card className="p-6">
               <h2 className="text-2xl flex items-center gap-2"><BarChart3 className="size-6 text-teal" aria-hidden />Safety insights</h2>
               <p className="mt-2 text-lg text-ink-soft">Purchases, your decisions, PayPal confirmations and shared scam checks over time.</p>
-              <Link to="/family/insights" className="mt-3 inline-block font-bold text-teal underline text-lg">Open insights dashboard</Link>
+              <Link to="/family/insights" className="mt-3 inline-flex items-center min-h-12 font-bold text-teal underline underline-offset-4 text-lg">Open insights dashboard</Link>
             </Card>
           )}
           <Card className="p-6">

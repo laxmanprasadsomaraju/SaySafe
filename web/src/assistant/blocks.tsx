@@ -11,10 +11,11 @@ import { goToPayPal } from '../lib/handoff';
 import { markPayPalReturn } from './thread';
 import { acknowledgeLeave } from '../components/LeaveGuard';
 import { speech } from '../lib/voice';
-import { paymentLabel, verdictLabel, money as moneyCents, when, fetchActivity, shortStatus, truncateRef, TONE_CLS, type Tone } from '../lib/activity';
+import { paymentLabel, verdictLabel, money as moneyCents, when, fetchActivity, shortStatus, truncateRef, type Tone } from '../lib/activity';
 import { shortTitle } from '../../../shared/shopping';
 import { COMPANION_REGISTRY, SampleBadge } from './companionCards';
 import { UI_LABEL } from './companion';
+import { card, btnPrimary, btnSecondary, linkBtn as linkCls, pill } from '../components/ds';
 
 export interface BlockActions {
   openItem: (item: ProductItem, source: 'channel3' | 'demo') => void;
@@ -42,7 +43,7 @@ export interface BlockActions {
 }
 
 const money = (n: number, c: string) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: c }).format(n);
-const cardCls = 'rounded-[var(--radius-card)] border border-line bg-paper shadow-[var(--shadow-card)]';
+const cardCls = card;
 const Sandbox = () => <span className="inline-flex items-center rounded-full bg-amber-soft text-amber font-bold text-sm px-3 py-0.5 border border-amber/30">PayPal Sandbox · no real money</span>;
 
 // ---------- Scam result ----------
@@ -239,11 +240,9 @@ function PaymentPrepCard({ b, act }: { b: BlockOf<'payment_prep'>; act: BlockAct
 }
 
 // ---------- Shared bits for the payment cards ----------
-const btnPrimary = 'min-h-14 rounded-full bg-teal text-white font-bold px-5 hover:bg-teal-deep disabled:opacity-60';
-const btnSecondary = 'min-h-12 rounded-full border-2 border-line bg-paper font-bold px-4 hover:border-teal disabled:opacity-60';
-const linkCls = 'font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center';
+// btnPrimary / btnSecondary / linkCls come from components/ds.ts (the design-system recipes).
 function Pill({ label, tone }: { label: string; tone: Tone }) {
-  return <span className={`inline-flex items-center rounded-full border px-3 py-0.5 text-sm font-bold ${TONE_CLS[tone]}`}>{label}</span>;
+  return <span className={pill(tone)}>{label}</span>;
 }
 /** Re-reads one purchase from the server (validated). Elder: /api/payments/:id. Family: /api/family/requests/:id. */
 export async function fetchPayment(id: string, as: 'elder' | 'family' = 'elder'): Promise<ServerPayment> {

@@ -67,7 +67,7 @@ function ActivityChart({ d }: { d: InsightsPayload }) {
             {SERIES.map((s) => <li key={s.key} className="flex items-center gap-2"><span className="inline-block size-3 rounded-sm" style={{ background: s.color }} aria-hidden />{EVENT_KIND_LABELS[s.key]}</li>)}
           </ul>
           <details className="mt-3">
-            <summary className="cursor-pointer font-bold text-teal">Show chart as a table</summary>
+            <summary className="cursor-pointer font-bold text-teal min-h-12 inline-flex items-center">Show chart as a table</summary>
             <div className="overflow-x-auto mt-2">
               <table className="w-full text-base">
                 <caption className="sr-only">Activity per day</caption>
@@ -129,7 +129,7 @@ function Ledger({ d }: { d: InsightsPayload }) {
                   <td className="p-2 whitespace-nowrap">{fmtDate(p.createdAt)}</td>
                   <td className="p-2"><span className="font-bold">{p.product}</span><br /><span className="text-ink-soft text-sm">{p.merchant}</span></td>
                   <td className="p-2 whitespace-nowrap">{money(p.amount, p.currency)}</td>
-                  <td className="p-2">{p.stateLabel}{p.approvalStatus && p.approvalStatus !== 'pending' && <span className="block text-sm text-ink-soft">Family: {p.approvalStatus}</span>}{p.awaitingMyDecision && <Link to="/family#pending-h" className="block text-sm font-bold text-teal underline">Review on Family page</Link>}</td>
+                  <td className="p-2">{p.stateLabel}{p.approvalStatus && p.approvalStatus !== 'pending' && <span className="block text-sm text-ink-soft">Family: {p.approvalStatus}</span>}{p.awaitingMyDecision && <Link to="/family#pending-h" className="inline-flex items-center min-h-11 text-sm font-bold text-teal underline underline-offset-4">Review on Family page</Link>}</td>
                   <td className="p-2"><SourceBadge source={p.source} /></td>
                   <td className="p-2 text-sm">{p.hasCapture ? <>Captured {p.capturedAmount != null ? money(p.capturedAmount, p.capturedCurrency ?? p.currency) : ''}<br />{p.webhookConfirmed ? `Webhook confirmed ${fmtDate(p.webhookConfirmedAt)}` : 'Webhook pending'}</> : p.hasPayPalOrder ? 'PayPal order created' : '—'}</td>
                 </tr>
@@ -165,7 +165,7 @@ function AskBox() {
         <div className="flex-1 min-w-[12rem]"><label htmlFor="ask-q" className="block font-bold mb-1 text-base">Your question</label><input id="ask-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} className="w-full min-h-12 rounded-2xl border-2 border-line px-4 bg-paper focus:border-teal outline-none text-base" /></div>
         <Button type="submit" busy={busy} className="!min-h-12">Ask</Button>
       </form>
-      <div className="mt-3 flex flex-wrap gap-2">{examples.map((x) => <button key={x} type="button" onClick={() => { setQ(x); ask(x); }} className="rounded-full border-2 border-line px-3 py-1 text-sm font-bold hover:border-teal min-h-10">{x}</button>)}</div>
+      <div className="mt-3 flex flex-wrap gap-2">{examples.map((x) => <button key={x} type="button" onClick={() => { setQ(x); ask(x); }} className="rounded-full border-2 border-line px-4 py-1 text-base font-bold text-left hover:border-teal min-h-12">{x}</button>)}</div>
       <div aria-live="polite">
         {err && <div className="mt-3"><Notice tone="danger" title={err} /></div>}
         {a && <div className="mt-4 rounded-2xl bg-teal-soft p-4"><p className="font-bold">{a.q}</p><p className="mt-1 whitespace-pre-line">{a.text}</p><p className="mt-2 text-sm text-ink-soft">{a.ai ? 'Answered with AI from your household data only.' : 'Answered directly from your household data.'}</p></div>}
@@ -194,7 +194,7 @@ export function NativeInsightsBody({ d }: { d: InsightsPayload }) {
           {pending.length === 0 ? <p className="mt-2 text-ink-soft">Nothing to review right now.</p> : (
             <ul className="mt-3 space-y-3">{pending.map((p) => <li key={p.id} className="rounded-2xl border-2 border-amber p-3"><p className="font-bold">{p.product} · {money(p.amount, p.currency)}</p><p className="text-sm text-ink-soft">Expires {fmtDate(p.approvalExpiresAt)}</p></li>)}</ul>
           )}
-          {pending.length > 0 && <Link to="/family#pending-h" className="mt-3 inline-block font-bold text-teal underline">Approve or decline on the Family page</Link>}
+          {pending.length > 0 && <Link to="/family#pending-h" className="mt-3 inline-flex items-center min-h-12 font-bold text-teal underline underline-offset-4">Approve or decline on the Family page</Link>}
           <h2 className="text-2xl mt-6 flex items-center gap-2"><ShieldAlert className="size-6 text-danger" aria-hidden />Scam reviews shared with you</h2>
           {d.scans.length === 0 ? <p className="mt-2 text-ink-soft">{d.elder.name} hasn't shared any scam checks yet.</p> : (
             <ul className="mt-3 space-y-2">{d.scans.slice(0, 8).map((s) => <li key={s.id} className={`rounded-2xl p-3 border-l-[6px] ${s.verdict === 'suspicious' ? 'bg-danger-soft border-danger' : 'bg-amber-soft border-amber'}`}><p className="font-bold text-base">{s.excerpt}</p><p className="text-sm text-ink-soft">{fmtDate(s.createdAt)}</p></li>)}</ul>
@@ -215,7 +215,7 @@ export default function NativeInsights() {
   return (
     <Layout mode="family" wide>
       <PageTitle eyebrow="Family · Insights" title={data ? `${data.elder.name}'s safety at a glance` : 'Family Safety Insights'} lead="Purchases, your decisions, PayPal sandbox confirmations and shared scam checks — for your household only." />
-      <p className="-mt-4 mb-6 flex flex-wrap gap-x-5 gap-y-2"><Link to="/family" className="font-bold text-teal underline">Back to Family page</Link>{showStudio && <Link to="/family/insights/studio" className="font-bold text-teal underline inline-flex items-center gap-1"><LayoutDashboard className="size-5" aria-hidden />Open AG Studio view</Link>}</p>
+      <p className="-mt-4 mb-6 flex flex-wrap gap-x-5 gap-y-2"><Link to="/family" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">Back to Family page</Link>{showStudio && <Link to="/family/insights/studio" className="font-bold text-teal underline underline-offset-4 inline-flex items-center gap-1 min-h-12"><LayoutDashboard className="size-5" aria-hidden />Open AG Studio view</Link>}</p>
       {error && <div className="mb-6"><Notice tone="danger" title={error} /></div>}
       {!data ? (!error && <p>Loading…</p>) : <NativeInsightsBody d={data} />}
     </Layout>
