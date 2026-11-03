@@ -6,7 +6,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { House, MessageCircle, ListChecks, UserRound, ArrowLeft, Globe } from 'lucide-react';
+import { House, MessageCircle, ListChecks, UserRound, ArrowLeft, Globe, BarChart3 } from 'lucide-react';
 import { VoiceBar } from './VoiceBar';
 import { useHandoff } from '../lib/handoff';
 import { rememberRole } from '../lib/role';
@@ -21,20 +21,23 @@ export function Logo() {
 }
 
 type Mode = 'elder' | 'family' | 'public';
-interface Dest { to: string; label: string; icon: typeof House; match: (p: string) => boolean }
+interface Dest { to: string; label: string; icon: typeof House; match: (p: string) => boolean; desktopOnly?: boolean }
 
 export function destinations(mode: 'elder' | 'family'): Dest[] {
   if (mode === 'family') return [
-    { to: '/family', label: 'Home', icon: House, match: (p) => p === '/family' || p.startsWith('/family/insights') },
+    { to: '/family', label: 'Home', icon: House, match: (p) => p === '/family' },
     { to: '/family/assistant', label: 'Assistant', icon: MessageCircle, match: (p) => p === '/family/assistant' },
     { to: '/activity?as=family', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' },
     { to: '/profile?as=family', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' },
+    { to: '/family/insights', label: 'Insights', icon: BarChart3, match: (p) => p.startsWith('/family/insights'), desktopOnly: true },
   ];
   return [
     { to: '/home', label: 'Home', icon: House, match: (p) => p === '/home' },
     { to: '/assistant', label: 'Assistant', icon: MessageCircle, match: (p) => p === '/assistant' || ['/check', '/shop', '/discover'].some((x) => p.startsWith(x)) },
     { to: '/activity', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' || p.startsWith('/order') },
     { to: '/profile', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' || ['/preferences', '/help', '/guide'].includes(p) },
+    // Desktop header only: the mobile bottom bar keeps exactly four tabs (Insights is reached from Home on mobile).
+    { to: '/insights', label: 'Insights', icon: BarChart3, match: (p) => p === '/insights', desktopOnly: true },
   ];
 }
 /** Primary tabs never show Back or Home. Everything else is a secondary screen with Back. */
@@ -46,6 +49,8 @@ export function fallbackFor(path: string, mode: Mode): string {
   if (['/check', '/shop', '/discover'].some((p) => path.startsWith(p))) return '/assistant';
   if (['/help', '/guide', '/preferences'].includes(path)) return mode === 'family' ? '/profile?as=family' : '/profile';
   if (path.startsWith('/family/insights/')) return '/family/insights';
+  if (path === '/family/insights') return '/family';
+  if (path === '/insights') return '/home';
   if (path.startsWith('/family')) return '/family';
   return mode === 'family' ? '/family' : '/home';
 }
@@ -67,7 +72,7 @@ function NavItems({ mode, variant }: { mode: 'elder' | 'family'; variant: 'top' 
   const { pathname } = useLocation();
   return (
     <ul className={variant === 'bottom' ? 'grid grid-cols-4' : 'flex gap-1'}>
-      {destinations(mode).map((d) => {
+      {destinations(mode).filter((d) => variant === 'top' || !d.desktopOnly).map((d) => {
         const exact = d.to.split('?')[0] === pathname;
         const inSection = d.match(pathname);
         const Icon = d.icon;

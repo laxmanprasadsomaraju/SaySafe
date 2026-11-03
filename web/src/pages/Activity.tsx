@@ -1,6 +1,6 @@
 /** My Activity: every payment (with family decisions) and scam check for this household, searchable and filterable. */
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Search, ChevronRight, ShieldAlert, Receipt, SlidersHorizontal, Users, BadgeCheck } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card, Notice } from '../components/ui';
@@ -61,8 +61,10 @@ export default function Activity() {
   const nav = useNavigate();
   const family = role === 'family';
   const [chip, setChip] = useState('all');
-  const [q, setQ] = useState('');
-  const [applied, setApplied] = useState('');
+  const [sp] = useSearchParams();
+  const initialQ = (sp.get('q') ?? '').slice(0, 60); // e.g. "View in Activity" from a receipt card
+  const [q, setQ] = useState(initialQ);
+  const [applied, setApplied] = useState(initialQ);
   const [more, setMore] = useState(false);
   const [min, setMin] = useState(''); const [max, setMax] = useState(''); const [from, setFrom] = useState(''); const [to, setTo] = useState('');
   const [items, setItems] = useState<ActivityItem[]>([]);

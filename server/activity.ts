@@ -103,11 +103,11 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
     };
   });
   // Family members only ever see the scan results the elder chose to share (same rule as the family overview).
-  const scans = db.prepare(`SELECT id, verdict, summary, shared_with_family, created_at FROM security_scans WHERE household_id=? ${role === 'family' ? 'AND shared_with_family=1' : ''} ORDER BY created_at DESC LIMIT 500`).all(householdId) as any[];
+  const scans = db.prepare(`SELECT id, verdict, summary, shared_with_family, example, created_at FROM security_scans WHERE household_id=? ${role === 'family' ? 'AND shared_with_family=1' : ''} ORDER BY created_at DESC LIMIT 500`).all(householdId) as any[];
   for (const s of scans) {
     items.push({
       id: s.id, type: 'scan', at: iso(s.created_at), updatedAt: iso(s.created_at), title: String(s.summary), status: String(s.verdict), statusGroup: 'scan', section: 'scans',
-      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, source: 'scan', sourceLabel: 'Scam check', evidence: null, verification: 'not_applicable', externalIds: null, approval: null,
+      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: Number(s.example ?? 0) === 1, source: 'scan', sourceLabel: Number(s.example ?? 0) === 1 ? 'Training example (practice)' : 'Scam check', evidence: null, verification: 'not_applicable', externalIds: null, approval: null,
       verdict: String(s.verdict), sharedWithFamily: Boolean(s.shared_with_family), href: null,
     });
   }

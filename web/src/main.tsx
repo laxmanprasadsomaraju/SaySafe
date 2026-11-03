@@ -25,6 +25,7 @@ import { ServerStatusBanner } from './components/ServerStatus';
 // Insights pages are lazy so the main bundle does not grow. The native page never imports AG packages.
 const NativeInsights = lazy(() => import('./pages/insights/NativeInsights'));
 const StudioRoute = lazy(() => import('./pages/insights/StudioRoute'));
+const MyInsights = lazy(() => import('./pages/insights/MyInsights'));
 const insightsFallback = <p className="p-8">Loading…</p>;
 
 // Apply saved display preferences (bigger text, contrast, reduced motion) before first paint.
@@ -93,6 +94,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/family" element={<Family />} />
     <Route path="/family/pair" element={<FamilyPair />} />
     <Route path="/family/assistant" element={<FamilyAssistant />} />
+    <Route path="/insights" element={<Suspense fallback={insightsFallback}><MyInsights /></Suspense>} />
     <Route path="/family/insights" element={<Suspense fallback={insightsFallback}><NativeInsights /></Suspense>} />
     <Route path="/family/insights/studio" element={<Suspense fallback={insightsFallback}><StudioRoute /></Suspense>} />
     <Route path="*" element={<Navigate to="/" replace />} />

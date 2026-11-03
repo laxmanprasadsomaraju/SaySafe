@@ -67,9 +67,9 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
     };
   });
 
-  // Only scans the elder explicitly shared with family. The message itself is never stored.
+  // Only scans the elder explicitly shared with family (training examples are practice, never counted). The message itself is never stored.
   const scans: InsightScan[] = (db.prepare(
-    'SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id = ? AND shared_with_family = 1 ORDER BY created_at DESC LIMIT 200',
+    'SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id = ? AND shared_with_family = 1 AND COALESCE(example, 0) = 0 ORDER BY created_at DESC LIMIT 200',
   ).all(householdId) as any[]).map((s) => {
     const createdAt = toIso(s.created_at)!;
     return { id: s.id, createdAt, day: dayOf(createdAt), verdict: normalizeVerdict(s.verdict), excerpt: excerpt(String(s.summary ?? '')) };

@@ -5,6 +5,7 @@
  * no insights, no activity feed). Manual records and contacts are "saved by you — not verified".
  * SaySafe never pays, blocks, or cancels anything from these records.
  */
+import { INSIGHT_FOCI, InsightsSummary } from './insightsSummary.js';
 import { z } from 'zod';
 
 export const COMPANION_LABELS = {
@@ -278,7 +279,7 @@ export const Contact = z.object({
 export type ContactT = z.infer<typeof Contact>;
 
 // ---------- Assistant intents + cards ----------
-export const COMPANION_ACTIONS = ['payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup', 'subscription_list', 'send_money'] as const;
+export const COMPANION_ACTIONS = ['payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup', 'subscription_list', 'send_money', 'insights'] as const;
 export const SUB_FOCUS = ['all', 'most', 'next'] as const;
 export type CompanionAction = (typeof COMPANION_ACTIONS)[number];
 
@@ -297,8 +298,10 @@ export const CompanionIntentParams = z.object({
   category: z.string().trim().max(40).nullable().optional().catch(null),
   /** contact_lookup: list every saved contact. */
   list_all: z.boolean().nullable().optional().catch(null),
+  /** insights: which part of Mary's insights the question is about (rules router only). */
+  insight_focus: z.enum(INSIGHT_FOCI).nullable().optional().catch(null),
 });
-export const COMPANION_PARAM_KEYS = ['recipient', 'amount', 'date_hint', 'merchant', 'contact_name', 'relation', 'focus', 'category', 'list_all'] as const;
+export const COMPANION_PARAM_KEYS = ['recipient', 'amount', 'date_hint', 'merchant', 'contact_name', 'relation', 'focus', 'category', 'list_all', 'insight_focus'] as const;
 export type CompanionIntentParamsT = z.infer<typeof CompanionIntentParams>;
 
 export const CancelGuideCard = z.object({ id: z.string(), name: z.string(), url: z.string().url().refine((u) => u.startsWith('https://')), steps: z.array(z.string()), note: z.string().nullable(), verifiedOn: z.string() });
@@ -336,6 +339,7 @@ export const CompanionCard = z.discriminatedUnion('kind', [
     paypalSendUrl: z.literal(PAYPAL_SEND_MONEY_URL), notice: z.literal(SEND_MONEY_NOTICE),
   }),
   z.object({ kind: z.literal('companion_sign_in'), message: z.string() }),
+  z.object({ kind: z.literal('insights_summary'), focus: z.enum(INSIGHT_FOCI), summary: InsightsSummary }),
 ]);
 export type CompanionCardT = z.infer<typeof CompanionCard>;
 

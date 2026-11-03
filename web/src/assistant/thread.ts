@@ -30,3 +30,15 @@ export function appendToSavedThread(text: string, blocks: unknown[], key = THREA
     return true;
   } catch { return false; }
 }
+
+/** The purchase this conversation is about: the newest family-review, receipt or sent purchase card. */
+export function conversationPaymentId(t: Thread): string | null {
+  for (let i = t.messages.length - 1; i >= 0; i--) {
+    const bs = t.messages[i].blocks;
+    for (let j = bs.length - 1; j >= 0; j--) {
+      const b = bs[j] as Block & { requestId?: string | null; status?: string };
+      if ((b.kind === 'family_status' || b.kind === 'receipt' || (b.kind === 'payment_prep' && b.status === 'sent')) && typeof b.requestId === 'string' && /^pay_[A-Za-z0-9_-]{4,60}$/.test(b.requestId) && !b.requestId.startsWith('pay_smp')) return b.requestId;
+    }
+  }
+  return null;
+}

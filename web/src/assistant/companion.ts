@@ -9,6 +9,7 @@
  * "Saved by you — not verified"; an external cancellation is only ever "You told SaySafe this is cancelled — not
  * confirmed by the provider"; the Demo Membership is "cancelled" only after the SERVER says provider_confirmed.
  */
+import { INSIGHT_FOCI, InsightsSummary } from '../../../shared/insightsSummary';
 import { z } from 'zod';
 import {
   PaymentSearchResult, PaymentMatch, SubscriptionSummary, Subscription, CancelGuideCard, Contact, ManualPayment,
@@ -101,9 +102,11 @@ const DemoWelcomeB = z.object({ kind: z.literal('demo_welcome'), prompts: z.arra
 const TrainingExamplesB = z.object({ kind: z.literal('training_examples'), items: z.array(z.object({ id: Str(40), label: Str(120), howToTest: Str(300), text: Str(600) })).max(5) });
 /** A request failed (server or network): never shown as "no records". Retry sends the same message again. */
 const RetryErrorB = z.object({ kind: z.literal('retry_error'), message: Str(400), retryText: Str(4000), done: z.boolean().default(false) });
+/** Mary's insights summary (server-built from the same stores as Activity). Re-read from the server on mount. */
+const InsightsSummaryB = z.object({ kind: z.literal('insights_summary'), focus: z.enum(INSIGHT_FOCI), summary: InsightsSummary });
 
-export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB] as const;
-export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error'] as const;
+export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB] as const;
+export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary'] as const;
 export type CompanionKind = (typeof COMPANION_KINDS)[number];
 export const isCompanionKind = (k: string): k is CompanionKind => (COMPANION_KINDS as readonly string[]).includes(k);
 

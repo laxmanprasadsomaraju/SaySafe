@@ -9,6 +9,8 @@ import * as store from './store.js';
 import { searchPayments, parseDateHint, fmtMoney, normName, tokenSimilarity, tokens } from './match.js';
 import { findCancelGuide, GENERIC_CANCEL_STEPS } from '../../shared/cancelGuides.js';
 import * as demo from './demoMembership.js';
+import { buildSummary } from '../insights/summary.js';
+import type { InsightsSummaryT, MoneyT, InsightFocus } from '../../shared/insightsSummary.js';
 import { CompanionError } from './store.js';
 import { COMPANION_ACTIONS, CANCELLATION_SCOPE, PAYPAL_AUTOPAY_URL, DEMO_MEMBERSHIP, PAYPAL_SEND_MONEY_URL, SEND_MONEY_NOTICE, type SubscriptionT, type CompanionAction, type CompanionCardT, type CompanionIntentParamsT, type ContactT } from '../../shared/companion.js';
 
@@ -21,6 +23,12 @@ const SIGN_IN = 'Please start SaySafe on this device first. Your records stay pr
 export async function answerCompanion(action: CompanionAction, p: CompanionIntentParamsT, s: Session | null, now = new Date()): Promise<CompanionAnswer> {
   if (!s || s.role !== 'elder') return { reply: SIGN_IN, card: { kind: 'companion_sign_in', message: SIGN_IN } };
   const hh = s.householdId;
+
+  if (action === 'insights') {
+    const focus: InsightFocus = p.insight_focus ?? 'overview';
+    const summary = buildSummary({ role: 'elder', householdId: hh }, now);
+    return { reply: insightsReply(summary, focus), card: { kind: 'insights_summary', focus, summary } };
+  }
 
   if (action === 'payment_search') {
     const win = parseDateHint(p.date_hint, now);
@@ -38,6 +46,15 @@ export async function answerCompanion(action: CompanionAction, p: CompanionInten
       : dupRep ? ` Two look like a possible duplicate: the same amount to ${dupRep.recipient}, ${dupRep.daysApart} day${dupRep.daysApart === 1 ? '' : 's'} apart. Ask ${dupRep.recipient} before paying again.`
       : separate ? ` You paid ${separate.recipient} the same amount more than once, but they look like separate payments (${separate.daysApart} days apart${/different things/.test(separate.message) ? ', for different work' : ''}).` : '';
     const more = n > 1 ? ` I found ${n} records in total.${repeatNote}` : '';
+    // Amount only ("a message says I owe €120"): the same amount is never proof that THIS bill is paid.
+    if (!recipient && p.amount) {
+      const amt = fmtMoney(Math.round(p.amount * 100), 'EUR');
+      const desc = (m: typeof top) => `${m!.source === 'manual' ? `${m!.sample ? 'a sample record' : 'a record you typed'} of paying ${m!.recipient}` : m!.sample ? 'a sample Demo Shop purchase' : 'a SaySafe Demo Shop purchase (real PayPal Sandbox)'} on ${new Date(`${m!.date}T00:00:00Z`).toLocaleDateString('en-IE', { day: 'numeric', month: 'long', timeZone: 'UTC' })}${m!.description ? ` (${m!.description})` : ''}`;
+      const reply = !top
+        ? `I couldn't find any record of ${amt}. That doesn't prove you haven't paid, and it doesn't prove you owe it. Who is the message from? Check with them using a number you already have, not one in the message.`
+        : `I found ${n === 1 ? 'one record' : `${n} records`} of ${amt}. The closest is ${desc(top)}. A matching amount alone doesn't prove this bill is paid${top.sample ? ', and this one is illustrative sample data' : top.source === 'manual' ? ', and a record you typed isn\u2019t proof the money arrived' : ''}. Who is the message from? Check with them using a number you already have, not one in the message.`;
+      return { reply, card: { kind: 'payment_matches', result: { ...result, guidance: top ? `A matching amount is not proof. Nothing here shows that the ${amt} in your message is paid. Check who sent it before you pay.` : result.guidance } } };
+    }
     const reply = !top
       ? result.guidance
       : top.sample
@@ -182,4 +199,42 @@ function listCard(subs: SubscriptionT[], focus: 'all' | 'most' | 'next', now: Da
     reply = `You have ${subs.length} subscription${subs.length === 1 ? '' : 's'}${summary.totals.length ? `, about ${summary.totals.map((t) => `${fmtMoney(t.monthlyCents, t.currency)} a month`).join(' and ')}` : ''}.${sampleNote}`;
   }
   return { reply: lead ? `${lead} ${reply}` : reply, card: { kind: 'subscriptions_list', focus, subscriptions: subs, summary, highlight: h, demoOffer } };
+}
+
+const eur = (ms: MoneyT[]) => (ms.length ? ms.map((m) => fmtMoney(m.cents, m.currency)).join(' and ') : fmtMoney(0, 'EUR'));
+/** Template replies for the insights card. Kinds of record are always named separately and never added together. */
+export function insightsReply(d: InsightsSummaryT, focus: InsightFocus): string {
+  const sb = d.payments.sandbox;
+  const pend = d.pendingReviews.real.length;
+  const subsU = d.subscriptions?.userEntered; const subsS = d.subscriptions?.sample;
+  if (focus === 'spending') {
+    const parts = [
+      sb.captured.count ? `Real PayPal Sandbox: ${eur(sb.captured.totals)} paid in ${sb.captured.count} Demo Shop purchase${sb.captured.count === 1 ? '' : 's'} (no real money).` : 'No PayPal Sandbox payments have finished yet.',
+      d.records?.userEntered.count ? `Recorded by you: ${d.records.userEntered.count} payment${d.records.userEntered.count === 1 ? '' : 's'}, ${eur(d.records.userEntered.totals)} (not verified).` : null,
+      d.records?.sample.count || d.payments.sample.count ? 'Sample data is shown separately and is illustrative.' : null,
+    ].filter(Boolean);
+    return `${parts.join(' ')} I keep these apart because they are different kinds of record.`;
+  }
+  if (focus === 'pending') {
+    if (!pend) return `Nothing is waiting for your family member right now.${d.pendingReviews.sampleWaiting ? ' The waiting item in your sample data is illustrative and can’t be approved.' : ''}`;
+    const x = d.pendingReviews.real[0];
+    return `${pend === 1 ? `One purchase is` : `${pend} purchases are`} waiting for your family member: ${x.item}, ${fmtMoney(x.amountCents, x.currency)}${pend > 1 ? ' and more' : ''}. Nothing is paid until they answer and you approve at PayPal.`;
+  }
+  if (focus === 'duplicates') {
+    const dups = d.duplicates ?? [];
+    if (!dups.length) return 'I didn’t find two records that look like the same payment. I can only see records you typed and Demo Shop payments made here.';
+    const x = dups[0];
+    return `${dups.length === 1 ? 'One pair looks' : `${dups.length} pairs look`} like a possible repeat: ${fmtMoney(x.amountCents, x.currency)} to ${x.recipient}, ${x.daysApart} day${x.daysApart === 1 ? '' : 's'} apart${x.sample ? ' (sample data)' : ''}. Ask ${x.recipient} before paying again.`;
+  }
+  if (focus === 'safety') {
+    const r = d.scamChecks.real;
+    return `${r.total ? `You checked ${r.total} message${r.total === 1 ? '' : 's'}: ${r.suspicious} suspicious, ${r.needsChecking} to check, ${r.noWarnings} with no obvious warning signs.` : 'You haven’t checked any real messages yet.'}${d.scamChecks.training ? ` ${d.scamChecks.training} training example${d.scamChecks.training === 1 ? '' : 's'} not counted.` : ''}`;
+  }
+  const bits = [
+    sb.captured.count ? `${sb.captured.count} PayPal Sandbox payment${sb.captured.count === 1 ? '' : 's'} finished` : null,
+    pend ? `${pend} waiting for family` : 'nothing waiting for family',
+    d.duplicates?.length ? `${d.duplicates.length} possible repeat${d.duplicates.length === 1 ? '' : 's'}` : null,
+    subsU?.count ? `your subscriptions about ${eur(subsU.monthly)} a month` : subsS?.count ? `sample subscriptions about ${eur(subsS.monthly)} a month (illustrative)` : null,
+  ].filter(Boolean);
+  return `Here’s your summary: ${bits.join(', ')}.`;
 }

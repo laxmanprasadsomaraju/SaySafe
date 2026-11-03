@@ -6,7 +6,7 @@
  * Contact details are deliberately non-routable: phone numbers are in Ofcom's ranges reserved for TV/radio drama
  * (07700 900000–900999 mobile, 020 7946 0000–0999 London) and emails use example.com (RFC 2606).
  */
-export const DEMO_SEED_VERSION = 1;
+export const DEMO_SEED_VERSION = 2;
 
 export const SAMPLE_BADGE = 'Sample data';
 export const SAMPLE_EVIDENCE = 'Illustrative — no PayPal record';
@@ -28,6 +28,8 @@ export const SAMPLE_RECORDS: SampleRecord[] = [
   { key: 'currys', recipient: 'Currys', amountCents: 8900, method: 'card', daysAgo: 24, note: 'Microwave' },
   { key: 'pat', recipient: 'Pat Doyle', amountCents: 4000, method: 'cash', daysAgo: 5, note: 'Hedge trimming' },
   { key: 'pharmacy', recipient: 'Riverside Pharmacy', amountCents: 1850, method: 'card', daysAgo: 2, note: 'Prescription' },
+  // Flagship story ("a message says I owe €120"): an illustrative record Mary typed, a POSSIBLE match only. v2.
+  { key: 'boiler', recipient: 'Shannon Boiler Services', amountCents: 12000, method: 'bank_transfer', daysAgo: 9, note: 'Annual boiler service' },
 ];
 
 export interface SampleSub { key: string; merchant: string; amountCents: number; frequency: 'weekly' | 'monthly' | 'yearly'; nextInDays: number; note: string }

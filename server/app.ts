@@ -17,6 +17,10 @@ import { db, audit, dbConfig } from './db/index.js';
 import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId, pairDemoFamily } from './auth.js';
 import { seedDemoHousehold, seedInfo } from './demo/seed.js';
 import { TRAINING_EXAMPLES, WELCOME_PROMPTS } from '../shared/demoData.js';
+import { buildSummary } from './insights/summary.js';
+const fmtEur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100);
+const normText = (t: string) => t.replace(/\s+/g, ' ').trim();
+const isTrainingText = (t: string) => TRAINING_EXAMPLES.some((x) => normText(x.text) === normText(t));
 import { routeCompanion } from './companion/router.js';
 import { scanMessage, extractFromImage, explainMore } from './scam/guardian.js';
 import { TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES } from './scam/directory.js';
@@ -198,7 +202,9 @@ export function createApp() {
     const text = z.string().trim().min(1).max(8000).parse(req.body?.text);
     const result = await scanMessage(text, { userName: s?.name ?? 'Mary', lang: langOf(req), contacts: contactsFor(s) });
     const scanId = newId('scan');
-    db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
+    // Training examples are recognised by exact text on the server (never by a client flag) and stored as practice.
+    const training = isTrainingText(text) ? 1 : 0;
+    db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary, example) VALUES (?,?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline, training);
     res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY });
   }));
 
@@ -265,17 +271,46 @@ export function createApp() {
     // Questions about Mary's own records are routed by rules first, so they behave the same with or without the AI
     // (and the same typed or spoken: voice sends its transcript here too). Everything else goes to the AI.
     const demoItem = /\b(demo (item|product|shop)s?|something from the (demo )?shop)\b/i.test(said) && !/\bmembership\b/i.test(said);
-    const routed = routeCompanion(said) ?? (demoItem ? { action: 'shop' as const, query: 'demo item', reply: 'Here are some items from the Demo Shop.' } : null);
+    // "Let's buy the demo microwave": a named Demo Shop product, priced only from the server catalogue.
+    const demoNamed = !demoItem && !/\bmembership\b/i.test(said) ? said.match(/\b(?:the |a )?demo ([a-z][a-z -]{2,40}?)(?:\s+(?:please|now|then|instead))?[?.!]*$/i)?.[1] ?? null : null;
+    const demoPick = demoNamed ? searchProducts(demoNamed, null, 3) : [];
+    // "Help me buy a microwave (instead)": real listings first (Channel3, bought at the retailer), Demo Shop offered apart.
+    const buyReal = !demoItem && !demoNamed ? said.match(/^(?:(?:can|could) you |please |ok,? |okay,? |so,? )?(?:help me |i(?: want|'d like| would like) to |let's |lets )?(?:buy|shop for)\s+(?:me\s+)?(?:a |an |some |new |a new )?([a-z][a-z -]{2,40}?)(?:\s+(?:instead|please|for me|now))*[?.!]*$/i)?.[1] ?? null : null;
+    const routed = routeCompanion(said)
+      ?? (demoItem ? { action: 'shop' as const, query: 'demo item', reply: 'Here are some items from the Demo Shop.' } : null)
+      ?? (demoPick.length ? { action: 'shop' as const, query: demoNamed, reply: '' } : null)
+      ?? (buyReal ? { action: 'shop' as const, query: buyReal.trim(), reply: '' } : null);
     const { intent, ai, replyLang: aiLang } = routed ? { intent: routed, ai: false as const, replyLang: 'en' as const } : await interpret(said, { name, lastResults, step, lang });
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
     let replyLang = aiLang;
     let discover: { query: string; suggested: boolean } | null = null;
+    if (intent.action === 'payment_status') {
+      // Answered on the device from GET /api/payments/:id (receipt card). Nothing here captures or charges.
+      return res.json({ intent: { action: 'payment_status', reply: intent.reply }, products, reply: intent.reply, replyLang: 'en', ai, discover: null });
+    }
     if (isCompanionAction(intent.action)) {
       // The AI only chose the intent and extracted parameters. The server queries this elder's own records and
       // writes the reply from a template: the model's own reply is discarded (it can't claim "marked as paid").
       const out = await answerCompanion(intent.action, intent, s);
       return res.json({ intent: { action: intent.action, reply: out.reply }, products, reply: out.reply, replyLang: 'en', ai, discover, companion: out.card });
+    }
+    let demoOffer: ReturnType<typeof searchProducts> = [];
+    let buyNow = false;
+    if (intent.action === 'shop' && demoPick.length) {
+      // A named Demo Shop product: one match goes straight to the purchase review card (amount from /api/quote).
+      products = demoPick.length === 1 || demoPick[0].name.toLowerCase().includes(String(demoNamed).toLowerCase()) ? demoPick.slice(0, 1) : demoPick;
+      buyNow = products.length === 1;
+      const one = products[0];
+      reply = buyNow ? `Here is the Demo Shop ${one.name}: ${fmtEur(one.priceCents)}, paid with PayPal Sandbox, so no real money.` : describeOptions(products, name);
+      replyLang = 'en';
+      return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover: null, buyNow });
+    }
+    if (intent.action === 'shop' && buyReal && channel3Configured()) {
+      discover = { query: buyReal.trim(), suggested: false };
+      demoOffer = searchProducts(buyReal, null, 1);
+      reply = "Here are real listings found for Ireland. You'd buy these on the retailer's own website: SaySafe doesn't take payment for them."; replyLang = 'en';
+      return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, demoOffer });
     }
     if (intent.action === 'shop') {
       // Real-product questions go to Channel3 discovery (same rules as /discover). The Demo Shop flow is unchanged.
@@ -284,7 +319,7 @@ export function createApp() {
         discover = { query: said, suggested: false };
         reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website."; replyLang = 'en';
       } else {
-        products = demoItem ? [...PRODUCTS].sort((a, b) => b.rating - a.rating).slice(0, 3) : searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
+        products = demoItem ? [...PRODUCTS].sort((a, b) => b.rating - a.rating).slice(0, 3) : searchProducts(intent.query || said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
         // English template, unless the AI already answered in the chosen reply language.
         if (lang === 'en' || replyLang !== lang) { reply = describeOptions(products, name); replyLang = 'en'; }
         if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }
@@ -539,6 +574,15 @@ export function createApp() {
     const s = sessionOf(req);
     res.setHeader('Cache-Control', 'no-store');
     res.json(buildInsights(s.householdId, { userId: s.userId, name: s.name }));
+  });
+  // "My insights": Mary sees her whole household picture; a family member gets the same shape with Mary's private
+  // records, subscriptions and duplicate checks left out (null), and only the scam checks she shared.
+  app.get('/api/insights/summary', insightsOn, (req, res) => {
+    const want = req.query.as === 'family' ? 'family' : 'elder';
+    const s = readSession(req, want) ?? readSession(req, want === 'elder' ? 'family' : 'elder');
+    if (!s) return res.status(401).json({ error: 'unauthenticated', message: 'Please start SaySafe on this device first.' });
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(buildSummary({ role: s.role, householdId: s.householdId }));
   });
   app.post('/api/family/insights/agent', insightsOn, aiLimiter, requireRole('family'), wrap(async (req, res) => {
     const s = sessionOf(req);

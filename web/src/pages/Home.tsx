@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MessageSquareWarning, ShoppingBag, LifeBuoy, Wallet, ChevronRight, Clock, Mic, ShieldAlert } from 'lucide-react';
+import { MessageSquareWarning, ShoppingBag, LifeBuoy, Wallet, ChevronRight, Clock, Mic, ShieldAlert, BarChart3 } from 'lucide-react';
+import { api } from '../lib/api';
+import { useConfig } from '../lib/insightsApi';
+import { InsightsSummary, type InsightsSummaryT } from '../../../shared/insightsSummary';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/ui';
 import { useMe } from '../lib/session';
@@ -45,9 +48,29 @@ export function mostRelevant(items: ActivityItem[]): ActivityItem | null {
   return [...items].filter((i) => i.type === 'payment' && !i.example && !(i.approval?.status === 'expired')).sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
+/** "View insights": a short glance from the same summary the Insights page and the Assistant use. */
+function InsightsCard() {
+  const [d, setD] = useState<InsightsSummaryT | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => { api('/api/insights/summary').then((raw) => { const r = InsightsSummary.safeParse(raw); if (r.success) setD(r.data); else setFailed(true); }).catch(() => setFailed(true)); }, []);
+  const bits = d ? [
+    d.pendingReviews.real.length ? `${d.pendingReviews.real.length} waiting for family` : 'Nothing waiting for family',
+    d.duplicates?.length ? `${d.duplicates.length} possible repeat payment${d.duplicates.length === 1 ? '' : 's'}` : null,
+    d.subscriptions?.upcoming[0] ? `Next charge: ${d.subscriptions.upcoming[0].merchant}${d.subscriptions.upcoming[0].kind === 'sample' ? ' (sample)' : ''}` : null,
+  ].filter(Boolean) as string[] : [];
+  return (
+    <Card className="mt-6 p-5" aria-labelledby="ins-h" data-testid="home-insights">
+      <h2 id="ins-h" className="text-xl flex items-center gap-2"><BarChart3 className="size-6 text-teal" aria-hidden />Your insights</h2>
+      <p className="mt-1 text-ink-soft">{failed ? 'Your spending, subscriptions and safety checks in one place.' : d ? bits.join(' · ') : 'Loading…'}</p>
+      <Link to="/insights" className="mt-3 inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold hover:bg-teal-soft">View insights<ChevronRight className="size-5" aria-hidden /></Link>
+    </Card>
+  );
+}
+
 export default function Home() {
   const me = useMe('elder');
   const nav = useNavigate();
+  const cfg = useConfig();
   const [pending, setPending] = useState<ActivityItem[]>([]);
   const [count, setCount] = useState(0);
   const [recent, setRecent] = useState<ActivityItem[] | null>(null);
@@ -89,6 +112,8 @@ export default function Home() {
           {count > 1 && <Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">{count - 1} more in Activity</Link>}
         </Card>
       )}
+
+      {cfg?.insights !== false && <InsightsCard />}
 
       <Card className="mt-6 p-5" aria-labelledby="recent-h">
         <h2 id="recent-h" className="text-xl">Recent activity</h2>

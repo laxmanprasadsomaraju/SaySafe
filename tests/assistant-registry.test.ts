@@ -11,7 +11,9 @@ describe('assistant component registry', () => {
       // payment companion (elder-only)
       'companion_records', 'companion_sign_in', 'contact_card', 'demo_cancel_intent', 'demo_membership', 'last_payment', 'monthly_costs', 'payment_matches', 'subscription_help',
       // "Try as Mary" demo: subscriptions list, send money handoff, welcome, training examples, error with Retry
-      'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error'].sort());
+      'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error',
+      // Insights summary card (flagship + Insights discoverability)
+      'insights_summary'].sort());
   });
   it('rejects unknown kinds and markup-shaped payloads', () => {
     expect(parseBlock({ kind: 'html', html: '<img src=x onerror=alert(1)>' })).toBeNull();

@@ -19,7 +19,7 @@ function stripCompanionParams<T extends Record<string, unknown>>(i: T): T {
 }
 
 export const Intent = CompanionIntentParams.extend({
-  action: z.enum(['shop', 'check_message', 'trusted_help', 'order_problem', 'select_product', 'confirm', 'cancel', 'chat', 'payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup', 'subscription_list', 'send_money']),
+  action: z.enum(['shop', 'check_message', 'trusted_help', 'order_problem', 'select_product', 'confirm', 'cancel', 'chat', 'payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup', 'subscription_list', 'send_money', 'insights', 'payment_status']),
   query: z.string().max(200).nullable().optional(),
   max_price_eur: z.number().positive().max(10000).nullable().optional(),
   choice_index: z.number().int().min(1).max(5).nullable().optional(),

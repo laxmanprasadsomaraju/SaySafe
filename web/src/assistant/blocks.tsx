@@ -9,6 +9,7 @@ import { ServerPayment, ServerActivity, parseServer, familyStatusFrom, familyRev
 import { api } from '../lib/api';
 import { goToPayPal } from '../lib/handoff';
 import { markPayPalReturn } from './thread';
+import { acknowledgeLeave } from '../components/LeaveGuard';
 import { speech } from '../lib/voice';
 import { paymentLabel, verdictLabel, money as moneyCents, when, fetchActivity, shortStatus, truncateRef, TONE_CLS, type Tone } from '../lib/activity';
 import { shortTitle } from '../../../shared/shopping';
@@ -120,6 +121,7 @@ function ProductCardsBlock({ b, act }: { b: BlockOf<'product_cards'>; act: Block
                 {p.role === 'best' && i === 0 && <span className="block text-sm font-bold uppercase tracking-wider text-teal">Best match</span>}
                 <span className="block font-bold leading-snug line-clamp-2 break-words">{p.title}</span>
                 <span className="block text-base text-ink-soft truncate">{p.retailer}</span>
+                {b.source === 'channel3' && p.features.length > 0 && <span className="block text-sm text-ink-soft line-clamp-1 break-words">{p.features.slice(0, 2).join(' · ')}</span>}
                 <span className="block font-bold">{money(p.price, p.currency)}{p.compareAt && p.compareAt > p.price ? <span className="font-normal text-base text-ink-soft"> · was {money(p.compareAt, p.currency)}</span> : null}</span>
                 <span className="sr-only">. Open details</span>
               </span>
@@ -262,6 +264,25 @@ function familyLook(b: BlockOf<'family_status'>): { pill: string; tone: Tone; ti
   const s = shortStatus(b.state, { approval: ap });
   return { pill: s.label, tone: s.tone, title: paymentLabel(b.state), note: s.detail ?? null, icon: TERMINAL.includes(b.state) ? XCircle : Clock };
 }
+/** Demo only: open Alex's family view for this household in this browser, to answer the real request. */
+function TryAlexHere({ requestId }: { requestId: string }) {
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true); setErr(null);
+    try { await api('/api/demo/alex', { body: {} }); acknowledgeLeave(requestId); nav('/family/assistant'); }
+    catch (e: any) { setErr(String(e.message).slice(0, 200)); setBusy(false); }
+  };
+  return (
+    <div className="mt-2 rounded-2xl bg-teal-soft p-3">
+      <p className="text-base">Trying the demo? Answer as Alex, the family helper. Mary can’t approve her own request.</p>
+      <button type="button" onClick={() => void go()} disabled={busy} className="mt-2 min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold hover:bg-teal-soft disabled:opacity-60" data-testid="try-as-alex-card">{busy ? 'Opening Alex’s view…' : 'Try as Alex too'}</button>
+      <p className="mt-1 text-sm text-ink-soft">Come back with Profile › Back to Mary, then Assistant. This conversation is kept.</p>
+      {err && <p role="alert" className="mt-1 text-danger font-bold">{err}</p>}
+    </div>
+  );
+}
 function FamilyStatusCard({ b, act }: { b: BlockOf<'family_status'>; act: BlockActions }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -314,6 +335,7 @@ function FamilyStatusCard({ b, act }: { b: BlockOf<'family_status'>; act: BlockA
           {!TERMINAL.includes(b.state) && <button type="button" onClick={() => void refresh(true)} disabled={checking} className={linkCls}>{checking ? 'Checking…' : 'Check now'}</button>}
           <Link to={`/order/${b.requestId}`} className={linkCls}>Open details</Link>
         </div>
+        {waiting && act.audience !== 'family' && <TryAlexHere requestId={b.requestId} />}
       </div>
     </div>
   );
@@ -406,9 +428,10 @@ function ReceiptCard({ b, act }: { b: BlockOf<'receipt'>; act: BlockActions }) {
         {row('Item', b.item)}
         {row('Shop', b.merchant)}
         {row('Amount', `${amount} ${r.currency}`)}
-        {b.familyApproval && row('Family', b.familyApproval === 'approved' ? 'Approved' : b.familyApproval)}
+        {row('Family', b.familyApproval === 'approved' ? 'Approved' : b.familyApproval ? b.familyApproval : 'Not needed')}
         {row('Your approval', b.buyerApproved ? 'Approved at PayPal' : 'Not recorded')}
-        {row('Capture', b.captureVerified ? 'Captured · checked with PayPal' : 'Captured')}
+        {row('Payment', 'PayPal Sandbox — no real money')}
+        {row('Capture', <>{b.captureVerified ? 'Captured · checked with PayPal' : 'Captured'}{r.captureId && <span className="block font-normal text-ink-soft" title={r.captureId}>Ref {truncateRef(r.captureId)}<span className="sr-only"> (full capture reference {r.captureId})</span></span>}</>)}
         {row('Webhook', r.webhookConfirmed ? 'Verified — signed PayPal notice' : 'Verification pending')}
         {row('Reference', <span title={r.orderId}>{truncateRef(r.orderId)}<span className="sr-only"> (full reference {r.orderId})</span></span>)}
         {row('Refund', b.state === 'REFUNDED' ? 'Refunded' : b.refundStatus === 'REFUND_REQUESTED' ? 'Request sent — not refunded yet' : b.refundStatus === 'REFUND_PENDING' ? 'Pending — not confirmed yet' : 'None')}
@@ -416,6 +439,7 @@ function ReceiptCard({ b, act }: { b: BlockOf<'receipt'>; act: BlockActions }) {
       </dl>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1">
         <Link to={`/order/${b.requestId}`} className={linkCls}>Open full receipt</Link>
+        <Link to={`/activity?q=${encodeURIComponent(b.item.split(' × ')[0].split(',')[0].slice(0, 60))}`} className={linkCls} data-testid="receipt-activity-link">View in Activity</Link>
         {b.state === 'CAPTURED' && <button type="button" onClick={() => act.refund(b.requestId)} className={linkCls}>Refund options</button>}
         <button type="button" onClick={() => speech.speak(spoken, { priority: 'user' })} className={`${linkCls} gap-1`}><Volume2 className="size-5" aria-hidden />Read aloud</button>
       </div>

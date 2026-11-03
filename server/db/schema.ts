@@ -226,6 +226,8 @@ export const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [
   ['webhook_events', 'processed_at', 'TEXT'],
   ['webhook_events', 'outcome', 'TEXT'],
   ['webhook_events', 'attempts', 'INTEGER NOT NULL DEFAULT 0'],
+  // A scam check of one of the built-in training examples (decided on the server by exact text): practice, never an incident.
+  ['security_scans', 'example', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 export function migrateSchema(db: Db) {

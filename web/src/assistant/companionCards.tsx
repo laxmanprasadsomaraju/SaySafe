@@ -11,7 +11,9 @@
  *    token), and shown as cancelled only when the server answers provider_confirmed.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { CheckCircle2, AlertTriangle, Pencil, Trash2, Plus, ExternalLink, Phone, Mail, UserRound, Repeat, Wallet, Search, ShieldCheck, Loader2, RotateCcw, CircleSlash, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { InsightsSummary as InsightsSummarySchema, fmtMoneyList, type InsightsSummaryT } from '../../../shared/insightsSummary';
+import { CheckCircle2, AlertTriangle, Pencil, Trash2, Plus, ExternalLink, Phone, Mail, UserRound, Repeat, Wallet, Search, ShieldCheck, Loader2, RotateCcw, CircleSlash, Info, BarChart3 } from 'lucide-react';
 import { api } from '../lib/api';
 import { goToPayPal } from '../lib/handoff';
 import { TONE_CLS, type Tone } from '../lib/activity';
@@ -867,6 +869,7 @@ function SubscriptionsListCard({ b, act }: { b: BlockOf<'subscriptions_list'>; a
       )}
       <Err e={err} />
       <p className="mt-2 text-base text-ink-soft">Tap one, then “Help me cancel”. For other companies SaySafe shows their official page: it can’t cancel for you.</p>
+      <Link to={b.focus === 'next' ? '/insights#upcoming' : '/insights#subscriptions'} className={linkCls} data-testid="view-full-insights">View full insights</Link>
       {b.demoOffer && !subs.some(isDemo) && (
         <div className="mt-3 rounded-2xl border-2 border-teal/40 p-3">
           <p className="font-bold">Real PayPal Sandbox subscription you can start and cancel here</p>
@@ -998,6 +1001,59 @@ function RetryErrorCard({ b, act }: { b: BlockOf<'retry_error'>; act: BlockActio
   );
 }
 
+// ---------- Insights summary (concise; the full page is /insights) ----------
+const FOCUS_TITLE: Record<string, string> = { overview: 'Your insights', spending: 'Your spending, by kind of record', pending: 'Waiting for approval', duplicates: 'Possible repeat payments', safety: 'Your safety insights', subscriptions: 'Subscriptions', upcoming: 'Coming out next' };
+const KindTag = ({ k }: { k: 'sandbox' | 'sample' | 'user_entered' }) => k === 'sample' ? <SampleBadge /> : <span className={`inline-flex items-center rounded-xl border px-2 py-0.5 text-sm font-bold ${k === 'sandbox' ? TONE_CLS.ok : TONE_CLS.muted}`}>{k === 'sandbox' ? 'Real PayPal Sandbox' : 'Recorded by you'}</span>;
+export function InsightLines({ d, focus }: { d: InsightsSummaryT; focus: string }) {
+  const sb = d.payments.sandbox;
+  const line = (label: ReactNode, value: ReactNode, key: string) => <li key={key} className="py-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1"><span className="min-w-0">{label}</span><span className="font-bold text-right">{value}</span></li>;
+  const rows: ReactNode[] = [];
+  if (focus === 'overview' || focus === 'spending') {
+    rows.push(line(<>Paid with PayPal Sandbox <KindTag k="sandbox" /></>, sb.captured.count ? `${fmtMoneyList(sb.captured.totals)} · ${sb.captured.count}` : 'None yet', 'sb'));
+    if (d.records) rows.push(line(<>Payments you recorded <KindTag k="user_entered" /></>, d.records.userEntered.count ? `${fmtMoneyList(d.records.userEntered.totals)} · ${d.records.userEntered.count}` : 'None', 'rec'));
+    if (d.records?.sample.count || d.payments.sample.count) rows.push(line(<>Sample records and purchases <KindTag k="sample" /></>, `${d.records?.sample.count ?? 0} records · ${d.payments.sample.count} purchases`, 'smp'));
+  }
+  if (focus === 'overview' || focus === 'pending') rows.push(line('Waiting for your family member', d.pendingReviews.real.length ? d.pendingReviews.real.map((x) => `${x.item} · ${money(x.amountCents, x.currency)}`).join('; ') : 'Nothing', 'pend'));
+  if (focus === 'pending' && d.pendingReviews.sampleWaiting) rows.push(line(<>Sample request <KindTag k="sample" /></>, 'Illustrative, can’t be approved', 'pends'));
+  if ((focus === 'overview' || focus === 'duplicates') && d.duplicates) {
+    if (!d.duplicates.length) rows.push(line('Possible repeat payments', 'None found', 'dup0'));
+    d.duplicates.slice(0, focus === 'duplicates' ? 5 : 1).forEach((x, i) => rows.push(line(<>{x.recipient} {x.sample && <SampleBadge />}</>, `${money(x.amountCents, x.currency)} twice, ${x.daysApart} day${x.daysApart === 1 ? '' : 's'} apart`, `dup${i}`)));
+  }
+  if ((focus === 'overview' || focus === 'subscriptions') && d.subscriptions) {
+    const s = d.subscriptions;
+    if (s.userEntered.count) rows.push(line(<>Your subscriptions <KindTag k="user_entered" /></>, `${fmtMoneyList(s.userEntered.monthly)} a month · ${fmtMoneyList(s.userEntered.annual)} a year`, 'subu'));
+    if (s.sample.count) rows.push(line(<>Sample subscriptions <KindTag k="sample" /></>, `${fmtMoneyList(s.sample.monthly)} a month · ${fmtMoneyList(s.sample.annual)} a year`, 'subs'));
+    if (s.sandbox.count) rows.push(line(<>Demo Membership <KindTag k="sandbox" /></>, `${fmtMoneyList(s.sandbox.monthly)} a month`, 'subp'));
+  }
+  if ((focus === 'overview' || focus === 'upcoming') && d.subscriptions?.upcoming.length) {
+    const u = d.subscriptions.upcoming[0];
+    rows.push(line(<>Next expected charge {u.kind === 'sample' && <SampleBadge />}</>, `${u.merchant} · ${money(u.amountCents, u.currency)} · ${u.inDays === 0 ? 'today' : u.inDays === 1 ? 'tomorrow' : `in ${u.inDays} days`}`, 'up'));
+  }
+  if (focus === 'overview' || focus === 'safety') {
+    const r = d.scamChecks.real;
+    rows.push(line('Messages you checked', r.total ? `${r.total} · ${r.suspicious} suspicious` : 'None yet', 'scan'));
+    if (d.scamChecks.training) rows.push(line(<>Training examples <KindTag k="sample" /></>, `${d.scamChecks.training} · not counted`, 'train'));
+  }
+  return <ul className="mt-2 divide-y divide-line text-base">{rows}</ul>;
+}
+function InsightsSummaryCard({ b, act }: { b: BlockOf<'insights_summary'>; act: BlockActions }) {
+  const cur = useRef(b); cur.current = b;
+  // Shown again after a reload: re-read so the numbers are current, never a stale copy.
+  useEffect(() => {
+    api('/api/insights/summary').then((raw) => { const r = InsightsSummarySchema.safeParse(raw); if (r.success) act.replace(cur.current, { ...cur.current, summary: r.data }); }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!elderOnly(act)) return null;
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="insights_summary" data-focus={b.focus}>
+      <Head icon={BarChart3}>{FOCUS_TITLE[b.focus] ?? 'Your insights'}</Head>
+      <InsightLines d={b.summary} focus={b.focus} />
+      <p className="mt-2 text-sm text-ink-soft">Each kind of record is shown on its own and never added together. Sample data is illustrative.</p>
+      <Link to={`/insights${b.focus !== 'overview' ? `#${b.focus}` : ''}`} className={`${linkCls} mt-1`} data-testid="view-full-insights">View full insights</Link>
+      <p className="mt-2 text-sm text-ink-soft flex items-start gap-1.5"><ShieldCheck className="size-4 mt-0.5 shrink-0 text-teal" aria-hidden />Your records and subscriptions are private to you. Your family member sees only Demo Shop purchases, reviews and checks you share.</p>
+    </div>
+  );
+}
+
 /** Registry entries for the companion kinds (merged into REGISTRY in blocks.tsx). */
 export const COMPANION_REGISTRY = {
   payment_matches: ({ b, act }: { b: BlockOf<'payment_matches'>; act: BlockActions }) => <PaymentMatchesCard b={b} act={act} />,
@@ -1014,5 +1070,6 @@ export const COMPANION_REGISTRY = {
   demo_welcome: ({ b, act }: { b: BlockOf<'demo_welcome'>; act: BlockActions }) => <DemoWelcomeCard b={b} act={act} />,
   training_examples: ({ b, act }: { b: BlockOf<'training_examples'>; act: BlockActions }) => <TrainingExamplesCard b={b} act={act} />,
   retry_error: ({ b, act }: { b: BlockOf<'retry_error'>; act: BlockActions }) => <RetryErrorCard b={b} act={act} />,
+  insights_summary: ({ b, act }: { b: BlockOf<'insights_summary'>; act: BlockActions }) => <InsightsSummaryCard b={b} act={act} />,
 };
 export type CompanionBlock = Extract<Block, { kind: keyof typeof COMPANION_REGISTRY }>;

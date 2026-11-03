@@ -14,7 +14,7 @@ import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
 import { spokenScam, spokenFamily } from '../lib/spoken';
 import { AssistantHeader } from '../assistant/AssistantHeader';
-import { THREAD_KEY, markPayPalReturn, pendingPayPalReturn, clearPayPalReturn, hasBlockFor } from '../assistant/thread';
+import { THREAD_KEY, markPayPalReturn, pendingPayPalReturn, clearPayPalReturn, hasBlockFor, conversationPaymentId } from '../assistant/thread';
 import { fetchPayment } from '../assistant/blocks';
 import { localProfileForRequest } from '../lib/prefs';
 import { fetchActivity, paymentLabel } from '../lib/activity';
@@ -127,17 +127,25 @@ export default function Assistant() {
     finally { setBusy(false); speech.endThinking(); if (fileRef.current) fileRef.current.value = ''; }
   };
 
-  const discover = async (text: string, turn: number, maxPrice?: number, label?: string) => {
+  /** A separate, clearly labelled Demo Shop option after real listings (never mixed into the Channel3 cards). */
+  const offerDemo = (demo: any[], query: string) => {
+    const items = productItems(demo.map(fromDemo));
+    if (!items.length) return;
+    add('assistant', 'Want to see the safe purchase steps instead? The SaySafe Demo Shop has a similar item. It is paid with PayPal Sandbox, so no real money moves, and you can say “let’s buy the demo ' + query.replace(/^(a|an|the)\s+/i, '') + '”.', [{ kind: 'product_cards', source: 'demo', query, items, fetchedAt: null, note: null }]);
+  };
+  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[]) => {
     try {
       const r = await api<{ products: ShopItem[]; recommendation: Recommendation; reply: string; fetchedAt: string; searchQuery: string }>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest() } });
       if (!speech.isCurrent(turn)) return;
       const items = productItems(r.products.map((p) => fromChannel3(p, r.recommendation)));
       if (!items.length) { const msg = label ? `${label}, I found no other listings for ${r.searchQuery}.` : r.reply || 'I found no matching listings.'; add('assistant', msg); say(msg, turn); return; }
-      add('assistant', r.reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: null }]);
+      const reply = demo ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
+      add('assistant', reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: null }]);
       setThread((t) => ({ ...t, focusId: null }));
       say(r.reply, turn);
+      if (demo?.length) offerDemo(demo, text);
     } catch (e: any) {
-      if (speech.isCurrent(turn)) add('assistant', e.message || 'I couldn’t search the shops right now. The SaySafe Demo Shop still works.');
+      if (speech.isCurrent(turn)) { add('assistant', e.message || 'I couldn’t search the shops right now. The SaySafe Demo Shop still works.'); if (demo?.length) offerDemo(demo, text); }
     }
   };
 
@@ -149,16 +157,17 @@ export default function Assistant() {
     say(reply, turn, lang);
   };
 
-  const prepare = async (item: ProductItem) => {
+  const prepare = async (item: ProductItem, lead?: string) => {
     setSheet(null);
     if (!item.productId) return;
     const turn = speech.beginTurn();
     try {
+      // The amount on the card comes from the server catalogue (/api/quote), never from the AI or the listing shown.
       const q = await api<{ lines: any[]; totalCents: number; currency: string; merchant: string; needsFamily: boolean; thresholdCents: number; spoken: string }>('/api/quote', { body: { items: [{ productId: item.productId, quantity: 1 }] } });
-      const extra = q.needsFamily ? ' It’s above your protected limit, so your family member checks it first.' : ' Tap Allow to continue to PayPal, or Deny.';
-      add('assistant', q.spoken + extra, [{ kind: 'payment_prep', lines: q.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, lineCents: l.lineCents, image: l.image })), totalCents: q.totalCents, currency: q.currency, merchant: q.merchant, needsFamily: q.needsFamily, thresholdCents: q.thresholdCents, idempotencyKey: newKey(), status: 'ready', requestId: null, error: null }]);
-      say(q.spoken + extra, turn);
-    } catch (e: any) { add('assistant', e.message); }
+      const extra = q.needsFamily ? ' It’s above your protected limit, so your family member checks it first. Tap Allow to ask them.' : ' Tap Allow to continue to PayPal, or Deny.';
+      add('assistant', (lead ? `${lead} ` : '') + q.spoken + extra, [{ kind: 'payment_prep', lines: q.lines.map((l) => ({ productId: l.productId, name: l.name, quantity: l.quantity, lineCents: l.lineCents, image: l.image })), totalCents: q.totalCents, currency: q.currency, merchant: q.merchant, needsFamily: q.needsFamily, thresholdCents: q.thresholdCents, idempotencyKey: newKey(), status: 'ready', requestId: null, error: null }]);
+      say((lead ? `${lead} ` : '') + q.spoken + extra, turn);
+    } catch (e: any) { add('assistant', '', [{ kind: 'retry_error', message: String(e?.message || 'I couldn’t price that item. Nothing was charged.').slice(0, 400), retryText: `buy the demo ${item.title}`.slice(0, 200), done: false }]); }
     finally { speech.endThinking(); }
   };
 
@@ -213,6 +222,33 @@ export default function Assistant() {
     add('assistant', t, [block]);
     say(t, turn);
   };
+  /**
+   * "Did my payment go through?" — the purchase this conversation is about (newest card first), else the newest real
+   * purchase. Read-only: GET /api/payments/:id. It never calls confirm/capture, so asking again (or reloading) can't
+   * charge twice; it shows the same receipt.
+   */
+  const showPaymentStatus = async (turn: number) => {
+    const id = conversationPaymentId(threadRef.current);
+    let p: ServerPayment | null = id ? await fetchPayment(id).catch(() => null) : null;
+    if (!p) {
+      const list = await api<unknown[]>('/api/payments');
+      const rows = (Array.isArray(list) ? list : []).map((x) => ServerPayment.safeParse(x)).filter((x) => x.success).map((x) => x.data!).filter((x) => !(x as any).sample);
+      p = rows[0] ? await fetchPayment(rows[0].id) : null;
+    }
+    if (!speech.isCurrent(turn)) return;
+    if (!p) { const t = 'I can’t see a purchase made in this app yet, so there is nothing to check. Records you typed are not payments SaySafe can confirm.'; add('assistant', t); return say(t, turn); }
+    const block = receiptFrom(p);
+    const amt = new Intl.NumberFormat('en-IE', { style: 'currency', currency: p.currency }).format(p.amountCents / 100);
+    if (block) {
+      const t = `Yes. PayPal confirmed your ${amt} payment for ${block.item}${block.receipt.webhookConfirmed ? ', and its signed notice was verified' : '. The signed PayPal notice hasn’t arrived yet, so that part is still pending'}. It was PayPal Sandbox, so no real money moved.`;
+      add('assistant', t, [block]); return say(t, turn);
+    }
+    const t = p.state === 'FAMILY_APPROVAL_PENDING' ? `Not yet. Your ${amt} purchase is still waiting for your family member. Nothing is paid.`
+      : p.state === 'FAMILY_APPROVED' || p.state === 'PAYER_APPROVAL_PENDING' ? `Not yet. Your ${amt} purchase still needs your approval at PayPal. Nothing is paid.`
+      : p.state === 'PAYER_APPROVED' || p.state === 'CAPTURE_PENDING' ? `Not confirmed yet. You approved it at PayPal, and SaySafe is still waiting for PayPal to confirm the ${amt} payment. Don’t pay again.`
+      : `No. ${paymentLabel(p.state)}. Nothing was paid.`;
+    add('assistant', t, [familyStatusFrom(p)]); say(t, turn);
+  };
   const showLastPayment = async (turn: number) => {
     const list = await api<unknown[]>('/api/payments');
     if (!speech.isCurrent(turn)) return;
@@ -258,6 +294,7 @@ export default function Assistant() {
       if (/^(yes|yeah|yep|ok|okay|sure|go ahead|confirm|do it|cancel it|please do)\b[\s.!]*$/i.test(text) && lastBlock('demo_cancel_intent')?.phase === 'confirm') { add('assistant', TAP_ONLY_REPLY); return say(TAP_ONLY_REPLY, turn); }
       const f = parseFollowup(text, Boolean(ctx));
       if (f.kind === 'refund') return await showRefund(turn);
+      if (f.kind === 'payment_status') return await showPaymentStatus(turn);
       if (f.kind === 'search') return await showHistory(turn, f.q);
       // "Show my last payment" is answered by the server from every source (Demo Shop, records, sample data).
       if (f.kind === 'last_payment' && /\breceipt\b/i.test(text)) return await showLastPayment(turn);
@@ -279,7 +316,7 @@ export default function Assistant() {
         }
       }
       // In "check a message" mode, a short request ("Compare real shops for a kettle") is a request, not a message to check.
-      const shortRequest = text.length < 80 && !/https?:|www\.|@|\+?\d[\d\s-]{6,}|€|\$|£/.test(text) && /^(please\s+)?(find|buy|compare|show|help me|i need|i want|look for|search|get me|cancel|send|who|what|which|did i|have i)\b/i.test(text);
+      const shortRequest = text.length < 80 && !/https?:|www\.|@|\+?\d[\d\s-]{6,}|€|\$|£/.test(text) && /^(please\s+|ok,?\s+|okay,?\s+)?(find|buy|compare|show|help me|i need|i want|look for|search|get me|cancel|send|who|what|which|did i|have i|let's|lets|can you|did my|has my|is my|do i)\b/i.test(text);
       if (mode === 'check' && !looksCompanion(text) && !shortRequest) return await scan(text, turn);
       if (mode === 'check' && shortRequest) setMode('chat');
       // "Help me cancel this one" right after a subscriptions card: name the highlighted subscription.
@@ -299,6 +336,7 @@ export default function Assistant() {
         add('assistant', r.reply, [r.companion], 'en');
         return say(shortSpoken(r.reply), turn);
       }
+      if (a === 'payment_status') return await showPaymentStatus(turn);
       if (a === 'check_message') {
         const msg = r.intent.message_text && r.intent.message_text !== text ? r.intent.message_text : text.length > 40 ? text : '';
         if (msg) return await scan(msg, turn);
@@ -306,7 +344,11 @@ export default function Assistant() {
       }
       if (a === 'shop' || r.discover) {
         setMode('find');
-        if (r.discover) return await discover(r.discover.query ?? text, turn);
+        if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined);
+        if (r.buyNow && Array.isArray(r.products) && r.products.length === 1) {
+          const item = productItems(r.products.map(fromDemo))[0];
+          if (item) return await prepare(item, r.reply);
+        }
         return showDemo(r.products ?? [], r.intent.query ?? text, r.reply, turn, r.replyLang);
       }
       if (a === 'select_product' && ctx && r.intent.choice_index) {

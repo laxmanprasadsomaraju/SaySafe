@@ -20,6 +20,27 @@ export function routeCompanion(said: string): IntentT | null {
   const s = raw.toLowerCase().replace(/[’']/g, "'");
   if (!s || s.length > 300) return null;
 
+  // ----- "Did my payment go through?" — status of a purchase made in this app. Never a scam check, never a list.
+  // The app answers with the receipt card read from the server (GET only: it can't capture or charge again).
+  if (/\b(did|has|have|is|was)\b.{0,12}\b(my|the|that|this|it)\b.{0,14}\b(payment|purchase|order|it)?\b.{0,6}\b(go(ne)? through|work(ed)?|succeed(ed)?|complete(d)?|finish(ed)?|done|paid|been paid)\b/.test(s)
+    && /\b(payment|purchase|order|it|through)\b/.test(s) && !/\b(to|for)\s+(?!the shop|demo|it\b)[a-z]+\b.{0,3}$/.test(s.replace(/[?.!]+$/, ''))) {
+    return { action: 'payment_status', reply: "I'll check that payment." };
+  }
+  // ----- Insights (Mary's own summary; answered from the database, never by the AI) -----
+  const twice = /\b(twice|two times|more than once|double|duplicates?)\b/.test(s);
+  if ((twice && (/\bsame (person|people|company|one|amount|thing)\b|\b(anyone|anybody|someone|somebody)\b/.test(s) || /^(have|did) i (paid|pay)( for)?( anything| something)? twice\b/.test(s))) || /\bduplicate (payments?|charges?)\b/.test(s)) {
+    return { action: 'insights', insight_focus: 'duplicates', reply: "I'll check your records for repeats." };
+  }
+  if (/\b(anything|something|what|any)\b.{0,30}\b(waiting|pending)\b.{0,30}\b(approv\w*|review\w*|family|alex|check\w*)\b/.test(s) || /\bwaiting (for|on) (an? )?(approval|review|alex|my family|family)\b/.test(s) || /\bpending (approvals?|reviews?)\b/.test(s)) {
+    return { action: 'insights', insight_focus: 'pending', reply: "I'll check what's waiting." };
+  }
+  if (/\b(my )?(spending|spend|spent)\b/.test(s) && /\b(show|what|how much|my|see|summary|tell)\b/.test(s) && !/\b(want|going) to spend\b/.test(s)) {
+    return { action: 'insights', insight_focus: 'spending', reply: "Here's what your records show." };
+  }
+  if (/\b(safety|scam)\s+(insights?|summary|history|checks?|overview|report)\b/.test(s) || /\b(show|open|see|view)\b.{0,12}\b(my |the )?(safety )?insights?\b/.test(s) || /^(my )?insights?[?.!]*$/.test(s)) {
+    return { action: 'insights', insight_focus: /\b(safety|scam)\b/.test(s) ? 'safety' : 'overview', reply: "Here's your summary." };
+  }
+
   // ----- "Did I already pay …?" -----
   if (/\b(have i|did i|i think i|have we|did we)\b.{0,15}\bpa(id|y)\b/.test(s) || /\balready paid\b/.test(s)) {
     const who = raw.replace(/[’]/g, "'").match(/\bpa(?:id|y)\s+(?:for\s+)?(?:the\s+|my\s+|a\s+)?(.{1,60}?)(?=\s+(?:€|eur\b|euro|\d|on\b|in\b|last\b|yesterday\b|by\b|already\b|twice\b|again\b)|[?.!,]|$)/i);

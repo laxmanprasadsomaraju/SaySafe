@@ -12,6 +12,9 @@ const ACK = 'ss-leave-ack';
 const acked = (id: string) => { try { return (JSON.parse(sessionStorage.getItem(ACK) ?? '[]') as string[]).includes(id); } catch { return false; } };
 const ack = (id: string) => { try { const a = JSON.parse(sessionStorage.getItem(ACK) ?? '[]') as string[]; sessionStorage.setItem(ACK, JSON.stringify([...a, id].slice(-50))); } catch { /* */ } };
 
+/** The person chose to leave on purpose (e.g. "Try as Alex too"): don't ask again for this purchase. */
+export const acknowledgeLeave = (id: string) => ack(id);
+
 export function LeaveGuard({ when, id, title, detail }: { when: boolean; id: string; title: string; detail: string }) {
   const active = when && !acked(id);
   const blocker = useBlocker(({ currentLocation, nextLocation }) => active && !handoffActive() && currentLocation.pathname !== nextLocation.pathname);
