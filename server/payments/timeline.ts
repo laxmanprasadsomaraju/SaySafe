@@ -40,8 +40,10 @@ export const truncateId = (id: string | null | undefined) => (!id ? '' : id.leng
 const json = (s: string | null) => { try { return s ? JSON.parse(s) : {}; } catch { return {}; } };
 const cents = (v: unknown) => Math.round(Number(v) * 100);
 
+let warned = false;
 export function buildTimeline(r: any): PaymentTimeline {
   const rows = db.prepare('SELECT actor, action, detail_json, at FROM audit_log WHERE target=? ORDER BY id ASC').all(r.id) as { actor: string; action: string; detail_json: string | null; at: string }[];
+  for (const x of rows) if (typeof x.action !== 'string') { if (!warned) { warned = true; console.warn('[timeline] audit row without action; keys=', Object.keys(x ?? {}).join(',')); } (x as any).action = ''; }
   const events: TimelineEvent[] = [];
   const has = (k: TimelineKind) => events.some((e) => e.kind === k);
   const evidence = (kind: string) => rows.filter((x) => x.action === `evidence.${kind}`).map((x) => json(x.detail_json));

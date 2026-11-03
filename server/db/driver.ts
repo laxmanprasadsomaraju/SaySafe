@@ -92,11 +92,42 @@ function cleanRow<T>(row: T): T {
   return row;
 }
 
+/**
+ * Normalise a row from any libsql mode to a plain {column: value} object. Seen on the hosted Turso embedded
+ * replica (2026-11-03): .all() rows that lacked the selected keys, so `row.action` was undefined. Arrays are
+ * mapped through the statement's column names; metadata-only/empty entries are dropped.
+ */
+export function normaliseRow(row: unknown, columns: string[] | null): Record<string, unknown> | undefined {
+  if (row == null) return undefined;
+  if (Array.isArray(row)) {
+    if (!columns || columns.length !== row.length) return undefined;
+    return Object.fromEntries(columns.map((c, i) => [c, row[i]]));
+  }
+  if (typeof row !== 'object') return undefined;
+  const r = cleanRow(row as Record<string, unknown>);
+  if (columns && columns.length && !columns.some((c) => c in r)) {
+    // keyed differently (e.g. table-qualified or positional keys): map by position over the column list
+    const vals = Object.entries(r).filter(([k]) => k !== '_metadata' && k !== 'duration').map(([, v]) => v);
+    if (vals.length === columns.length) return Object.fromEntries(columns.map((c, i) => [c, vals[i]]));
+    return undefined;
+  }
+  return r;
+}
+
+function columnNames(stmt: any): string[] | null {
+  try { const cols = stmt.columns?.(); return Array.isArray(cols) ? cols.map((c: any) => String(c?.name ?? c)) : null; } catch { return null; }
+}
+
 function wrapStatement(stmt: any): Statement {
+  let cols: string[] | null | undefined;
+  const names = () => (cols === undefined ? (cols = columnNames(stmt)) : cols);
   return {
     run: (...p) => { const info = stmt.run(...p); return { changes: Number(info.changes), lastInsertRowid: info.lastInsertRowid }; },
-    get: (...p) => cleanRow(stmt.get(...p)),
-    all: (...p) => (stmt.all(...p) as unknown[]).map(cleanRow),
+    get: (...p) => { const r = stmt.get(...p); return r == null ? r : (normaliseRow(r, names()) as any); },
+    all: (...p) => {
+      const out = (stmt.all(...p) as unknown[]).map((r) => normaliseRow(r, names())).filter((r): r is Record<string, unknown> => !!r);
+      return out as any;
+    },
   };
 }
 

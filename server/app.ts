@@ -468,7 +468,7 @@ export function createApp() {
     if (err instanceof pay.PaymentError) return res.status(err.status).json({ error: err.code, message: err.message });
     if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'too_large', message: 'That file is too large (max 4 MB).' });
     const ref = crypto.randomBytes(4).toString('hex');
-    console.error(`[${ref}]`, err?.message ?? err);
+    console.error(`[${ref}]`, err?.message ?? err, err?.stack ? `\n${String(err.stack).split("\n").slice(1, 6).join("\n")}` : "");
     res.status(500).json({ error: 'server_error', message: 'Something went wrong on our side. Nothing was charged.', ref });
   });
   return app;
