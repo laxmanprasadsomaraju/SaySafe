@@ -94,3 +94,11 @@ details > summary { list-style: none; }
 details > summary::-webkit-details-marker { display: none; }
 details > summary::after { content: '+'; font-size: 1.5rem; line-height: 1; margin-left: .25rem; }
 details[open] > summary::after { content: '−'; }
+
+/* ---------- App shell ---------- */
+/* Keyboard focus and anchors are never scrolled under the sticky header or the bottom tab bar. */
+html { scroll-padding-bottom: calc(var(--stack-h, 0px) + 1rem); }
+/* "Reduce motion" in Profile: same effect as the system setting. */
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+html.reduce-motion { scroll-behavior: auto; }
+dialog::backdrop { background: rgb(21 40 59 / .5); }

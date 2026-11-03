@@ -1,16 +1,16 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { House, Type, Contrast, SlidersHorizontal } from 'lucide-react';
+/**
+ * App shell: one navigation for the whole app.
+ * Mobile: bottom tab bar (Home, Assistant, Activity, Profile). Desktop: the same four in the header.
+ * Secondary screens get a history-aware Back button with a sensible fallback.
+ * The bottom stack (page dock, voice controls, tab bar) is measured so content is never hidden behind it.
+ */
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { House, MessageCircle, ListChecks, UserRound, Type, Contrast, ArrowLeft, BarChart3 } from 'lucide-react';
 import { VoiceBar } from './VoiceBar';
-
-function usePref(key: string, cls: string | null) {
-  const [on, setOn] = useState(() => localStorage.getItem(key) === 'on');
-  useEffect(() => {
-    if (cls) document.documentElement.classList.toggle(cls, on);
-    localStorage.setItem(key, on ? 'on' : 'off');
-  }, [on, key, cls]);
-  return [on, setOn] as const;
-}
+import { useDisplay, setDisplay } from '../lib/display';
+import { useHandoff } from '../lib/handoff';
+import { rememberRole } from '../lib/role';
 
 export function Logo() {
   return (
@@ -21,41 +21,140 @@ export function Logo() {
   );
 }
 
-export function Layout({ children, mode = 'elder', wide = false }: { children: ReactNode; mode?: 'elder' | 'family' | 'public'; wide?: boolean }) {
-  const [large, setLarge] = usePref('ss-large', 'large-text');
-  const [contrast, setContrast] = usePref('ss-contrast', 'high-contrast');
-  const loc = useLocation();
-  // Speech is stopped on navigation by RouteSpeechGuard (main.tsx).
-  useEffect(() => { window.scrollTo(0, 0); document.getElementById('main')?.focus({ preventScroll: true }); }, [loc.pathname]);
+type Mode = 'elder' | 'family' | 'public';
+interface Dest { to: string; label: string; icon: typeof House; match: (p: string) => boolean }
 
-  const toggle = 'inline-flex items-center justify-center gap-2 rounded-full border-2 min-w-12 px-3 sm:px-4 min-h-12 font-bold text-base';
-  const lbl = 'sr-only sm:not-sr-only';
+export function destinations(mode: 'elder' | 'family'): Dest[] {
+  if (mode === 'family') return [
+    { to: '/family', label: 'Home', icon: House, match: (p) => p === '/family' },
+    { to: '/family/insights', label: 'Insights', icon: BarChart3, match: (p) => p.startsWith('/family/insights') },
+    { to: '/activity?as=family', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' },
+    { to: '/profile?as=family', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' },
+  ];
+  return [
+    { to: '/home', label: 'Home', icon: House, match: (p) => p === '/home' },
+    { to: '/assistant', label: 'Assistant', icon: MessageCircle, match: (p) => p === '/assistant' || ['/check', '/shop', '/discover'].some((x) => p.startsWith(x)) },
+    { to: '/activity', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' || p.startsWith('/order') },
+    { to: '/profile', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' || ['/preferences', '/help', '/guide'].includes(p) },
+  ];
+}
+const PRIMARY = new Set(['/home', '/assistant', '/activity', '/profile', '/family', '/family/insights']);
+
+/** Where Back goes when there is no in-app history (opened from a link, or after a reload). */
+export function fallbackFor(path: string, mode: Mode): string {
+  if (path.startsWith('/order') || path.startsWith('/checkout')) return mode === 'family' ? '/activity?as=family' : '/activity';
+  if (['/check', '/shop', '/discover'].some((p) => path.startsWith(p))) return '/assistant';
+  if (['/help', '/guide', '/preferences'].includes(path)) return mode === 'family' ? '/profile?as=family' : '/profile';
+  if (path.startsWith('/family/insights/')) return '/family/insights';
+  if (path.startsWith('/family')) return '/family';
+  return mode === 'family' ? '/family' : '/home';
+}
+
+export function BackButton({ fallback, historyAware = true }: { fallback: string; historyAware?: boolean }) {
+  const nav = useNavigate();
+  const go = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (historyAware && idx > 0) nav(-1); else nav(fallback);
+  };
   return (
-    <div className="min-h-dvh flex flex-col">
+    <button type="button" onClick={go} className="inline-flex items-center gap-2 min-h-12 min-w-12 pl-2 pr-4 -ml-2 rounded-full font-bold text-teal hover:bg-teal-soft">
+      <ArrowLeft className="size-6" aria-hidden />Back
+    </button>
+  );
+}
+
+function DisplayToggles() {
+  const d = useDisplay();
+  const toggle = 'inline-flex items-center justify-center gap-2 rounded-full border-2 min-w-12 px-3 min-h-12 font-bold text-base';
+  return (
+    <div role="group" aria-label="Display settings" className="flex gap-1.5">
+      <button type="button" className={`${toggle} ${d.large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={d.large} onClick={() => setDisplay('large', !d.large)}><Type className="size-5" aria-hidden /><span className="sr-only lg:not-sr-only">Bigger text</span></button>
+      <button type="button" className={`${toggle} ${d.contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={d.contrast} onClick={() => setDisplay('contrast', !d.contrast)}><Contrast className="size-5" aria-hidden /><span className="sr-only lg:not-sr-only">Contrast</span></button>
+    </div>
+  );
+}
+
+function NavItems({ mode, variant }: { mode: 'elder' | 'family'; variant: 'top' | 'bottom' }) {
+  const { pathname } = useLocation();
+  return (
+    <ul className={variant === 'bottom' ? 'grid grid-cols-4' : 'flex gap-1'}>
+      {destinations(mode).map((d) => {
+        const exact = d.to.split('?')[0] === pathname;
+        const inSection = d.match(pathname);
+        const Icon = d.icon;
+        const cls = variant === 'bottom'
+          ? `flex flex-col items-center justify-center gap-0.5 min-h-16 px-1 text-[0.8125rem] leading-tight font-bold ${inSection ? 'text-teal-deep' : 'text-ink-soft'}`
+          : `inline-flex items-center gap-2 min-h-12 px-4 rounded-full font-bold ${inSection ? 'bg-teal-soft text-teal-deep' : 'text-navy hover:bg-teal-soft'}`;
+        return (
+          <li key={d.to}>
+            <NavLink to={d.to} end aria-current={exact ? 'page' : undefined} className={cls}>
+              {variant === 'bottom'
+                ? <span className={`grid place-items-center rounded-full w-14 h-8 ${inSection ? 'bg-teal-soft' : ''}`}><Icon className="size-6" aria-hidden /></span>
+                : <Icon className="size-5" aria-hidden />}
+              <span>{d.label}</span>
+            </NavLink>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+export function Layout({ children, mode = 'elder', wide = false, dock, footer = true, back }: {
+  children: ReactNode; mode?: Mode; wide?: boolean; dock?: ReactNode; footer?: boolean; back?: string | false;
+}) {
+  const loc = useLocation();
+  const handoff = useHandoff();
+  const stack = useRef<HTMLDivElement>(null);
+  useEffect(() => { window.scrollTo(0, 0); document.getElementById('main')?.focus({ preventScroll: true }); }, [loc.pathname]);
+  useEffect(() => { if (mode !== 'public') rememberRole(mode); }, [mode]);
+  // Keep the page's bottom padding equal to the fixed bottom stack, so nothing is ever hidden behind it.
+  useLayoutEffect(() => {
+    const el = stack.current;
+    const set = () => document.documentElement.style.setProperty('--stack-h', `${el?.offsetHeight ?? 0}px`);
+    set();
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(set); ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.setProperty('--stack-h', '0px'); };
+  });
+
+  const p = loc.pathname;
+  const app = mode !== 'public';
+  const external = p.startsWith('/checkout/');
+  const showNav = app && !external && !handoff && p !== '/family/pair';
+  const showBack = app && back !== false && !PRIMARY.has(p) && p !== '/family/pair';
+  const width = mode === 'public' ? 'max-w-7xl md:px-10' : wide ? 'max-w-7xl' : 'max-w-5xl';
+  return (
+    <div className="min-h-dvh flex flex-col" style={{ paddingBottom: 'var(--stack-h, 0px)' }}>
       <a href="#main" className="skip-link">Skip to main content</a>
-      <header className="border-b border-line bg-ivory/90 backdrop-blur sticky top-0 z-20">
-        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : wide ? 'max-w-7xl' : 'max-w-5xl'} px-4 sm:px-5 py-3 flex flex-wrap items-center gap-2 justify-between`}>
-          <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home"><Logo /></Link>
-          <nav aria-label="Display settings" className="flex flex-wrap gap-1.5 sm:gap-2">
-            {mode === 'elder' && loc.pathname !== '/home' && (
-              <NavLink to="/home" className={`${toggle} border-teal text-teal`}><House className="size-5" aria-hidden /><span className={lbl}>Home</span></NavLink>
-            )}
-            <button type="button" className={`${toggle} ${large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={large} onClick={() => setLarge(!large)}><Type className="size-5" aria-hidden /><span className={lbl}>Bigger text</span></button>
-            <button type="button" className={`${toggle} ${contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={contrast} onClick={() => setContrast(!contrast)}><Contrast className="size-5" aria-hidden /><span className={lbl}>Contrast</span></button>
-            {mode === 'elder' && (
-              <NavLink to="/preferences" className={`${toggle} ${loc.pathname === '/preferences' ? 'bg-navy text-white border-navy' : 'border-line'}`}><SlidersHorizontal className="size-5" aria-hidden /><span className={lbl}>My preferences</span></NavLink>
-            )}
-          </nav>
+      <header className="border-b border-line bg-ivory/95 backdrop-blur sticky top-0 z-20">
+        <div className={`mx-auto ${width} px-4 sm:px-5 py-2.5 flex items-center gap-2 justify-between`}>
+          <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home" className="min-h-12 inline-flex items-center"><Logo /></Link>
+          {showNav && <nav aria-label="Main" className="hidden md:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
+          <DisplayToggles />
         </div>
       </header>
-      <main id="main" tabIndex={-1} className={mode === 'public' ? 'flex-1 w-full outline-none' : `flex-1 mx-auto w-full ${wide ? 'max-w-7xl' : 'max-w-5xl'} px-5 py-8 md:py-12 outline-none`}>{children}</main>
-      {mode === 'elder' && <VoiceBar />}
-      <footer className={`border-t border-line text-ink-soft text-base ${mode === 'elder' ? 'pb-36 sm:pb-20' : ''}`}>
-        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : wide ? 'max-w-7xl' : 'max-w-5xl'} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
-          <p>SaySafe — Shop simply. Pay safely. Demo uses the PayPal sandbox; no real money moves.</p>
-          <p><Link className="underline" to="/guide">How to use SaySafe</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
+      {showBack && (
+        <div className={`mx-auto w-full ${width} px-5 pt-3`}>
+          <BackButton fallback={typeof back === 'string' ? back : fallbackFor(p, mode)} historyAware={!external} />
         </div>
-      </footer>
+      )}
+      <main id="main" tabIndex={-1} className={mode === 'public' ? 'flex-1 w-full outline-none' : `flex-1 mx-auto w-full ${width} px-5 ${showBack ? 'pt-3 pb-8 md:pb-12' : 'py-6 md:py-10'} outline-none`}>{children}</main>
+      {footer && (
+        <footer className="border-t border-line text-ink-soft text-base">
+          <div className={`mx-auto ${width} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
+            <p>SaySafe — Shop simply. Pay safely. Demo uses the PayPal sandbox; no real money moves.</p>
+            <p><Link className="underline" to="/guide">How to use SaySafe</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
+          </div>
+        </footer>
+      )}
+      {app && (
+        <div ref={stack} data-testid="bottom-stack" className="fixed inset-x-0 bottom-0 z-30 bg-paper/95 backdrop-blur border-t border-line pb-[env(safe-area-inset-bottom)]">
+          {dock && !handoff && <div className="border-b border-line">{dock}</div>}
+          {mode === 'elder' && <VoiceBar />}
+          {showNav && <nav aria-label="Main" className="md:hidden border-t border-line"><NavItems mode={mode as 'elder' | 'family'} variant="bottom" /></nav>}
+        </div>
+      )}
     </div>
   );
 }

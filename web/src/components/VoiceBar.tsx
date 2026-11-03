@@ -35,11 +35,58 @@ export function VoiceBar() {
   }, []);
 
   const chip = CHIP[s.status];
+  const hasText = Boolean(s.caption || s.segment || s.error || s.notice || s.micMessage || s.prefs.readAll);
   return (
-    <div role="region" aria-label="Voice controls" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+    <div role="region" aria-label="Voice controls">
       {open && (
-        <div id={panelId} className="mx-auto max-w-5xl px-4 sm:px-5 pt-3">
-          <fieldset className="rounded-2xl border border-line bg-ivory p-4 flex flex-wrap gap-x-6 gap-y-3 items-center">
+        <div id={panelId} className="mx-auto max-w-5xl px-4 sm:px-5 pt-3 max-h-[50dvh] overflow-y-auto">
+          <VoiceSettings />
+        </div>
+      )}
+      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className={`flex items-center gap-2 sm:gap-3 min-w-0 flex-1 ${hasText ? 'basis-full sm:basis-0' : ''}`}>
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap shrink-0 ${chip.cls}`}>
+            <span className={`size-2.5 rounded-full ${chip.dot}`} aria-hidden />
+            <span><span className="sr-only">Voice status: </span>{chip.label}</span>
+          </span>
+          {hasText && <p className="min-w-0 flex-1 text-base text-ink-soft line-clamp-2 break-words" title={s.caption || undefined}>
+            {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
+            {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
+            {s.error && <span className="text-danger font-bold"> {s.error}</span>}
+            {!s.caption && s.notice && <span className="text-ink-soft"> {s.notice}</span>}
+            {!s.caption && !s.notice && s.micMessage && <span className="text-navy font-bold"> {s.micMessage}</span>}
+          </p>}
+        </div>
+        <div className="flex gap-1.5 justify-end shrink-0 ml-auto">
+          <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
+            className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
+            <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
+          </button>
+          <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
+            {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}
+          </button>
+          <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>
+            <RotateCcw className="size-5" aria-hidden />
+          </button>
+          <button type="button" onClick={() => speech.toggleMute()} disabled={!s.supported} aria-pressed={s.prefs.muted} aria-label={s.prefs.muted ? 'Unmute voice' : 'Mute voice'}
+            className={`${btn} ${s.prefs.muted ? 'bg-navy border-navy text-white' : 'border-line text-navy hover:border-teal'}`}>
+            {s.prefs.muted ? <VolumeX className="size-5" aria-hidden /> : <Volume2 className="size-5" aria-hidden />}
+          </button>
+          <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={panelId} aria-label="Voice settings" className={`${btn} ${open ? 'border-teal text-teal' : 'border-line text-navy hover:border-teal'}`}>
+            <SlidersHorizontal className="size-5" aria-hidden />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+/** Voice settings, shared by the voice bar's settings panel and the Profile page. */
+export function VoiceSettings({ className = '' }: { className?: string }) {
+  const s = useSpeech();
+  return (
+          <fieldset className={`rounded-2xl border border-line bg-ivory p-4 flex flex-wrap gap-x-6 gap-y-3 items-center ${className}`}>
             <legend className="sr-only">Voice settings</legend>
             <label className="inline-flex items-center gap-3 min-h-11 font-bold cursor-pointer">
               <input type="checkbox" className="size-6 accent-[var(--color-teal)]" checked={s.prefs.autoSpeak} onChange={(e) => speech.setPrefs({ autoSpeak: e.target.checked })} />
@@ -65,43 +112,6 @@ export function VoiceBar() {
               </select>
             </label>
           </fieldset>
-        </div>
-      )}
-      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-2 flex flex-col-reverse sm:flex-row sm:items-center gap-x-3 gap-y-1.5">
-        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap shrink-0 ${chip.cls}`}>
-            <span className={`size-2.5 rounded-full ${chip.dot}`} aria-hidden />
-            <span><span className="sr-only">Voice status: </span>{chip.label}</span>
-          </span>
-          <p className="min-w-0 flex-1 text-base text-ink-soft line-clamp-2 break-words" title={s.caption || undefined}>
-            {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
-            {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
-            {s.error && <span className="text-danger font-bold"> {s.error}</span>}
-            {!s.caption && s.notice && <span className="text-ink-soft"> {s.notice}</span>}
-            {!s.caption && !s.notice && s.micMessage && <span className="text-navy font-bold"> {s.micMessage}</span>}
-          </p>
-        </div>
-        <div className="flex gap-1.5 justify-end shrink-0">
-          <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
-            className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
-            <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
-          </button>
-          <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
-            {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}
-          </button>
-          <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>
-            <RotateCcw className="size-5" aria-hidden />
-          </button>
-          <button type="button" onClick={() => speech.toggleMute()} disabled={!s.supported} aria-pressed={s.prefs.muted} aria-label={s.prefs.muted ? 'Unmute voice' : 'Mute voice'}
-            className={`${btn} ${s.prefs.muted ? 'bg-navy border-navy text-white' : 'border-line text-navy hover:border-teal'}`}>
-            {s.prefs.muted ? <VolumeX className="size-5" aria-hidden /> : <Volume2 className="size-5" aria-hidden />}
-          </button>
-          <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={panelId} aria-label="Voice settings" className={`${btn} ${open ? 'border-teal text-teal' : 'border-line text-navy hover:border-teal'}`}>
-            <SlidersHorizontal className="size-5" aria-hidden />
-          </button>
-        </div>
-      </div>
-    </div>
   );
 }
 

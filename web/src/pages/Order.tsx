@@ -7,6 +7,8 @@ import { api, eur, type PaymentRequest, type PaymentState, type PaymentTimeline,
 import { speech } from '../lib/voice';
 import { spokenReceipt, spokenFamily } from '../lib/spoken';
 import { useMe } from '../lib/session';
+import { goToPayPal } from '../lib/handoff';
+import { LeaveGuard } from '../components/LeaveGuard';
 
 export function stateLabel(s: PaymentState) {
   return ({
@@ -127,7 +129,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
 
   const checkout = async () => {
     setBusy(true); setErr(null);
-    try { const { approveUrl } = await api(`/api/payments/${id}/checkout`, { body: {} }); window.location.assign(approveUrl); }
+    try { const { approveUrl } = await api(`/api/payments/${id}/checkout`, { body: {} }); goToPayPal(approveUrl); }
     catch (e: any) { setErr(e.message); setBusy(false); }
   };
   const cancel = async () => { setBusy(true); try { setR(await api(`/api/payments/${id}/cancel`, { body: {} })); } catch (e: any) { setErr(e.message); } setBusy(false); };
@@ -141,6 +143,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   return (
     <Layout>
       <PageTitle eyebrow="Your purchase" title={paid ? 'Payment successful' : stateLabel(r.state)} />
+      <LeaveGuard when={r.state === 'FAMILY_APPROVAL_PENDING' || r.state === 'PAYER_APPROVAL_PENDING'} id={r.id} title={r.state === 'FAMILY_APPROVAL_PENDING' ? 'Still waiting for your family member' : 'Still waiting for your PayPal approval'} detail="This purchase isn’t finished." />
       {err && <div className="mb-6"><Notice tone="danger" title={err} /></div>}
       <div className="grid lg:grid-cols-[1.2fr_1fr] gap-6 items-start">
         <Card className="p-6 md:p-8">

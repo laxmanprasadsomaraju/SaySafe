@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Lock, Trash2 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice } from '../components/ui';
@@ -16,8 +15,8 @@ const FIELDS: { key: ListKey; label: string; hint: string }[] = [
   { key: 'categories', label: 'Things you shop for often', hint: 'For example: kitchen appliances, radios' },
 ];
 
-export default function Preferences() {
-  const me = useMe('elder');
+/** Private shopping preferences: edit and clear. Used on its own page and inside Profile. */
+export function ShoppingPrefsForm({ headingLevel = 'none' }: { headingLevel?: 'none' | 'h2' }) {
   const [form, setForm] = useState<Record<ListKey, string>>({ colours: '', brands: '', styles: '', avoid: '', categories: '' });
   const [budget, setBudget] = useState('');
   const [status, setStatus] = useState<{ tone: 'ok' | 'danger' | 'info'; text: string } | null>(null);
@@ -45,11 +44,9 @@ export default function Preferences() {
     finally { setBusy(false); }
   };
 
-  if (!me) return <Layout><p>Loading…</p></Layout>;
   return (
-    <Layout>
-      <PageTitle eyebrow="Shopping" title="My preferences" lead="These help me pick from shop listings. I only say a listing matches a preference when the listing itself shows it." />
       <Card className="p-6 md:p-8 max-w-2xl">
+        {headingLevel === 'h2' && <h2 id="shopping-h" className="text-2xl mb-3">Shopping preferences</h2>}
         <p className="flex items-start gap-3 text-lg"><Lock className="size-6 text-teal shrink-0 mt-0.5" aria-hidden /><span>Private to you. Your family member can’t see these, and they aren’t shared with shops.</span></p>
         <form onSubmit={save} className="mt-6 space-y-5" noValidate>
           {FIELDS.map((f) => (
@@ -74,7 +71,16 @@ export default function Preferences() {
           {status && <Notice tone={status.tone} title={status.text} />}
         </form>
       </Card>
-      <p className="mt-6 text-lg"><Link to="/discover" className="font-bold text-teal underline underline-offset-4">Back to Compare real shops</Link></p>
+  );
+}
+
+export default function Preferences() {
+  const me = useMe('elder');
+  if (!me) return <Layout><p>Loading…</p></Layout>;
+  return (
+    <Layout>
+      <PageTitle eyebrow="Shopping" title="My preferences" lead="These help me pick from shop listings. I only say a listing matches a preference when the listing itself shows it." />
+      <ShoppingPrefsForm />
     </Layout>
   );
 }

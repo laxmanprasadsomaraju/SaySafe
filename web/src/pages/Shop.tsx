@@ -6,6 +6,7 @@ import { Button, Card, PageTitle, MicButton, Caption, Notice, SandboxBadge } fro
 import { api, eur, newKey, type Product } from '../lib/api';
 import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
+import { goToPayPal } from '../lib/handoff';
 import { normaliseLang } from '../../../shared/lang';
 
 interface Quote { lines: { productId: string; name: string; unitCents: number; quantity: number; lineCents: number; image: string }[]; totalCents: number; currency: string; merchant: string; needsFamily: boolean; thresholdCents: number; spoken: string }
@@ -70,7 +71,7 @@ export default function Shop() {
     setPaying(true); setErr(null);
     try {
       const r = await api('/api/payments', { body: { items: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: key.current }, idempotent: true });
-      if (r.approveUrl) { speech.stop(); window.location.assign(r.approveUrl); return; }
+      if (r.approveUrl) { goToPayPal(r.approveUrl); return; }
       nav(`/order/${r.request.id}`);
     } catch (e: any) { setErr(e.message); setPaying(false); }
   };
