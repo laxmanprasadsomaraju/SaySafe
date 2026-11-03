@@ -261,8 +261,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:44.809Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:08.915Z"
     },
     "g06/02-alex-review-1440": {
       "file": "/docs-assets/g06/02-alex-review-1440.webp",
@@ -272,8 +272,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:48.507Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:12.595Z"
     },
     "g06/02-alex-review-390": {
       "file": "/docs-assets/g06/02-alex-review-390.webp",
@@ -283,8 +283,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:46.890Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:11.004Z"
     },
     "g06/03-alex-approved-390": {
       "file": "/docs-assets/g06/03-alex-approved-390.webp",
@@ -294,8 +294,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:49.981Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:14.062Z"
     },
     "g06/04-alex-family-home-1440": {
       "file": "/docs-assets/g06/04-alex-family-home-1440.webp",
@@ -305,8 +305,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:53.354Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:17.414Z"
     },
     "g06/05-back-to-mary-390": {
       "file": "/docs-assets/g06/05-back-to-mary-390.webp",
@@ -316,8 +316,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:01.068Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:25.154Z"
     },
     "g06/06-mary-approved-390": {
       "file": "/docs-assets/g06/06-mary-approved-390.webp",
@@ -327,8 +327,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:02.786Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:27.834Z"
     },
     "g07/01-receipt-card-390": {
       "file": "/docs-assets/g07/01-receipt-card-390.webp",
@@ -481,8 +481,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:41.966Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:47.550Z"
     },
     "g12/02-mary-insights-1440": {
       "file": "/docs-assets/g12/02-mary-insights-1440.webp",
@@ -492,8 +492,8 @@
       "source": "local",
       "paypalMock": true,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:46.183Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:51.092Z"
     },
     "g12/02-mary-insights-390": {
       "file": "/docs-assets/g12/02-mary-insights-390.webp",
@@ -503,8 +503,8 @@
       "source": "local",
       "paypalMock": true,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:47.641Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:52.238Z"
     },
     "g12/03-alex-insights-1440": {
       "file": "/docs-assets/g12/03-alex-insights-1440.webp",
@@ -514,8 +514,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:58.223Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:22.227Z"
     },
     "g12/03-alex-insights-390": {
       "file": "/docs-assets/g12/03-alex-insights-390.webp",
@@ -525,8 +525,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:59.318Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:23.468Z"
     },
     "g13/01-profile-1440": {
       "file": "/docs-assets/g13/01-profile-1440.webp",
@@ -536,8 +536,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:51.288Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:55.233Z"
     },
     "g13/02-accessibility-390": {
       "file": "/docs-assets/g13/02-accessibility-390.webp",
@@ -547,8 +547,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:53.079Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:56.553Z"
     },
     "g13/03-assistant-menu-390": {
       "file": "/docs-assets/g13/03-assistant-menu-390.webp",
@@ -558,8 +558,8 @@
       "source": "local",
       "paypalMock": false,
       "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:57.627Z"
+      "commit": "ce72e3d",
+      "takenAt": "2026-11-03T19:25:58.898Z"
     },
     "g14/01-sample-order-390": {
       "file": "/docs-assets/g14/01-sample-order-390.webp",
@@ -573,6 +573,6 @@
       "takenAt": "2026-11-03T18:01:00.240Z"
     }
   },
-  "generatedAt": "2026-11-03T18:01:00.255Z",
+  "generatedAt": "2026-11-03T19:26:00.293Z",
   "lastBase": "local"
 }

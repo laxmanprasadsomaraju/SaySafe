@@ -65,7 +65,7 @@ describe('Wording rules', () => {
     expect(allText).toMatch(/permission-filtered records/);
     expect(allText).not.toMatch(/Alex (sees|can see) all|(he|Alex|They) can change (her|your|Mary’s) (family-review )?limit/i);
     expect(allText).toMatch(/Share spending summaries with Alex/);
-    expect(allText).toMatch(/Share my individual purchase history with Alex/);
+    expect(allText).toMatch(/Share my purchase history with Alex/);
     expect(allText).toMatch(/AG Studio view exists for evaluation only and is not enabled publicly/);
   });
   it('makes no endorsement, wallet, transfer, fraud-prevention or AI-moves-money claims', () => {
