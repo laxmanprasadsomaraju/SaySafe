@@ -138,14 +138,16 @@ export default function Assistant() {
   };
   /** Channel3 search. Returns what happened, so a caller never claims listings that aren't on screen. With `quiet`,
    *  a miss or an error adds nothing (the caller says it, honestly) and listings are shown without being spoken. */
-  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[], quiet = false): Promise<{ status: 'shown' | 'none' | 'error' | 'stale'; message?: string }> => {
+  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[], quiet = false, ignoreMemory = false): Promise<{ status: 'shown' | 'none' | 'error' | 'stale'; message?: string }> => {
     try {
-      const r = await api<{ products: ShopItem[]; recommendation: Recommendation; reply: string; fetchedAt: string; searchQuery: string }>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest() } });
+      const r = await api<{ products: ShopItem[]; recommendation: Recommendation; reply: string; fetchedAt: string; searchQuery: string; personalisation?: { line: string } | null }>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest(), ...(ignoreMemory ? { ignoreMemory: true } : {}) } });
       if (!speech.isCurrent(turn)) return { status: 'stale' };
       const items = productItems(r.products.map((p) => fromChannel3(p, r.recommendation)));
       if (!items.length) { const msg = label ? `${label}, I found no other listings for ${r.searchQuery}.` : r.reply || 'I found no matching listings.'; if (!quiet) { add('assistant', msg); say(msg, turn); } return { status: 'none', message: msg }; }
       const reply = demo || quiet ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
-      add('assistant', reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: null }]);
+      // "Shown first because you prefer red…" (remembered preferences; only when memory is on).
+      const why = typeof r.personalisation?.line === 'string' ? r.personalisation.line.slice(0, 380) : null;
+      add('assistant', why ? `${reply} ${why}` : reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: why }]);
       setThread((t) => ({ ...t, focusId: null }));
       if (!quiet) say(r.reply, turn);
       if (demo?.length) offerDemo(demo, text);
@@ -318,7 +320,7 @@ export default function Assistant() {
   };
 
   // ---------- one entry point for typed and spoken messages ----------
-  const handle = useCallback(async (raw: string) => {
+  const handle = useCallback(async (raw: string, via: 'voice' | 'text' = 'text') => {
     const text = raw.trim();
     if (!text) return;
     add('user', text);
@@ -379,7 +381,7 @@ export default function Assistant() {
         if (sub) sendText = `cancel ${sub.merchant}`;
       }
       if (mode === 'payments' && !looksCompanion(text)) return await showHistory(turn);
-      const r = await api<any>('/api/assistant', { body: { text: sendText, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
+      const r = await api<any>('/api/assistant', { body: { text: sendText, via, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
       if (!speech.isCurrent(turn)) return;
       const a = r.intent?.action;
       // Payment companion: the server answered from Mary's own records (template reply + one card). Spoken reply stays short.
@@ -399,7 +401,7 @@ export default function Assistant() {
         if (Array.isArray(r.catalogue) && r.catalogue.length) {
           return await notInDemoShop(r.catalogue, typeof r.realQuery === 'string' ? r.realQuery : r.discover?.query ?? null, Boolean(r.discover), turn);
         }
-        if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined);
+        if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined, false, r.discover.ignoreMemory === true);
         if (r.buyNow && Array.isArray(r.products) && r.products.length === 1) {
           const item = productItems(r.products.map(fromDemo))[0];
           if (item) return await prepare(item, r.reply);
@@ -423,7 +425,7 @@ export default function Assistant() {
     } finally { setBusy(false); speech.endThinking(); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const voice = useVoiceInput((t) => { void handle(t); });
+  const voice = useVoiceInput((t) => { void handle(t, 'voice'); });
 
   // Shortcuts open the conversation with a mode preselected (?mode=check|find|help|payments).
   useEffect(() => {

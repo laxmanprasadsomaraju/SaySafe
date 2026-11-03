@@ -45,6 +45,9 @@ import { answerInsightsQuestion } from './insights/agent.js';
 import { insightsConfig } from './insights/config.js';
 import { listActivity, ActivityQuery } from './activity.js';
 import { registerCompanion } from './companion/routes.js';
+import { registerMemory, assistantHook, discoverHook } from './memory/http.js';
+import { effectiveProfile, personalisedQuery, personalisationLine } from './memory/personalise.js';
+import { clearAll as clearMemory } from './memory/store.js';
 import { answerCompanion, isCompanionAction } from './companion/assistant.js';
 import { listContacts } from './companion/store.js';
 import type { SavedContact } from './scam/contactMismatch.js';
@@ -170,6 +173,7 @@ export function createApp() {
   // "Reset Mary's demo": replaces this household's SAMPLE rows only. Real PayPal Sandbox payments and records you typed are kept.
   app.post('/api/demo/reset', requireRole('elder'), (req, res) => {
     const s = sessionOf(req);
+    clearMemory(s.householdId, s.userId, { turnOff: true }); // demo reset also clears what SaySafe remembered (and turns memory off)
     res.json({ ok: true, seeded: seedDemoHousehold(s.householdId, s.userId) });
   });
   app.get('/api/demo/info', requireRole('elder'), (req, res) => {
@@ -271,6 +275,8 @@ export function createApp() {
     }
   }));
 
+  // Memory (server/memory/http.ts): answers "remember…/forget…/that microwave" deterministically, records context.
+  app.post('/api/assistant', assistantHook);
   app.post('/api/assistant', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const name = s?.name ?? 'Mary';
@@ -362,6 +368,8 @@ export function createApp() {
 
   // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------
   registerCompanion(app, { originOf });
+  // ---------- What SaySafe remembers (elder-only, user-scoped; family gets 404) ----------
+  registerMemory(app);
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
   // Read-only: asks PayPal what actually happened to an order this app created. Never captures, never creates.
@@ -384,12 +392,16 @@ export function createApp() {
   }));
 
   // ---------- Real product discovery (Channel3). Discovery only: purchases happen on the retailer's site. ----------
+  app.post('/api/discover', discoverHook);
   app.post('/api/discover', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const said = z.string().trim().min(1).max(400).parse(req.body?.text);
     const overrideMax = z.number().positive().max(100000).nullable().catch(null).parse(req.body?.maxPrice ?? null);
     // Signed in: the profile comes only from this user's own row. No session: the browser's local copy, sanitised.
-    const profile = s ? getProfile(s.userId) : sanitizeProfile(req.body?.profile);
+    // Remembered preferences (only when this elder turned memory on); the current request always overrides them.
+    const ignoreMemory = req.body?.ignoreMemory === true;
+    const personal = s ? effectiveProfile(s.householdId, s.userId, said, { ignoreMemory }) : null;
+    const profile = personal ? personal.profile : sanitizeProfile(req.body?.profile);
     const parsed = parseRequest(said);
     let query = parsed.productQuery;
     let ai: boolean | undefined;
@@ -402,14 +414,17 @@ export function createApp() {
     try {
       // No user id is sent to Channel3: its optional x-user-id is only for click/commission attribution and is
       // appended to every buy URL, so it would leak an internal id to retailers (docs.trychannel3.com/api-reference/v1/search).
-      const result = await searchChannel3(query, { maxPrice });
+      // Only product terms go to Channel3: at most a remembered colour is added to the query, never anything personal.
+      let result = await searchChannel3(personal ? personalisedQuery(query, personal) : query, { maxPrice });
+      if (personal && !result.products.length && personalisedQuery(query, personal) !== query) result = await searchChannel3(query, { maxPrice });
       count('channel3.searches');
       const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
       const byId = new Map(result.products.map((p) => [p.id, p]));
       const products = rec.rankedIds.map((id) => byId.get(id)!);
       const best = rec.picks.find((p) => p.role === 'best');
       const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice) : null;
-      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
+      const personalisation = personal ? personalisationLine(rec, products, personal) : null;
+      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), personalisation, channel3Query: result.query, reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
       count(`channel3.errors.${e.code}`);

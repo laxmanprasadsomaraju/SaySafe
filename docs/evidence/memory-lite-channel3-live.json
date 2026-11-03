@@ -1,0 +1,142 @@
+{
+  "what": "ONE live Channel3 personalisation check (real api.trychannel3.com, no mocks), run from a local SaySafe server on memory-lite. Memory ON; Mary said \"I prefer black\" (voice) and \"keep my budget below €150\" (text); then asked \"find me a kettle\". Second call: same request with \"ignore my preferences\".",
+  "ranAt": "2026-11-03 18:43 GMT",
+  "runs": [
+    {
+      "label": "with memory",
+      "userSaid": "find me a kettle",
+      "channel3QuerySent": "black kettle",
+      "country": "IE",
+      "currency": "EUR",
+      "listings": 9,
+      "personalisationLine": "Shown first because you prefer black and under €150. Say “ignore my preferences” to see them without.",
+      "picks": [
+        {
+          "role": "best",
+          "title": "L17PKB26 Traditional Kettle",
+          "reasons": [
+            "€24.99 at currys.ie, within your €150 budget",
+            "listed as in stock",
+            "matches your preference for black"
+          ]
+        },
+        {
+          "role": "another",
+          "title": "Addison Jug Kettle",
+          "reasons": [
+            "€69.99 at currys.co.uk, within your €150 budget",
+            "listed as in stock",
+            "matches your preference for black"
+          ]
+        }
+      ],
+      "top5": [
+        {
+          "title": "L17PKB26 Traditional Kettle",
+          "brand": "LOGIK",
+          "price": 24.99,
+          "currency": "EUR",
+          "retailer": "currys.ie"
+        },
+        {
+          "title": "Addison Jug Kettle",
+          "brand": "Russell Hobbs",
+          "price": 69.99,
+          "currency": "EUR",
+          "retailer": "currys.co.uk"
+        },
+        {
+          "title": "Traditional Kettle",
+          "brand": "KitchenAid",
+          "price": 89.99,
+          "currency": "EUR",
+          "retailer": "currys.co.uk"
+        },
+        {
+          "title": "BOSCH Sky TWK7203GB Variable Temperature Jug Kettle - Black",
+          "brand": "Bosch",
+          "price": 119.99,
+          "currency": "EUR",
+          "retailer": "currys.ie"
+        },
+        {
+          "title": "Russell Hobbs Stylevia Traditional Kettle",
+          "brand": "Russell Hobbs",
+          "price": 74.99,
+          "currency": "EUR",
+          "retailer": "currys.co.uk"
+        }
+      ]
+    },
+    {
+      "label": "ignore my preferences",
+      "userSaid": "find me a kettle",
+      "channel3QuerySent": "kettle",
+      "country": "IE",
+      "currency": "EUR",
+      "listings": 10,
+      "personalisationLine": null,
+      "picks": [
+        {
+          "role": "best",
+          "title": "Russell Hobbs Bronte Jug Kettle",
+          "reasons": [
+            "listed as in stock"
+          ]
+        },
+        {
+          "role": "cheaper",
+          "title": "Eclettica Kettle",
+          "reasons": [
+            "€25.00 less than the best match: €54.99 at currys.ie",
+            "listed as in stock"
+          ]
+        },
+        {
+          "role": "another",
+          "title": "Traditional Kettle",
+          "reasons": [
+            "listed as in stock"
+          ]
+        }
+      ],
+      "top5": [
+        {
+          "title": "Russell Hobbs Bronte Jug Kettle",
+          "brand": "Russell Hobbs",
+          "price": 79.99,
+          "currency": "EUR",
+          "retailer": "currys.ie"
+        },
+        {
+          "title": "Traditional Kettle",
+          "brand": "KitchenAid",
+          "price": 89.99,
+          "currency": "EUR",
+          "retailer": "currys.co.uk"
+        },
+        {
+          "title": "BREVILLE Edge Low Steam VKT236 Traditional Kettle",
+          "brand": "Breville",
+          "price": 89.99,
+          "currency": "EUR",
+          "retailer": "currys.ie"
+        },
+        {
+          "title": "Jug Calm Kettle",
+          "brand": "Russell Hobbs",
+          "price": 89.99,
+          "currency": "EUR",
+          "retailer": "currys.co.uk"
+        },
+        {
+          "title": "Eclettica Kettle",
+          "brand": "De Longhi",
+          "price": 54.99,
+          "currency": "EUR",
+          "retailer": "currys.ie"
+        }
+      ]
+    }
+  ]
+}

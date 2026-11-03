@@ -202,6 +202,58 @@ CREATE TABLE IF NOT EXISTS demo_seeds (
   anchored_at TEXT NOT NULL,
   seeded_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Long-term memory (server/memory). PRIVATE to the elder who said it: every read/write is scoped by household_id AND
+-- user_id from the session; family sessions get 404. Only explicit statements are saved, and only after the user
+-- turned memory on (memory_settings.enabled, default 0). Column names avoid SQL keywords (mem_key, mem_value, mem_status).
+CREATE TABLE IF NOT EXISTS user_memory (
+  id TEXT PRIMARY KEY,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL CHECK (category IN ('shopping','brand_like','brand_avoid','budget','communication','other')),
+  mem_key TEXT NOT NULL CHECK (length(mem_key) <= 60),
+  mem_value TEXT NOT NULL CHECK (length(mem_value) <= 120),
+  source TEXT NOT NULL CHECK (source IN ('voice','text','profile')),
+  mem_status TEXT NOT NULL DEFAULT 'confirmed' CHECK (mem_status IN ('confirmed','pending')),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (user_id, category, mem_key)
+);
+CREATE INDEX IF NOT EXISTS idx_user_memory_owner ON user_memory(household_id, user_id);
+CREATE TABLE IF NOT EXISTS memory_settings (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+-- Short conversation context so "that microwave" resolves after a reload or in a new tab. Last 10 turns and
+-- 20 products per user (pruned on write), 14-day window. Never raw audio; long pasted messages are not kept.
+CREATE TABLE IF NOT EXISTS conversation_turns (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  speaker TEXT NOT NULL CHECK (speaker IN ('user','assistant')),
+  body TEXT NOT NULL CHECK (length(body) <= 600),
+  via TEXT NOT NULL DEFAULT 'text' CHECK (via IN ('voice','text')),
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_conversation_turns_owner ON conversation_turns(household_id, user_id);
+CREATE TABLE IF NOT EXISTS recent_products (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  product_id TEXT NOT NULL CHECK (length(product_id) <= 200),
+  title TEXT NOT NULL CHECK (length(title) <= 300),
+  price REAL NOT NULL,
+  currency TEXT NOT NULL,
+  retailer TEXT NOT NULL CHECK (length(retailer) <= 120),
+  origin TEXT NOT NULL CHECK (origin IN ('channel3','demo')),
+  search_query TEXT CHECK (search_query IS NULL OR length(search_query) <= 200),
+  batch TEXT NOT NULL,
+  rank_pos INTEGER NOT NULL DEFAULT 0,
+  item_json TEXT NOT NULL CHECK (length(item_json) <= 6000),
+  shown_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recent_products_owner ON recent_products(household_id, user_id);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   household_id TEXT,
@@ -214,7 +266,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `;
 
 /** Every table the app owns, in an order that respects foreign keys (parents first). Used by backup/migration scripts. */
-export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'companion_payments', 'companion_subscriptions', 'companion_contacts', 'companion_cancel_tokens', 'demo_seeds', 'audit_log'] as const;
+export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'companion_payments', 'companion_subscriptions', 'companion_contacts', 'companion_cancel_tokens', 'demo_seeds', 'user_memory', 'memory_settings', 'conversation_turns', 'recent_products', 'audit_log'] as const;
 
 /** Columns added after the first hosted deploy. CREATE TABLE IF NOT EXISTS never alters an existing table, so add them here. */
 export const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [
