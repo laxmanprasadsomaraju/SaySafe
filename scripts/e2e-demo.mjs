@@ -21,7 +21,10 @@ fs.mkdirSync(OUT, { recursive: true });
 const results = []; const transcripts = []; const axeOut = [];
 const rec = (n, name, status, info = '') => { results.push({ n, name, status, info }); console.log(`${String(n).padStart(2)} ${status.padEnd(18)} ${name}${info ? ` — ${info}` : ''}`); };
 const sql = (q) => (DB ? execFileSync('sqlite3', [DB, q]).toString().trim() : '');
-const b = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
+const px = process.env.HTTPS_PROXY || process.env.https_proxy;
+let proxy;
+if (px && !/localhost|127\.0\.0\.1/.test(BASE)) { const u = new URL(px); proxy = { server: `${u.protocol}//${u.host}`, username: decodeURIComponent(u.username) || undefined, password: decodeURIComponent(u.password) || undefined }; }
+const b = await chromium.launch({ ...(proxy ? { proxy } : {}), args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
 const ctx = async (width = 390) => {
   const c = await b.newContext({ viewport: { width, height: width >= 1000 ? 900 : 844 }, reducedMotion: 'reduce', permissions: ['microphone'] });
   await c.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: false, rate: 0.95, readAll: false, lang: 'en' })));
@@ -31,6 +34,7 @@ const stub = (p) => p.route('https://www.sandbox.paypal.com/**', (r) => r.fulfil
 const last = (p, kind) => p.locator(`[data-card="${kind}"]`).last();
 const lastReply = (p) => p.locator('[role="log"] > div[data-role="assistant"]').last();
 async function say(p, text, kind, timeout = 25000) {
+  if (HOSTED) await p.waitForTimeout(3500); // stay under the hosted 20-per-minute AI rate limit
   await p.fill('#assistant-input', text); await p.keyboard.press('Enter');
   if (kind) await last(p, kind).waitFor({ timeout });
   else await p.waitForTimeout(1500);

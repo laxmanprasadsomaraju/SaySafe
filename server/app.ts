@@ -98,11 +98,13 @@ export function createApp() {
 
   const apiLimiter = rateLimit({ windowMs: 60_000, limit: Number(process.env.API_LIMIT_PER_MIN ?? 120), standardHeaders: true, legacyHeaders: false });
   const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
-  const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
+  // Questions about Mary's own records are answered by rules without calling the AI, so they don't count against the AI limits.
+  const rulesOnly = (req: Request) => req.path === '/api/assistant' && typeof req.body?.text === 'string' && req.body.text.length <= 4000 && routeCompanion(req.body.text) != null;
+  const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, skip: rulesOnly, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
   // Per-session limit on AI routes on top of the per-IP one (several people can share an IP; one session cannot bypass by rotating IPs).
   const aiSessionKey = (req: Request) => String(req.cookies?.ss_elder ?? req.cookies?.ss_family ?? '');
   const aiSessionLimiter = rateLimit({
-    windowMs: 60_000, limit: Number(process.env.AI_SESSION_LIMIT_PER_MIN ?? 15), standardHeaders: true, legacyHeaders: false,
+    windowMs: 60_000, limit: Number(process.env.AI_SESSION_LIMIT_PER_MIN ?? 15), standardHeaders: true, legacyHeaders: false, skip: rulesOnly,
     keyGenerator: (req) => (aiSessionKey(req) ? `s:${crypto.createHash('sha256').update(aiSessionKey(req)).digest('hex').slice(0, 32)}` : `ip:${ipKeyGenerator(req.ip ?? '')}`),
     message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' },
   });
