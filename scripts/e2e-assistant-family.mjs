@@ -84,7 +84,7 @@ try {
     await f.goto(BASE + '/family'); await f.waitForLoadState('networkidle');
     const tabs = await f.locator('nav[aria-label="Main"] a').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent));
     ok('Alex’s tabs: Home, Assistant, Activity, Profile', tabs.join() === 'Home,Assistant,Activity,Profile', tabs.join());
-    ok('Insights still reachable from Alex’s Home', await f.getByRole('link', { name: /Open insights dashboard/ }).isVisible());
+    ok('Insights still reachable from Alex’s Home', await f.getByRole('link', { name: /View insights|Open insights dashboard/ }).isVisible());
     await f.locator('nav[aria-label="Main"]').getByRole('link', { name: 'Assistant' }).click(); await f.waitForURL('**/family/assistant');
     const review = f.locator('[data-card="family_review"]').last(); await review.waitFor({ timeout: 15000 });
     const txt = await review.innerText();

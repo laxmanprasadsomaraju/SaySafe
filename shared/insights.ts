@@ -117,9 +117,10 @@ export function computeKpis(payments: InsightPayment[], scans: InsightScan[], cu
   const seeded = captured.filter((p) => p.source === 'seeded');
   const withCapture = captured.filter((p) => p.hasCapture);
   return {
-    pendingApprovals: payments.filter((p) => p.awaitingMyDecision).length,
-    approved: payments.filter((p) => p.approvalStatus === 'approved').length,
-    declined: payments.filter((p) => p.approvalStatus === 'declined').length,
+    // Decisions count real requests only: example (sample) rows can't be approved and are shown, labelled, in the ledger.
+    pendingApprovals: payments.filter((p) => p.awaitingMyDecision && p.source !== 'seeded').length,
+    approved: payments.filter((p) => p.approvalStatus === 'approved' && p.source !== 'seeded').length,
+    declined: payments.filter((p) => p.approvalStatus === 'declined' && p.source !== 'seeded').length,
     captured: { count: captured.length, total: sum(captured), currency },
     sandboxCaptured: { count: sandbox.length, total: sum(sandbox), currency },
     seededCaptured: { count: seeded.length, total: sum(seeded), currency },

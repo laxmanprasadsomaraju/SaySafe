@@ -104,9 +104,11 @@ const TrainingExamplesB = z.object({ kind: z.literal('training_examples'), items
 const RetryErrorB = z.object({ kind: z.literal('retry_error'), message: Str(400), retryText: Str(4000), done: z.boolean().default(false) });
 /** Mary's insights summary (server-built from the same stores as Activity). Re-read from the server on mount. */
 const InsightsSummaryB = z.object({ kind: z.literal('insights_summary'), focus: z.enum(INSIGHT_FOCI), summary: InsightsSummary });
+/** What the Demo Shop sells, from the server catalogue (GET /api/products or the no-match answer). Each chip asks to buy it. */
+const ShopCatalogueB = z.object({ kind: z.literal('shop_catalogue'), items: z.array(z.object({ productId: Str(60), name: Str(120), category: Str(40), priceCents: z.number().int().min(0), currency: z.string().regex(/^[A-Z]{3}$/) })).min(1).max(30), channel3: z.boolean().default(false) });
 
-export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB] as const;
-export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary'] as const;
+export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB, ShopCatalogueB] as const;
+export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary', 'shop_catalogue'] as const;
 export type CompanionKind = (typeof COMPANION_KINDS)[number];
 export const isCompanionKind = (k: string): k is CompanionKind => (COMPANION_KINDS as readonly string[]).includes(k);
 

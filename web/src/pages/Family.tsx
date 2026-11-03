@@ -110,8 +110,9 @@ export default function Family() {
           {cfg?.insights !== false && (
             <Card className="p-6">
               <h2 className="text-2xl flex items-center gap-2"><BarChart3 className="size-6 text-teal" aria-hidden />Safety insights</h2>
-              <p className="mt-2 text-lg text-ink-soft">Purchases, your decisions, PayPal confirmations and shared scam checks over time.</p>
-              <Link to="/family/insights" className="mt-3 inline-flex items-center min-h-12 font-bold text-teal underline underline-offset-4 text-lg">Open insights dashboard</Link>
+              <p className="mt-2 text-lg text-ink-soft">Purchases, your decisions, PayPal confirmations and the scam checks Mary shares with you.</p>
+              <p className="mt-1 text-base text-ink-soft">Her own payment records, subscriptions and contacts stay private to her.</p>
+              <Link to="/family/insights" className="mt-3 inline-flex items-center min-h-12 px-5 rounded-full border-2 border-teal text-teal-deep font-bold hover:bg-teal-soft text-lg" data-testid="family-view-insights">View insights</Link>
             </Card>
           )}
           <Card className="p-6">

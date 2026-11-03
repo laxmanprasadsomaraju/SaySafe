@@ -132,12 +132,28 @@ describe('speech controller', () => {
     expect(f.log.filter((l) => l.startsWith('speak'))).toEqual(['speak:Short reply.']);
   });
 
-  it('preferences persist in localStorage, and the legacy voice-off flag means muted', () => {
+  it('preferences persist; muted persists only when the person chose it; stale/legacy muted flags start On', () => {
     s.setPrefs({ rate: 1.1, readAll: true });
     const again = new SpeechController(f.env);
-    expect(again.getSnapshot().prefs).toMatchObject({ rate: 1.1, readAll: true });
-    const legacy = new SpeechController(fakeEnv({ store: { 'ss-voice': 'off' } }).env);
-    expect(legacy.getSnapshot().prefs.muted).toBe(true);
+    expect(again.getSnapshot().prefs).toMatchObject({ rate: 1.1, readAll: true, muted: false });
+    // Fresh visitor: no storage → playback On.
+    expect(new SpeechController(fakeEnv({ store: {} }).env).getSnapshot().prefs.muted).toBe(false);
+    // Legacy "ss-voice" key or an old pref without the person's choice → On (root cause of "off on a fresh visit").
+    expect(new SpeechController(fakeEnv({ store: { 'ss-voice': 'off' } }).env).getSnapshot().prefs.muted).toBe(false);
+    expect(new SpeechController(fakeEnv({ store: { 'ss-voice-prefs': JSON.stringify({ muted: true }) } }).env).getSnapshot().prefs.muted).toBe(false);
+    // The person mutes → remembered.
+    s.mute();
+    expect(new SpeechController(f.env).getSnapshot().prefs.muted).toBe(true);
+    s.unmute();
+    expect(new SpeechController(f.env).getSnapshot().prefs.muted).toBe(false);
+  });
+  it('autoplay block before the first tap shows "needs tap", never Muted', () => {
+    let active = false;
+    const e = fakeEnv({ store: {} }).env;
+    const c = new SpeechController({ ...e, activated: () => active });
+    expect(c.getSnapshot()).toMatchObject({ needsTap: true, status: 'ready', prefs: { muted: false } });
+    active = true; c.activate();
+    expect(c.getSnapshot().needsTap).toBe(false);
   });
 
   it('read-everything list is read part by part and stops instantly', async () => {

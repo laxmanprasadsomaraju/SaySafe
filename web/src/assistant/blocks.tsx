@@ -329,6 +329,7 @@ function FamilyStatusCard({ b, act }: { b: BlockOf<'family_status'>; act: BlockA
       {err && <p role="alert" className="mt-2 text-danger font-bold">{err}</p>}
       <div className="mt-3 flex flex-col gap-2">
         {(b.state === 'FAMILY_APPROVED' || b.state === 'PAYER_APPROVAL_PENDING') && <button type="button" onClick={toPayPal} disabled={busy} className={btnPrimary}>{busy ? 'Opening PayPal…' : 'Continue to PayPal'}</button>}
+        {(b.state === 'FAMILY_APPROVED' || b.state === 'PAYER_APPROVAL_PENDING') && <p className="text-sm text-ink-soft" data-testid="judge-login-note">On PayPal’s Sandbox page, sign in with a PayPal <strong>Sandbox</strong> buyer account. Hackathon judges: the test buyer login is in the Devpost testing instructions. SaySafe never asks for or stores it.</p>}
         {b.state === 'CAPTURED' && <button type="button" onClick={() => act.receipt(b.requestId)} className={btnPrimary}>Show my receipt</button>}
         <div className="flex flex-wrap gap-x-5 gap-y-1">
           {!TERMINAL.includes(b.state) && <button type="button" onClick={() => void refresh(true)} disabled={checking} className={linkCls}>{checking ? 'Checking…' : 'Check now'}</button>}

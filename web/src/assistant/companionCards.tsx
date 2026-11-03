@@ -1048,8 +1048,31 @@ function InsightsSummaryCard({ b, act }: { b: BlockOf<'insights_summary'>; act: 
       <Head icon={BarChart3}>{FOCUS_TITLE[b.focus] ?? 'Your insights'}</Head>
       <InsightLines d={b.summary} focus={b.focus} />
       <p className="mt-2 text-sm text-ink-soft">Each kind of record is shown on its own and never added together. Sample data is illustrative.</p>
-      <Link to={`/insights${b.focus !== 'overview' ? `#${b.focus}` : ''}`} className={`${linkCls} mt-1`} data-testid="view-full-insights">View full insights</Link>
+      <Link to={`/insights${b.focus !== 'overview' ? `#${b.focus}` : ''}`} className="mt-2 inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-full bg-teal text-white font-bold hover:bg-teal-deep" data-testid="view-full-insights"><BarChart3 className="size-5" aria-hidden />Open Insights</Link>
       <p className="mt-2 text-sm text-ink-soft flex items-start gap-1.5"><ShieldCheck className="size-4 mt-0.5 shrink-0 text-teal" aria-hidden />Your records and subscriptions are private to you. Your family member sees only Demo Shop purchases, reviews and checks you share.</p>
+    </div>
+  );
+}
+
+// ---------- What the Demo Shop sells (tappable) ----------
+function ShopCatalogueCard({ b, act }: { b: BlockOf<'shop_catalogue'>; act: BlockActions }) {
+  const cats = [...new Set(b.items.map((i) => i.category))];
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="shop_catalogue">
+      <Head icon={Wallet}>What you can buy in the Demo Shop</Head>
+      {cats.map((c) => (
+        <div key={c} className="mt-3">
+          <p className="text-sm font-bold uppercase tracking-wider text-ink-soft">{c}</p>
+          <div className="mt-1 flex flex-wrap gap-2" role="group" aria-label={`${c} items`}>
+            {b.items.filter((i) => i.category === c).map((i) => (
+              <button key={i.productId} type="button" onClick={() => act.send?.(`Let's buy the demo ${i.name}`)} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold text-left hover:bg-teal-soft">
+                {i.name} · {money(i.priceCents, i.currency)}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+      <p className="mt-3 text-sm text-ink-soft">Demo Shop items are paid with PayPal Sandbox: no real money. For anything else, ask for it and I’ll search real shops with Channel3 — you’d buy those on the retailer’s own website.</p>
     </div>
   );
 }
@@ -1071,5 +1094,6 @@ export const COMPANION_REGISTRY = {
   training_examples: ({ b, act }: { b: BlockOf<'training_examples'>; act: BlockActions }) => <TrainingExamplesCard b={b} act={act} />,
   retry_error: ({ b, act }: { b: BlockOf<'retry_error'>; act: BlockActions }) => <RetryErrorCard b={b} act={act} />,
   insights_summary: ({ b, act }: { b: BlockOf<'insights_summary'>; act: BlockActions }) => <InsightsSummaryCard b={b} act={act} />,
+  shop_catalogue: ({ b, act }: { b: BlockOf<'shop_catalogue'>; act: BlockActions }) => <ShopCatalogueCard b={b} act={act} />,
 };
 export type CompanionBlock = Extract<Block, { kind: keyof typeof COMPANION_REGISTRY }>;

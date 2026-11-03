@@ -106,8 +106,10 @@ dialog::backdrop { background: rgb(21 40 59 / .5); }
 /* Grid children may shrink below their content width (no horizontal scroll at 320px / large text). */
 main .grid > * { min-width: 0; }
 /* Short viewports (landscape phones, 400 % browser zoom ≈ 320×200 CSS px): the sticky header would take a third of
-   the screen on top of the bottom tab bar, so it scrolls away with the page instead (WCAG 1.4.10 reflow). */
-@media (max-height: 30rem) {
+   the screen on top of the bottom tab bar, so it scrolls away with the page instead (WCAG 1.4.10 reflow).
+   Threshold 26rem (416 CSS px), was 30rem: a laptop at 150 % zoom (~430–470 CSS px tall) lost the header and menu
+   while scrolling. Media-query rem is the browser default (16 px), not SaySafe's "bigger text" setting. */
+@media (max-height: 26rem) {
   header.sticky { position: static; }
   /* The bottom stack (composer, voice bar, tabs) would cover two thirds of a 200 px-tall screen: it joins the end of
      the page instead, so content is never trapped in a sliver between fixed bars. */

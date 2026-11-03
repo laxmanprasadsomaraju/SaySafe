@@ -272,10 +272,16 @@ export function createApp() {
     // (and the same typed or spoken: voice sends its transcript here too). Everything else goes to the AI.
     const demoItem = /\b(demo (item|product|shop)s?|something from the (demo )?shop)\b/i.test(said) && !/\bmembership\b/i.test(said);
     // "Let's buy the demo microwave": a named Demo Shop product, priced only from the server catalogue.
-    const demoNamed = !demoItem && !/\bmembership\b/i.test(said) ? said.match(/\b(?:the |a )?demo ([a-z][a-z -]{2,40}?)(?:\s+(?:please|now|then|instead))?[?.!]*$/i)?.[1] ?? null : null;
+    const demoNamed = !demoItem && !/\bmembership\b/i.test(said) ? said.match(/\b(?:the |a )?demo ([a-z0-9][a-z0-9 .'-]{2,60}?)(?:\s+(?:please|now|then|instead))?[?!]*\.?$/i)?.[1]?.replace(/\.$/, '') ?? null : null;
     const demoPick = demoNamed ? searchProducts(demoNamed, null, 3) : [];
     // "Help me buy a microwave (instead)": real listings first (Channel3, bought at the retailer), Demo Shop offered apart.
     const buyReal = !demoItem && !demoNamed ? said.match(/^(?:(?:can|could) you |please |ok,? |okay,? |so,? )?(?:help me |i(?: want|'d like| would like) to |let's |lets )?(?:buy|shop for)\s+(?:me\s+)?(?:a |an |some |new |a new )?([a-z][a-z -]{2,40}?)(?:\s+(?:instead|please|for me|now))*[?.!]*$/i)?.[1] ?? null : null;
+    // "What can I buy?": the Demo Shop catalogue from the server, as tappable chips (no AI).
+    if (/\bwhat (can|could) i (buy|shop|get|order)\b|\bwhat('s| is) (in|for sale in) the (demo )?shop\b|\bwhat do you (sell|have)\b|\bwhat (products|items) (are there|do you have)\b/i.test(said)) {
+      const catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
+      const r2 = `The Demo Shop sells ${[...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ')} items, paid with PayPal Sandbox (no real money). Tap one below. For anything else, ask for it and I'll search real shops with Channel3: you'd buy those on the retailer's own website.`;
+      return res.json({ intent: { action: 'shop', reply: r2 }, products: [], reply: r2, replyLang: 'en', ai: false, discover: null, catalogue });
+    }
     const routed = routeCompanion(said)
       ?? (demoItem ? { action: 'shop' as const, query: 'demo item', reply: 'Here are some items from the Demo Shop.' } : null)
       ?? (demoPick.length ? { action: 'shop' as const, query: demoNamed, reply: '' } : null)
@@ -296,6 +302,7 @@ export function createApp() {
       return res.json({ intent: { action: intent.action, reply: out.reply }, products, reply: out.reply, replyLang: 'en', ai, discover, companion: out.card });
     }
     let demoOffer: ReturnType<typeof searchProducts> = [];
+    let catalogue: { productId: string; name: string; category: string; priceCents: number; currency: string }[] | null = null;
     let buyNow = false;
     if (intent.action === 'shop' && demoPick.length) {
       // A named Demo Shop product: one match goes straight to the purchase review card (amount from /api/quote).
@@ -310,6 +317,12 @@ export function createApp() {
       discover = { query: buyReal.trim(), suggested: false };
       demoOffer = searchProducts(buyReal, null, 1);
       reply = "Here are real listings found for Ireland. You'd buy these on the retailer's own website: SaySafe doesn't take payment for them."; replyLang = 'en';
+      if (!demoOffer.length) {
+        // Not in the Demo Shop: say what it does sell (server catalogue) before the real listings.
+        catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
+        reply = `I can't find that in the Demo Shop. You can buy: ${[...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ')} items such as ${PRODUCTS.slice(0, 4).map((p) => p.name).join(', ')}. Tap one below. I'll also look for it in real shops with Channel3: you'd buy those on the retailer's own website.`;
+        return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover: { ...discover, suggested: true }, catalogue });
+      }
       return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, demoOffer });
     }
     if (intent.action === 'shop') {
@@ -322,12 +335,19 @@ export function createApp() {
         products = demoItem ? [...PRODUCTS].sort((a, b) => b.rating - a.rating).slice(0, 3) : searchProducts(intent.query || said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
         // English template, unless the AI already answered in the chosen reply language.
         if (lang === 'en' || replyLang !== lang) { reply = describeOptions(products, name); replyLang = 'en'; }
-        if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }
+        if (!products.length) {
+          // Never a blank result: say what the Demo Shop sells (from the server catalogue) and where else to look.
+          catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
+          const cats = [...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ');
+          reply = `I can't find that in the Demo Shop. You can buy: ${cats} items such as ${PRODUCTS.slice(0, 4).map((p) => p.name).join(', ')}. Tap one below.${channel3Configured() ? " I'll also look for it in real shops with Channel3: you'd buy those on the retailer's own website." : ''}`;
+          replyLang = 'en';
+          if (channel3Configured()) discover = { query: said, suggested: true };
+        }
       }
     }
     // Free model text (chat / confirm / cancel / help…) never claims an effect: the assistant has no write tools.
     if (ai && reply === intent.reply) reply = guardAssistantReply(reply);
-    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover });
+    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, ...(catalogue ? { catalogue } : {}) });
   }));
 
   // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------

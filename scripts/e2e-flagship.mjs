@@ -39,13 +39,21 @@ const b = await chromium.launch(HOSTED && process.env.HTTPS_PROXY ? { proxy: pro
 // Locally with USE_PROXY=1: real retailer images (from the listings) are fetched through the egress proxy with curl.
 const { execFile } = await import('node:child_process');
 const viaCurl = (url) => new Promise((res) => execFile('curl', ['-sSL', '-m', '20', url], { encoding: 'buffer', maxBuffer: 20e6 }, (e, out) => res(e ? null : out)));
+/** USE_PROXY=1 (local screenshots only): the sandbox browser has no internet, so each listing's own image is fetched
+ *  with curl through the egress proxy and shown as the same bytes (data URL). Listing data itself is unchanged. */
+async function loadListingImages(p) {
+  if (HOSTED || process.env.USE_PROXY !== '1') return;
+  const srcs = await p.locator('[data-card="product_cards"] img').evaluateAll((is) => [...new Set(is.map((i) => i.getAttribute('src')).filter((u) => u && u.startsWith('https://')))]);
+  for (const u of srcs) {
+    const body = await viaCurl(u); if (!body?.length) continue;
+    const type = body[0] === 0x89 ? 'image/png' : body[0] === 0x52 ? 'image/webp' : 'image/jpeg';
+    const data = `data:${type};base64,${body.toString('base64')}`;
+    await p.evaluate(([src, d]) => document.querySelectorAll('img').forEach((i) => { if (i.getAttribute('src') === src) { i.setAttribute('loading', 'eager'); i.src = d; } }), [u, data]).catch(() => {});
+  }
+  await p.waitForTimeout(500);
+}
 const ctx = async (w = 390) => {
   const c = await b.newContext({ viewport: { width: w, height: 844 }, reducedMotion: 'reduce' });
-  if (!HOSTED && process.env.USE_PROXY === '1') await c.route(/^https:\/\//, async (r) => {
-    if (r.request().resourceType() !== 'image') return r.continue();
-    const body = await viaCurl(r.request().url());
-    return body ? r.fulfill({ status: 200, body }) : r.abort();
-  });
   await c.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: false, rate: 0.95, readAll: false, lang: 'en' })));
   return c;
 };
@@ -101,6 +109,7 @@ try {
   ok('Demo Shop offered separately, after the real listings, as PayPal Sandbox (no real money)', /Demo Shop/.test(offerMsg) && /no real money/i.test(offerMsg) && /Simple Dial Microwave 20L/.test(offerMsg), offerMsg.slice(0, 200));
   const retailerNote = (await m.locator('[data-role="assistant"]').nth(-2).innerText()).replace(/\s+/g, ' ');
   ok('explains real listings are bought at the retailer, not through SaySafe’s PayPal Sandbox checkout', /retailer/i.test(retailerNote) && /not through SaySafe/i.test(retailerNote), retailerNote.slice(0, 200));
+  await loadListingImages(m);
   await shot(m, '02-channel3-listings', '[data-card="product_cards"]:has([aria-label="Shop listings"])');
   await shopCard.getByRole('button', { name: 'Compare' }).click();
   await lastCard(m, 'compare').waitFor({ timeout: 10000 }).catch(() => {});
@@ -224,11 +233,15 @@ try {
   const tabs = await m.locator('nav[aria-label="Main"] a').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent));
   ok('mobile keeps exactly four tabs', tabs.join() === 'Home,Assistant,Activity,Profile', tabs.join());
   await shot(m, '09-insights-mobile');
+  await m.goto(BASE + '/family/insights'); await m.waitForURL((u) => u.pathname === '/insights', { timeout: 20000 }).catch(() => {});
+  ok('Mary opening the family dashboard link lands on her own /insights (no family session needed)', new URL(m.url()).pathname === '/insights');
   // Assistant insights card
   await m.goto(BASE + '/assistant'); await m.waitForSelector('#assistant-input');
-  await ask(m, 'Do I have anything waiting for approval?');
+  await ask(m, 'Show my insights');
   await lastCard(m, 'insights_summary').waitFor({ timeout: 20000 });
-  ok('Assistant insights card with View full insights', await lastCard(m, 'insights_summary').getByTestId('view-full-insights').isVisible());
+  await ask(m, 'Do I have anything waiting for approval?');
+  await m.waitForFunction(() => document.querySelectorAll('[data-card="insights_summary"]').length >= 2, null, { timeout: 20000 });
+  ok('Assistant insights card with an Open Insights button (rules, no AI)', await lastCard(m, 'insights_summary').getByTestId('view-full-insights').isVisible());
   await shot(m, '10-assistant-insights-card', '[data-card="insights_summary"]');
 
   // ---------- 11. Desktop 1440 ----------
@@ -252,7 +265,16 @@ try {
   // ---------- 12. Alex: insights without Mary's private records; household isolation ----------
   const fs1 = await get(f, '/api/insights/summary?as=family');
   ok('Alex: summary without Mary’s private records/subscriptions/duplicates', fs1.status === 200 && fs1.body.privateRecordsVisible === false && fs1.body.records === null && fs1.body.subscriptions === null && fs1.body.duplicates === null);
-  await f.goto(BASE + '/family/insights'); await f.waitForLoadState('networkidle'); await shot(f, '13-alex-family-insights');
+  await f.goto(BASE + '/family'); await f.getByTestId('family-view-insights').click(); await f.waitForURL(/\/family\/insights/);
+  await f.waitForLoadState('networkidle'); await f.getByText(/safety at a glance/).waitFor({ timeout: 20000 });
+  const fi = (await f.locator('main').innerText()).replace(/\s+/g, ' ');
+  ok('Alex: Home → View insights opens /family/insights without Mary’s private records', !/John Smith|Shannon Boiler|Netflix|Riverside Pharmacy/.test(fi), fi.slice(0, 160));
+  await shot(f, '13-alex-family-insights-390');
+  const fd = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce', storageState: await f.context().storageState() });
+  const fdp = await fd.newPage(); await fdp.goto(BASE + '/family/insights'); await fdp.getByText(/safety at a glance/).waitFor({ timeout: 20000 });
+  const fdt = await fdp.locator('nav[aria-label="Main"] a').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent));
+  ok('Alex desktop header has an Insights item', fdt.includes('Insights'), fdt.join());
+  await shot(fdp, '14-alex-family-insights-1440'); await fd.close();
   const oc = await ctx(); const o = await oc.newPage(); await o.goto(BASE + '/'); await post(o, '/api/demo/start', { name: 'Mary' });
   const peek = await get(o, `/api/payments/${id}`);
   const oSum = await get(o, '/api/insights/summary');

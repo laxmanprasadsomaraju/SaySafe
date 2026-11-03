@@ -63,7 +63,8 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
       approvalStatus,
       approvalDecidedAt: a ? toIso(a.decided_at) : null,
       approvalExpiresAt: a ? new Date(a.expires_at).toISOString() : null,
-      awaitingMyDecision: r.state === 'FAMILY_APPROVAL_PENDING' && approvalStatus === 'pending',
+      // Sample rows are never actionable, so never "waiting for you" (the ledger still lists them as example data).
+      awaitingMyDecision: r.state === 'FAMILY_APPROVAL_PENDING' && approvalStatus === 'pending' && !isSeededRow(r),
     };
   });
 

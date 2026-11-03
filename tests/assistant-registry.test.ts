@@ -13,7 +13,7 @@ describe('assistant component registry', () => {
       // "Try as Mary" demo: subscriptions list, send money handoff, welcome, training examples, error with Retry
       'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error',
       // Insights summary card (flagship + Insights discoverability)
-      'insights_summary'].sort());
+      'insights_summary', 'shop_catalogue'].sort());
   });
   it('rejects unknown kinds and markup-shaped payloads', () => {
     expect(parseBlock({ kind: 'html', html: '<img src=x onerror=alert(1)>' })).toBeNull();

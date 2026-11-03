@@ -128,7 +128,7 @@ export function MuteSwitch() {
   const on = !s.prefs.muted && s.supported;
   return (
     <div className="flex items-center justify-between gap-4 py-2">
-      <span className="min-w-0"><span className="block font-bold" id={`${id}-l`}>Voice playback</span><span className="block text-base text-ink-soft" id={`${id}-h`}>{!s.supported ? 'Not available in this browser.' : on ? 'SaySafe can speak to you.' : 'Muted: SaySafe won’t speak on its own.'}</span></span>
+      <span className="min-w-0"><span className="block font-bold" id={`${id}-l`}>Voice playback</span><span className="block text-base text-ink-soft" id={`${id}-h`}>{!s.supported ? 'Not available in this browser.' : on && s.needsTap ? 'On. Tap to enable sound: your browser waits for a first tap before SaySafe can speak.' : on ? 'SaySafe can speak to you.' : 'Muted: SaySafe won’t speak on its own.'}</span></span>
       <button type="button" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={`${id}-h`} disabled={!s.supported} onClick={() => speech.toggleMute()}
         className={switchBtn(on)} data-testid="voice-playback">{on ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}{!s.supported ? 'Off' : on ? 'On' : 'Muted'}</button>
     </div>

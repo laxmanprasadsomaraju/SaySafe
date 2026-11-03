@@ -4,7 +4,7 @@ import { api } from './api';
 import type { InsightsAgentAnswer, InsightsPayload } from '../../../shared/insights';
 import type { InsightsClientConfig } from './insightsChoice';
 
-/** Loads the signed-in family member's own insights. Unauthenticated → pairing page. */
+/** Loads the signed-in family member's own insights. Unauthenticated → pairing page (Mary → her own /insights). */
 export function useInsights(pollMs = 15000) {
   const nav = useNavigate();
   const [data, setData] = useState<InsightsPayload | null>(null);
@@ -13,7 +13,12 @@ export function useInsights(pollMs = 15000) {
     let alive = true;
     const load = () => api<InsightsPayload>('/api/family/insights')
       .then((d) => { if (alive) { setData(d); setError(null); } })
-      .catch((e) => { if (!alive) return; if (e.status === 401) nav('/family/pair', { replace: true }); else setError(e.message); });
+      .catch((e) => {
+        if (!alive) return;
+        if (e.status !== 401) return setError(e.message);
+        // Mary (no family session) opened the family dashboard link: send her to her own Insights page instead.
+        api<{ elder?: unknown; family?: unknown }>('/api/me').then((me) => nav(me?.elder && !me?.family ? '/insights' : '/family/pair', { replace: true })).catch(() => nav('/family/pair', { replace: true }));
+      });
     load();
     const t = setInterval(load, pollMs);
     return () => { alive = false; clearInterval(t); };

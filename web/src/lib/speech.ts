@@ -38,12 +38,17 @@ export interface SpeechSnapshot {
   /** Mic outcome to show on screen, never spoken ("I didn't hear anything. Tap to try again."). */
   micMessage: string | null;
   micSupported: boolean;
+  /** Playback is On, but the browser won't let a page speak before the first tap/click (autoplay policy). Shown as
+   *  "Tap to enable sound" — never as Muted. */
+  needsTap: boolean;
 }
 
 export interface SpeechEnv {
   synth: Pick<SpeechSynthesis, 'speak' | 'cancel' | 'getVoices'> & Partial<Pick<SpeechSynthesis, 'resume' | 'paused' | 'addEventListener'>> | null;
   Utterance: (new (text: string) => SpeechSynthesisUtterance) | null;
   storage: Pick<Storage, 'getItem' | 'setItem'> | null;
+  /** Has the person tapped/clicked/typed on this page yet (navigator.userActivation)? Unknown → treated as yes. */
+  activated?: () => boolean;
 }
 
 export const AUTO_MAX_CHARS = 320;
@@ -109,6 +114,9 @@ export class SpeechController {
   private listeners = new Set<() => void>();
   private snap: SpeechSnapshot;
 
+  private blockedUntilTap = false;
+  /** The first tap/click/key on the page: the browser now allows speech. */
+  activate() { if (this.blockedUntilTap) { this.blockedUntilTap = false; } this.emit(); }
   constructor(private env: SpeechEnv, private mic: MicEnv | null = null) {
     this.prefs = this.loadPrefs();
     this.snap = this.build();
@@ -150,6 +158,7 @@ export class SpeechController {
       notice: this.notice,
       micMessage: this.micMessage,
       micSupported: this.micSupported(),
+      needsTap: supported && !this.prefs.muted && (this.blockedUntilTap || (this.env.activated ? !this.env.activated() : false)),
     };
   }
 
@@ -162,19 +171,21 @@ export class SpeechController {
       if (raw) {
         const j = JSON.parse(raw);
         p = {
-          muted: typeof j.muted === 'boolean' ? j.muted : p.muted,
+          // Muted is kept only when the person chose it (mutedByUser). Older saved prefs, test profiles and the legacy
+          // "ss-voice" key could carry a muted state nobody chose here, which made a fresh-looking visit start muted.
+          muted: j.muted === true && j.mutedByUser === true,
           autoSpeak: typeof j.autoSpeak === 'boolean' ? j.autoSpeak : p.autoSpeak,
           rate: typeof j.rate === 'number' && j.rate >= 0.6 && j.rate <= 1.5 ? j.rate : p.rate,
           readAll: typeof j.readAll === 'boolean' ? j.readAll : p.readAll,
           lang: normaliseLang(j.lang),
         };
-      } else if (st?.getItem('ss-voice') === 'off') p.muted = true; // legacy "Voice" toggle
+      } // the legacy "ss-voice" key is ignored: playback is On unless the person mutes it here
     } catch { /* defaults */ }
     return p;
   }
   private savePrefs() {
     try {
-      this.env.storage?.setItem(PREFS_KEY, JSON.stringify(this.prefs));
+      this.env.storage?.setItem(PREFS_KEY, JSON.stringify({ ...this.prefs, mutedByUser: this.prefs.muted }));
       this.env.storage?.setItem('ss-voice', this.prefs.muted ? 'off' : 'on');
     } catch { /* private mode */ }
   }
@@ -375,6 +386,8 @@ export class SpeechController {
     u.onerror = (e: any) => {
       if (g !== this.gen) return;
       if (e?.error === 'interrupted' || e?.error === 'canceled') return;
+      // Autoplay policy: the browser refuses speech before the first tap. Playback stays On; ask for a tap.
+      if (e?.error === 'not-allowed') { this.speaking = false; this.queue = []; this.blockedUntilTap = true; this.emit(); return; }
       this.speaking = false; this.queue = []; this.err = 'Speech stopped unexpectedly. You can read the text on screen.'; this.emit();
     };
     this.speaking = true;
@@ -418,6 +431,7 @@ function browserEnv(): SpeechEnv {
     synth: 'speechSynthesis' in window ? window.speechSynthesis : null,
     Utterance: typeof (window as any).SpeechSynthesisUtterance === 'function' ? (window as any).SpeechSynthesisUtterance : null,
     storage,
+    activated: () => { const ua = (navigator as any).userActivation; return ua ? Boolean(ua.hasBeenActive) : true; },
   };
 }
 
@@ -446,4 +460,5 @@ export const speech = new SpeechController(browserEnv(), browserMic());
 if (typeof window !== 'undefined') {
   (window as any).__saysafeSpeech = speech; // for QA scripts
   window.addEventListener('pagehide', () => speech.stopAll());
+  for (const ev of ['pointerdown', 'keydown'] as const) window.addEventListener(ev, () => speech.activate(), { once: true, capture: true });
 }

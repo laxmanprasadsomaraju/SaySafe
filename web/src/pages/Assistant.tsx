@@ -344,6 +344,13 @@ export default function Assistant() {
       }
       if (a === 'shop' || r.discover) {
         setMode('find');
+        // Not in the Demo Shop: say so and list what it sells (server catalogue), then look in real shops if available.
+        if (Array.isArray(r.catalogue) && r.catalogue.length) {
+          add('assistant', r.reply, [{ kind: 'shop_catalogue', items: r.catalogue, channel3: Boolean(r.discover) }]);
+          say(r.reply.split('. Tap')[0] + '.', turn);
+          if (r.discover) return await discover(r.discover.query ?? text, turn);
+          return;
+        }
         if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined);
         if (r.buyNow && Array.isArray(r.products) && r.products.length === 1) {
           const item = productItems(r.products.map(fromDemo))[0];
@@ -426,6 +433,11 @@ export default function Assistant() {
     if (!me || sp.get('welcome') !== '1') return;
     setThread((t) => (t.messages.some((m) => m.blocks.some((b) => b.kind === 'demo_welcome')) ? t : fresh('chat')));
     setTimeout(() => add('assistant', `Hello ${me.name}. Here’s what you can try.`, [{ kind: 'demo_welcome', prompts: [...WELCOME_PROMPTS] }], 'en'), 0);
+    // What she can shop for: the Demo Shop catalogue from the server (not hard-coded here).
+    api<any[]>('/api/products').then((ps) => {
+      const items = (Array.isArray(ps) ? ps : []).map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
+      if (items.length) add('assistant', 'You can shop the Demo Shop below (PayPal Sandbox, no real money), or ask for anything else and I’ll search real shops.', [{ kind: 'shop_catalogue', items, channel3: true }], 'en');
+    }).catch(() => {});
     nav('/assistant', { replace: true });
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 

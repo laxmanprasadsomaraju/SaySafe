@@ -353,3 +353,83 @@ describe('Insights: calculations, roles, privacy', () => {
     expect(c.insightsDashboard).toBe('native');
   });
 });
+
+describe('what Mary can shop (server catalogue, never a blank result)', () => {
+  it('an unmatched request says so and lists the Demo Shop catalogue', async () => {
+    const { m } = await household();
+    const saved = process.env.CHANNEL3_API_KEY; delete process.env.CHANNEL3_API_KEY;
+    try {
+      const r = await ask(m, 'I want to buy a garden hose');
+      expect(r.products).toEqual([]);
+      expect(r.reply).toMatch(/^I can't find that in the Demo Shop\. You can buy: /);
+      expect(r.catalogue.length).toBeGreaterThanOrEqual(10);
+      expect(r.catalogue.find((c: any) => c.productId === 'microwave')).toMatchObject({ name: 'Simple Dial Microwave 20L', priceCents: 12000, currency: 'EUR' });
+    } finally { if (saved !== undefined) process.env.CHANNEL3_API_KEY = saved; }
+  });
+  it('with Channel3 available it also searches real shops (and still lists the catalogue)', async () => {
+    const { m } = await household();
+    const saved = process.env.CHANNEL3_API_KEY; process.env.CHANNEL3_API_KEY = 'test-key-not-called';
+    try {
+      const r = await ask(m, 'I want to buy a garden hose');
+      expect(r.catalogue.length).toBeGreaterThan(0);
+      expect(r.discover).toMatchObject({ suggested: true });
+      expect(r.reply).toMatch(/Channel3/);
+    } finally { if (saved === undefined) delete process.env.CHANNEL3_API_KEY; else process.env.CHANNEL3_API_KEY = saved; }
+  });
+  it('a catalogue chip ("Let’s buy the demo <full name>") opens that exact product’s purchase card', async () => {
+    const { m } = await household();
+    const r = await ask(m, "Let's buy the demo Easy-Pour Electric Kettle 1.5L");
+    expect(r.buyNow).toBe(true);
+    expect(r.products[0]).toMatchObject({ id: 'kettle-classic', priceCents: 3200 });
+  });
+});
+
+describe('family dashboard counts (live finding: sample request shown as "waiting for you")', () => {
+  it('sample requests are never "waiting for you" and sample decisions are not counted', async () => {
+    const { f } = await household(true);
+    const d = (await f.get('/api/family/insights').expect(200)).body;
+    expect(d.kpis.pendingApprovals).toBe(0);
+    expect(d.kpis.approved).toBe(0);
+    expect(d.kpis.declined).toBe(0);
+    expect(d.payments.some((p: any) => p.source === 'seeded' && p.state === 'FAMILY_APPROVAL_PENDING')).toBe(true); // still listed, labelled
+    expect(d.kpis.seededCaptured.count).toBe(2);
+    expect(d.kpis.sandboxCaptured.count).toBe(0);
+  });
+  it('scam reviews count only checks Mary shared, never training examples', async () => {
+    const { m, f } = await household(true);
+    const t = (await m.post('/api/scan').set(H).send({ text: TRAINING_EXAMPLES[0].text }).expect(200)).body;
+    const r = (await m.post('/api/scan').set(H).send({ text: 'URGENT: your PayPal is locked. Call +44 20 7946 0999 now and read us the code we text you.' }).expect(200)).body;
+    let d = (await f.get('/api/family/insights').expect(200)).body;
+    expect(d.kpis.scamReviews).toBe(0); // nothing shared yet: private to Mary
+    await m.post(`/api/scan/${t.scanId}/share`).set(H).send({}).expect(200);
+    await m.post(`/api/scan/${r.scanId}/share`).set(H).send({}).expect(200);
+    d = (await f.get('/api/family/insights').expect(200)).body;
+    expect(d.kpis.scamReviews).toBe(1); // the shared real check; the shared training example is practice
+  });
+});
+
+describe('desktop header stays visible on normal heights', () => {
+  it('the short-viewport rule only applies below 26rem (416 CSS px)', async () => {
+    const css = (await import('node:fs')).readFileSync(new URL('../web/src/index.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/@media \(max-height: 26rem\) \{\s*header\.sticky \{ position: static; \}/);
+    expect(css).not.toMatch(/max-height: 30rem/);
+  });
+});
+
+describe('"What can I buy?" and the judges’ PayPal login note', () => {
+  it('"What can I buy?" lists the server catalogue without AI', async () => {
+    const { m } = await household();
+    const r = await ask(m, 'What can I buy?');
+    expect(r.ai).toBe(false);
+    expect(r.catalogue.map((c: any) => c.productId)).toContain('microwave');
+    expect(r.reply).toMatch(/Demo Shop sells/);
+  });
+  it('no PayPal credentials anywhere in the app source; the judge note points to Devpost', async () => {
+    const fs = await import('node:fs'); const path = await import('node:path');
+    const walk = (d: string): string[] => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+    const src = ['server', 'shared', 'web/src'].flatMap((d) => walk(path.resolve(d))).filter((f) => /\.(ts|tsx)$/.test(f)).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    expect(src).not.toMatch(/sb-[a-z0-9]{6,}@personal\.example\.com/i);
+    expect(src).not.toMatch(/business\.example\.com/i);
+    expect(src).toMatch(/test buyer login is in the Devpost testing instructions/);
+  });
+});
