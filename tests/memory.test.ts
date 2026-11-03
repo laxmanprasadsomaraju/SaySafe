@@ -27,6 +27,8 @@ import { db } from '../server/db/index';
 import { setMemoryClock } from '../server/memory/store';
 import { extractMemory } from '../server/memory/extract';
 import { resolveProductRef, isProductReference } from '../server/memory/context';
+import { buildInsights } from '../server/insights/model';
+import { aiPayload } from '../server/insights/agent';
 
 const app = createApp();
 const H = { 'Content-Type': 'application/json' };
@@ -306,6 +308,29 @@ describe('isolation and reset', () => {
     expect(JSON.stringify(r.body)).not.toMatch(/Panasonic|Kenwood|currys/i);
     expect((await mary.a.get('/api/memory')).body.items[0].value).toBe('red');
     await request(app).get('/api/memory').expect(401);
+  });
+
+
+  it('family routes and the family Insights AI payload never carry Mary\'s memory or conversation, even with both sharing switches ON', async () => {
+    const mary = await elder('Mary');
+    await on(mary.a);
+    await say(mary.a, 'I prefer black');
+    await say(mary.a, "I don't like Zorblex");
+    await say(mary.a, 'keep my budget below €137');
+    await discover(mary.a, 'find me a microwave' + uniq()).expect(200);
+    await mary.a.post('/api/family/sharing').set(H).send({ shareSummaries: true, shareHistory: true }).expect(200);
+    const alex = await familyFor(mary.a);
+    const bodies: string[] = [];
+    for (const u of ['/api/family/overview', '/api/family/status', '/api/family/insights', '/api/activity', '/api/insights/summary']) {
+      const r = await alex.get(u);
+      bodies.push(`${u} ${r.status} ${JSON.stringify(r.body)}`);
+    }
+    const agent = await alex.post('/api/family/insights/agent').set(H).send({ question: 'What does Mary like to buy and what did she look at?' });
+    bodies.push(JSON.stringify(agent.body));
+    const alexId = (db.prepare("SELECT family_id FROM family_links WHERE household_id=? AND status='active'").get(mary.hh) as any).family_id;
+    bodies.push(JSON.stringify(aiPayload(buildInsights(mary.hh, { userId: alexId, name: 'Alex' }))));
+    const all = bodies.join('\n');
+    for (const leak of ['Zorblex', 'prefer black', '€137', 'H25MOBS7HUK', 'NN-ST64QWBPQ', 'Prefers the colour', 'I prefer', 'mem_']) expect(all).not.toContain(leak);
   });
 
   it('demo reset clears memory and context and turns memory off', async () => {

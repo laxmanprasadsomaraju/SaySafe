@@ -30,6 +30,8 @@ Profile section `web/src/components/MemorySection.tsx`. Tests: `tests/memory.tes
   sample data — each labelled). If there's no record: "We talked about the … on 3 November, but I have no payment record for it."
 - Isolation: every read/write is scoped by household AND user from the session. A family session (Alex) gets 404 on
   `/api/memory*`, and the assistant never resolves Mary's context for him. Nothing is written to audit_log or insights.
+- Family access (server/family/permissions.ts) never touches these tables: no family route, Family Insights view or
+  family Insights AI payload reads memory or conversation, even with both Family sharing switches on (tested).
 - Memory never triggers a money action (no path to the payment service, PayPal, approvals, webhooks or capture).
 - Memory values are data: length-capped (key 60, value 120), control characters stripped, rendered as text.
   Long or pasted messages (scam checks) are never kept as conversation and never write memory.
