@@ -18,6 +18,11 @@ OUT=shots node scripts/ui-shots.mjs       # every page at 320/375/390/768/1024/1
 
 Restart the stack between runs if you hit the "Try as Alex" rate limit (10 per 15 minutes per IP).
 
+If something else already listens on :8787 (another checkout's server), the stack's API cannot bind and the scripts
+silently test that other build. Check with `curl -s localhost:8787/ | grep -o 'assets/index-[^"]*'` against your
+`web/dist`, or use another port: `PORT=8788 STACK_DIR=/tmp/saysafe-stack-2 scripts/local-stack.sh` and
+`BASE=http://127.0.0.1:8788 node scripts/visual-regression.mjs`.
+
 ## Visual regression (`scripts/visual-regression.mjs`)
 
 - Pages: landing, Home, Activity, Profile, Help (first 6000 px), Assistant with subscription + contact cards,
@@ -25,7 +30,8 @@ Restart the stack between runs if you hit the "Try as Alex" rate limit (10 per 1
 - Widths: 390 px (phone) and 1440 px (desktop). Baselines are committed in `tests/visual/`.
 - Comparator: Playwright's own screenshot comparator (the one behind `expect(page).toHaveScreenshot()`,
   pixelmatch, threshold 0.2), allowing at most 0.2 % differing pixels for anti-aliasing noise.
-- Determinism: fixed browser clock (3 Nov 2026 10:00 Europe/Dublin), `en-IE`, reduced motion, voice muted,
+- Determinism: fixed browser clock (3 Nov 2026 10:00 Europe/Dublin), `en-IE`, reduced motion, voice muted (saved with
+  `mutedByUser: true`, because the app only keeps a mute the person chose),
   lazy images forced to load, and dates/times/ids that come from server timestamps replaced with fixed text
   before capture. Layout is under test, not the clock.
 - On a difference it writes `<page>-<width>.actual.png` and `.diff.png` next to the baseline (git-ignored).

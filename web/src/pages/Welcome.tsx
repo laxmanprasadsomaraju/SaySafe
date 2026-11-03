@@ -75,19 +75,22 @@ export default function Welcome() {
     { t: 'Shopping online is hard work', d: 'Small text, many steps and unclear prices put people off, or push them to ask strangers.' },
     { t: 'Doubt after paying', d: '“Did it go through? Was I charged twice?” SaySafe only says “paid” once PayPal confirms it.' },
   ];
-  const stages = [
-    { n: 1, t: 'Before payment', items: ['Check a message, link or screenshot for warning signs', 'Ask the Assistant by voice or text', 'Find real products with Channel3, then compare them', 'Ask family for a second opinion'] },
-    { n: 2, t: 'During payment', items: ['Review the exact item, shop and price', 'Bigger buys wait for a trusted family member', 'You approve the payment yourself on PayPal’s sandbox page', 'SaySafe checks the order with PayPal and captures it once'] },
-    { n: 3, t: 'After payment', items: ['A receipt confirmed from PayPal’s own records, read aloud if you like', 'Searchable history of payments and checks', 'Clear steps if an order goes wrong', 'Family Safety Insights for your helper'] },
+  // How it works: the flagship journey in five steps (Mary → Alex → PayPal Sandbox → verified receipt).
+  const steps = [
+    { n: 1, t: 'Mary asks first', d: '“I got a message saying I owe €120. Did I already pay?” SaySafe checks her own records and labels sample data clearly.', tag: 'Before' },
+    { n: 2, t: 'She reviews the exact purchase', d: 'Real products to compare (Channel3), or the SaySafe Demo Shop microwave at €120. The server fixes item, shop and price.', tag: 'Before' },
+    { n: 3, t: 'Alex, her family helper, approves', d: 'Over Mary’s €75 limit, Alex sees that exact item and price and says yes or no. The answer expires and can’t pay for her.', tag: 'During' },
+    { n: 4, t: 'Mary approves at PayPal herself', d: 'On PayPal’s own sandbox page, with test money. SaySafe re-checks amount and currency and captures once.', tag: 'During' },
+    { n: 5, t: 'A receipt checked with PayPal', d: '“Paid” only after PayPal confirms the capture, then a signed webhook is verified. Activity and Insights show it as a real sandbox transaction.', tag: 'After' },
   ];
   const features: { icon: typeof ShieldAlert; t: string; d: string; status: Status; help: string }[] = [
     { icon: ShieldAlert, t: 'Scam Guardian', d: 'Paste a message, link, email, phone number or screenshot. You get Suspicious, Needs checking or No obvious warning signs, with the exact words that worried it. Never “safe”.', status: 'Live', help: 'checking-messages' },
-    { icon: MessageCircle, t: 'AI Assistant', d: 'One conversation for checking, shopping and help. The AI explains and suggests; it can never pay, approve or change a record. Interactive cards are being finished.', status: 'In development', help: 'getting-started' },
+    { icon: MessageCircle, t: 'AI Assistant', d: 'One conversation for checking, shopping and help, with purchase, family, receipt and insights cards. The AI explains and suggests; it can never pay, approve or change a record.', status: 'Live', help: 'getting-started' },
     { icon: Search, t: 'Channel3 shopping', d: 'Real products, prices and pictures from Channel3. Buying opens the shop’s own website: SaySafe never pays a retailer.', status: 'Live', help: 'real-products' },
     { icon: Users, t: 'Family Circle', d: 'Invite a trusted helper with a one-time code. Purchases over your limit wait for them to approve or decline the exact item and price.', status: 'Live', help: 'family-reviews' },
     { icon: CreditCard, t: 'PayPal Sandbox checkout', d: 'Demo Shop items are paid on PayPal’s own sandbox page. SaySafe re-checks amount and currency with PayPal and captures once.', status: 'Live, sandbox', help: 'paypal-sandbox' },
     { icon: ListChecks, t: 'Payment history', d: 'Every payment, family decision and scam check in one searchable list, with receipts and PayPal evidence.', status: 'Live', help: 'history-receipts' },
-    { icon: BarChart3, t: 'Family Safety Insights', d: 'A read-only dashboard for the family helper: spending confirmed by PayPal, shared scam checks and pending approvals.', status: 'Live', help: 'family-reviews' },
+    { icon: BarChart3, t: 'Insights', d: 'Mary’s own insights, and a read-only dashboard for her family helper: spending confirmed by PayPal (sample data counted separately), shared scam checks and pending approvals.', status: 'Live', help: 'insights' },
     { icon: Accessibility, t: 'Voice and accessibility', d: 'Large text, high contrast, captions for everything spoken, and a big Stop. Voice is tap-to-talk and still being tested on real phones.', status: 'Beta', help: 'voice' },
   ];
   const tech = [
@@ -106,7 +109,7 @@ export default function Welcome() {
       <section className="wrap pt-10 md:pt-16 pb-16 md:pb-24 grid lg:grid-cols-12 gap-12 lg:gap-8 items-center">
         <div className="lg:col-span-6 fade-up">
           <SandboxBadge />
-          <h1 className="mt-6 text-[2.75rem] leading-[1.04] sm:text-[3.5rem] lg:text-[4.5rem] tracking-[-0.025em] max-w-[13ch]">Pay with confidence, not doubt.</h1>
+          <h1 className="mt-6 text-[2.75rem] leading-[1.04] sm:text-[3.5rem] lg:text-[4.5rem] tracking-[-0.025em] max-w-[13ch]">Ask first. Pay with confidence.</h1>
           <p className="mt-6 text-[1.375rem] leading-relaxed text-ink-soft max-w-[36ch]">SaySafe is a payment safety companion for older adults and the family who help them. It checks the request, brings in family when it matters, and confirms with PayPal before telling you it’s paid.</p>
           <div className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-3">
             {signedIn
@@ -191,21 +194,20 @@ export default function Welcome() {
         </div>
       </section>
 
-      {/* How it works: three stages */}
+      {/* How it works: the flagship journey, five steps */}
       <section id="how" aria-labelledby="how-h" className="wrap py-20 md:py-28 scroll-mt-24 reveal">
         <p className="eyebrow">How it works</p>
-        <h2 id="how-h" className="display-2 mt-3 max-w-[20ch]">Before, during and after every payment.</h2>
-        <ol className="mt-12 grid md:grid-cols-3 gap-6">
-          {stages.map((st) => (
-            <li key={st.t} className="rounded-[var(--radius-card)] border border-line bg-paper p-6 sm:p-7 shadow-[var(--shadow-card)]">
-              <p className="flex items-center gap-3"><span aria-hidden className="grid size-10 place-items-center rounded-full bg-navy text-white font-bold text-lg">{st.n}</span><span className="sr-only">Stage {st.n}: </span><span className="text-2xl font-display">{st.t}</span></p>
-              <ul className="mt-5 grid gap-3 text-lg">
-                {st.items.map((it) => <li key={it} className="flex gap-3"><CheckCircle2 className="size-6 shrink-0 text-teal mt-0.5" aria-hidden /><span>{it}</span></li>)}
-              </ul>
+        <h2 id="how-h" className="display-2 mt-3 max-w-[22ch]">From “did I already pay?” to a receipt PayPal confirmed.</h2>
+        <ol className="mt-12 grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+          {steps.map((st) => (
+            <li key={st.t} className="rounded-[var(--radius-card)] border border-line bg-paper p-6 shadow-[var(--shadow-card)]">
+              <p className="flex items-center gap-3"><span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-navy text-white font-bold text-lg">{st.n}</span><span className="sr-only">Step {st.n}: </span><span className="text-sm font-bold uppercase tracking-wide text-teal">{st.tag} payment</span></p>
+              <p className="mt-4 text-2xl font-display leading-tight">{st.t}</p>
+              <p className="mt-3 text-lg text-ink-soft">{st.d}</p>
             </li>
           ))}
         </ol>
-        <p className="mt-8 text-lg text-ink-soft max-w-[70ch]"><b className="text-navy">The rule behind it:</b> AI explains, rules decide, the payer authorises at PayPal, and the server verifies. A family “yes” never replaces your own approval.</p>
+        <p className="mt-8 text-lg text-ink-soft max-w-[70ch]"><b className="text-navy">The rule behind it:</b> AI explains, rules decide, the payer authorises at PayPal, and the server verifies. A family “yes” never replaces your own approval. Everything uses the PayPal sandbox: no real money.</p>
       </section>
 
       {/* Showcase 1: ScamLens */}

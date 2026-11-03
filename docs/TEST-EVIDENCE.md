@@ -10,6 +10,36 @@ _What was run, on which build, where, and what kind of test it is. Times are GMT
 
 Nothing below is a test on a physical phone or with a real person. Those are listed under [Not yet done](#not-yet-done).
 
+## Flagship release (3 November 2026, branch `flagship`)
+
+Three kinds of evidence, kept apart on purpose. None of it is a test on a physical phone or with a real person.
+
+| Kind | What ran | What it proves | What it does **not** prove |
+|---|---|---|---|
+| **Mocked** (Node, test doubles) | `vitest run`: **759 passed, 0 failed (42 files)**, incl. `tests/flagship.test.ts` (29 tests, PayPal replaced by a test double and labelled so); `tsc --noEmit` 0 errors; `vite build` built. Local run 2026-11-03 ~16:40 GMT on `61fec46` | Our logic: state machine, family-approval binding, capture idempotency, webhook verification paths, isolation, labels, insights totals | PayPal's real behaviour, real models, real browsers |
+| **Local browser** (Playwright Chromium headless, local build, **mock PayPal** :9999 + **recorded Channel3** response :9998, no AI key) | `scripts/e2e-flagship.mjs`: **49/49 passed**; axe-core (wcag2a/aa, 21a/aa, 22aa) **0 violations on the 20 screens that script visits**, no horizontal overflow on them. `scripts/visual-regression.mjs`: **22/22 screenshots match** baselines, run twice in a row (2026-11-03 ~17:00 GMT) | The flagship UI journey clicks through end to end; one capture after repeated questions and reload; role and household isolation from the browser; header/insights layout at 390, 1280 and 1440 px | The mock PayPal cannot sign webhooks, so locally the receipt correctly stays **Verification pending**; the buyer step on PayPal's real page is not exercised; axe is a floor, not a screen-reader test; other screens are covered by `scripts/a11y-audit.mjs`, not re-run for this release |
+| **Hosted + real PayPal Sandbox** (https://saysafe.onrender.com, real sandbox buyer logging in on www.sandbox.paypal.com, test money) | Two full flagship runs by browser automation with the buyer step done on PayPal's page (§F below) | The real money path: family approval → buyer approval at PayPal → one capture → Payments v2 check → **signed webhook verified** → same receipt after reloads → Activity label | Builds after `d630e97` (the `flagship` branch has **not** been deployed by this release; the user deploys); physical phones; two physical devices |
+| **Live Channel3** | `scripts/channel3-live-check.mjs` against the hosted app, 2026-11-03 16:06 GMT: query "microwave" → 10 listings; 8/8 checks passed (title, price + currency, retailer, https link, images, specs, no invented rating) | The real Channel3 integration returns usable listings | Retailer stock or prices beyond that moment |
+
+### F. Flagship journey, hosted, real PayPal Sandbox
+
+Both runs: Try as Mary → €120 question → Demo Shop **Simple Dial Microwave 20L, €120.00 EUR** → above the €75 limit → **Family review: Pending** → Alex (family view) **Approve** → Mary's card **Approved** → Continue to PayPal → sandbox buyer signed in on PayPal's page, paid with PayPal Balance (sandbox) → back to SaySafe.
+
+| | Run 1 | Run 2 |
+|---|---|---|
+| Time (GMT) | order created 14:37:46, buyer approved 14:38:28, captured 14:38:30, signed webhook 14:38:40 | order created 15:50:28, buyer approved 15:51:21, captured 15:51:22, signed webhook 15:51:26 |
+| Build | hosted; deployed commit not recorded in the run notes | **`d630e97`** |
+| PayPal order | 14N79698ML703613G | 9BP28498Y7570471J |
+| Capture | 4K097800X0771815W, Payments v2 status COMPLETED, 120.00 EUR matched | 96T3543906935310P, Payments v2 status COMPLETED, 120.00 EUR matched |
+| Webhook | "Verification pending" on first render → **"Verified — signed PayPal notice"** on reload (signature checked with PayPal's verify-webhook-signature API) | same, verified on the ~20 s reload |
+| Double charge | none: same single capture after the first reload and after ~60 s | none: same capture after reloads at ~20 s and ~60 s; "Did my payment go through?" asked twice → same receipt, no new capture |
+| Activity | listed as **Real PayPal Sandbox transaction**, "PayPal capture + signed webhook verified", next to the sample rows with the same item | same |
+| Family Insights | — | `/family/insights` (Alex): sandbox captures €240 = 2 paid in sandbox, "€152 more in example data" shown separately; ledger Source column "PayPal sandbox" vs "Example data" |
+
+Found on `d630e97` and addressed on `flagship` (verified locally only, not yet on the hosted app): "Did my payment go through?" typed while the composer was in *Check a message* mode was treated as a scam check (the rules router now answers it with `payment_status`, checked in the default chat mode by the e2e step "payment-status question is never a scam check"; the explicit *Check a message* mode case was not re-tested); there was no Mary-side Insights page (now `/insights`); "Try as Alex too" was only in Profile (now also on the pending family-review card).
+
+Run notes (project workspace, not in the repo): `work/flagship/hosted-buyer-journey-2026-11-03.md`, `work/flagship/hosted-buyer-journey-d630e97.md`. Manual checklist for repeating this: [MANUAL-ACCEPTANCE.md](MANUAL-ACCEPTANCE.md).
+
 ## Release-hardening test matrix (3 November 2026, branch `arch-hardening`)
 
 Code commit **`922641c`** (merged to `main`; the merge commit and the GitHub Actions run are listed in
@@ -34,7 +64,7 @@ Channel3 replaced by test doubles · **Untested** = not done.
 | AI tool authorisation + prompt injection | bypass approval, change amount, unapproved payment, other household, fabricated receipt, cancel without tap, effect claims replaced, no contacts/records sent to the model, Channel3 receives no user id | Mocked model (hostile outputs) | `authz-isolation-evidence.test.ts` §1, §4; `ai-adversarial.test.ts` | 3 Nov, `922641c` |
 | Evidence / double counting | each record once per surface (Activity, Assistant search, Insights); typed records always `user_entered_unverified`; Insights sample totals separate (bug fixed) | Mocked | `authz-isolation-evidence.test.ts` §3 | 3 Nov, `922641c` |
 | Real PayPal Sandbox happy path | buyer logs in on PayPal's hosted page, approves; SaySafe captures once; duplicate confirm same capture | **Real sandbox** | §7 (local server), §6 (hosted) | 2 Nov 22:04; 3 Nov 01:25–01:57 |
-| Full Assistant → card → family approval → buyer approval → capture → receipt → Activity, on the hosted app | in progress by a separate hosted run; **not claimed here** (H5: stopped at PayPal's guest-checkout page) | Hosted + real sandbox | H5 | not complete at `922641c` |
+| Full Assistant → card → family approval → buyer approval → capture → receipt → Activity, on the hosted app | not complete at `922641c` (H5 stopped at PayPal's guest-checkout page); **completed later the same day, see §F** | Hosted + real sandbox | H5, §F | §F: 3 Nov 14:38 and 15:51 GMT |
 | Browser reload / restart recovery | hosted Render restart: data and session persisted; lost redirect recovered with reconcile + Finish, one capture | **Real sandbox + Hosted** | §6 | 3 Nov 01:39 |
 | Mobile accessibility | axe 0 violations on hosted screens at an iPhone 13 viewport (emulated); one open `label-content-name-mismatch` on product buttons (H5) | Real browser (emulated mobile) | H4, H5 | 3 Nov |
 | Real-device tests (iOS Safari, Android Chrome, microphone, two-device family approval) | — | **Untested — NOT DONE** | — | — |
@@ -148,7 +178,8 @@ Held-out set v2: 42 messages not used during calibration, run live through rules
 ## Not yet done
 
 - Any test on a physical phone (iOS Safari, Android Chrome), including microphone permission, real speech and spoken output.
-- The full Assistant → Demo Shop → family approval → PayPal buyer approval → receipt flow on a real phone.
+- The full Assistant → Demo Shop → family approval → PayPal buyer approval → receipt flow on a real phone (done on the hosted app in a desktop/emulated browser only, §F).
+- The `flagship` branch on the hosted app (not deployed at the time of writing).
 - Family approval across two physical devices.
 - Android share target on a device.
 - Usability testing with older adults (only scripted walkthroughs so far) and screen-reader testing.

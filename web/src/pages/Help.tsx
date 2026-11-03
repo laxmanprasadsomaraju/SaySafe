@@ -51,6 +51,23 @@ const TOPICS: Topic[] = [
     ],
   },
   {
+    id: 'flagship', title: 'The main demo: Mary, Alex, PayPal Sandbox and a checked receipt', summary: 'The whole journey in about three minutes, with test money only.',
+    steps: [
+      'Choose “Try as Mary”. You get a private demo household with labelled sample data and a €75 family limit.',
+      'In the Assistant, type “I received a message saying I owe €120. Can you check whether I already paid?”. SaySafe looks through Mary’s own records and shows possible matches. Sample records are marked “Sample data”: they are examples, not real payments, and a matching amount is not proof.',
+      'Ask “Can you help me buy a microwave instead?”. You see real products from Channel3 (bought on the shop’s own website), and separately the SaySafe Demo Shop microwave for €120 (PayPal Sandbox). Say “Let’s buy the demo microwave”, check the item, shop and price on the review card, and ask your family to check. Nothing is paid yet.',
+      'Choose “Try as Alex too” on the family review card (or in Profile › Trusted family) to open Alex’s family view. Alex sees the exact item and price and chooses Approve. The answer expires and applies only to this purchase.',
+      'Back as Mary, the same card now says “Approved”. Choose “Continue to PayPal” and approve on PayPal’s own sandbox page with a sandbox buyer account (judges: see the testing instructions on Devpost).',
+      'SaySafe checks the order with PayPal, captures it once and shows the receipt. It says “Captured” first, then “Webhook verified” once PayPal’s signed notice arrives (usually within seconds; reload to see it).',
+      'Ask “Did my payment go through?”, or open Activity: the purchase is labelled “Real PayPal Sandbox transaction”. Reloading or asking again never charges twice.',
+      'Finish with Insights: Mary’s “View insights” on Home, or Alex’s “View insights” on the Family page.',
+    ],
+    notes: [
+      'PayPal Sandbox is PayPal’s test system. No real money moves and nothing is delivered.',
+      'SaySafe is an independent project. It is not affiliated with or endorsed by PayPal.',
+    ],
+  },
+  {
     id: 'getting-started', title: 'Getting started', summary: 'Open the demo as Mary in under a minute. No sign-up.',
     steps: [
       'Go to the SaySafe home page and choose “Try as Mary”.',
@@ -120,7 +137,7 @@ const TOPICS: Topic[] = [
       'As Mary, choose a Demo Shop item over €75, for example the €120 microwave. It shows “Waiting for family”.',
       'Alex sees the exact item, shop and price, and chooses Approve or Decline. The answer applies only to that purchase and expires after 30 minutes.',
       'If Alex approves, Mary continues to PayPal and approves the payment herself. If Alex declines, nothing can be paid.',
-      'Alex can also see shared scam checks and a read-only Family Safety Insights dashboard, and can change Mary’s limit.',
+      'Alex can also see shared scam checks and a read-only Insights dashboard (see “Insights”), and can change Mary’s limit.',
     ],
     notes: ['Alex can never pay from Mary’s account or approve the PayPal step.', 'Tested with two browser sessions. Not yet tested on two physical phones.'],
     shots: [
@@ -152,6 +169,21 @@ const TOPICS: Topic[] = [
     ],
     notes: ['The Activity screen is being reorganised, so labels may differ slightly.'],
     shots: [{ src: '/screens/receipt.webp', alt: 'SaySafe receipt: Paid, Easy-Pour Electric Kettle, €32.00 EUR, Receipt confirmed by PayPal, with order and transaction numbers.', cap: 'A real sandbox receipt (test money)' }],
+  },
+  {
+    id: 'insights', title: 'Insights', summary: 'A calm summary of your payments, approvals and scam checks.',
+    steps: [
+      'Mary: open Home and choose “View insights”, choose “Insights” at the top of the screen on a computer, or ask the Assistant “Show my insights”. The page is at /insights.',
+      'It shows payments by kind of record, purchases waiting for approval, possible repeat payments, subscriptions, what is coming out next, the messages you checked and your PayPal Sandbox outcomes.',
+      'Each kind of record is kept apart: “Real PayPal Sandbox”, “Recorded by you” and “Sample data” are never added together.',
+      'Alex (the family helper): open the Family page and choose “View insights”, or “Insights” at the top on a computer. The page is at /family/insights.',
+      'Alex’s dashboard shows purchases waiting for a decision, decisions made, sandbox captures confirmed by PayPal, signed webhooks, shared scam checks, a 14-day chart with a table version, and a searchable ledger. Example rows are labelled and not counted in the PayPal totals.',
+      'You can ask questions about the activity. Answers are read-only: Insights can explain what happened, but it can’t approve, pay or change anything.',
+    ],
+    notes: [
+      'An optional AG Studio dashboard exists but is switched off on the public site: its trial licence is for evaluation only.',
+      'Mary’s private scam checks are only visible to Alex if Mary shares them.',
+    ],
   },
   {
     id: 'already-paid', title: 'Have I already paid?', summary: 'Check your own records before you pay someone twice.',
