@@ -11,6 +11,9 @@ describe('normaliseRow (libsql replica row shapes)', () => {
   it('maps positionally keyed rows', () => {
     expect(normaliseRow({ 0: 'a', 1: 'x->Y', 2: 't' }, cols)).toEqual({ actor: 'a', action: 'x->Y', at: 't' });
   });
+  it('folds upper-cased keyword columns (hosted replica returned ACTION)', () => {
+    expect(normaliseRow({ actor: 'a', ACTION: 'x->Y', at: 't' }, cols)).toEqual({ actor: 'a', action: 'x->Y', at: 't' });
+  });
   it('drops metadata-only entries', () => {
     expect(normaliseRow({ _metadata: { duration: 1 } }, cols)).toBeUndefined();
     expect(normaliseRow(null, cols)).toBeUndefined();
