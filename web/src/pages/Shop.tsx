@@ -4,8 +4,9 @@ import { Search, Star, ShieldCheck, Users, ArrowLeft, Lock } from 'lucide-react'
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, MicButton, Caption, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, newKey, type Product } from '../lib/api';
-import { speak, useVoiceInput } from '../lib/voice';
+import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
+import { normaliseLang } from '../../../shared/lang';
 
 interface Quote { lines: { productId: string; name: string; unitCents: number; quantity: number; lineCents: number; image: string }[]; totalCents: number; currency: string; merchant: string; needsFamily: boolean; thresholdCents: number; spoken: string }
 
@@ -16,6 +17,7 @@ export default function Shop() {
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [caption, setCaption] = useState<string | null>(null);
+  const [captionLang, setCaptionLang] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [paying, setPaying] = useState(false);
@@ -23,25 +25,32 @@ export default function Shop() {
   const key = useRef(newKey());
   const reviewRef = useRef<HTMLDivElement>(null);
 
+  const [discoverQuery, setDiscoverQuery] = useState<string | null>(null);
+  const turn = useRef(0);
   const applyAssistant = (r: any) => {
+    setDiscoverQuery(r.discover?.query ?? null);
+    if (r.discover && !r.discover.suggested) { nav('/discover', { state: { query: r.discover.query } }); return; }
     if (r.intent.action === 'shop') { setProducts(r.products); setQuote(null); }
     if (r.intent.action === 'select_product' && r.intent.choice_index && products[r.intent.choice_index - 1]) { choose(products[r.intent.choice_index - 1]); return; }
     if (r.intent.action === 'confirm' && quote) { pay(); return; }
     if (r.intent.action === 'cancel') { setQuote(null); }
     if (r.intent.action === 'check_message') { nav('/check'); return; }
-    setCaption(r.reply); speak(r.reply);
+    setCaption(r.reply); setCaptionLang(r.replyLang); speech.speak(r.reply, { turn: turn.current, lang: normaliseLang(r.replyLang) });
   };
 
   const ask = useCallback(async (text: string) => {
     setBusy(true); setErr(null); setCaption(`You said: “${text}”`);
+    turn.current = speech.beginTurn();
     try {
+      const myTurn = turn.current;
       const r = await api('/api/assistant', { body: { text, step: quote ? 'review' : products.length ? 'choosing' : 'shop', lastResults: products.map((p) => p.name) } });
+      if (!speech.isCurrent(myTurn)) return; // stale reply: a newer request, Stop, or navigation happened
       applyAssistant(r);
     } catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); speech.endThinking(); }
   }, [products, quote]); // eslint-disable-line
 
-  useEffect(() => { if (loc.state?.result) applyAssistant(loc.state.result); else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))).catch((e) => setErr(e.message)); }, []); // eslint-disable-line
+  useEffect(() => { if (loc.state?.result) { turn.current = speech.generation; applyAssistant(loc.state.result); } else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))).catch((e) => setErr(e.message)); }, []); // eslint-disable-line
   const voice = useVoiceInput(ask);
 
   const choose = async (p: Product) => {
@@ -51,7 +60,7 @@ export default function Shop() {
       key.current = newKey();
       setQuote(q);
       const extra = q.needsFamily ? ` This is above your protected limit of ${eur(q.thresholdCents)}, so I'll ask your family member to check it first.` : ' Would you like to pay with PayPal?';
-      setCaption(q.spoken + extra); speak(q.spoken + extra);
+      setCaption(q.spoken + extra); setCaptionLang(undefined); speech.speak(q.spoken + extra);
       setTimeout(() => reviewRef.current?.focus(), 50);
     } catch (e: any) { setErr(e.message); }
   };
@@ -61,7 +70,7 @@ export default function Shop() {
     setPaying(true); setErr(null);
     try {
       const r = await api('/api/payments', { body: { items: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: key.current }, idempotent: true });
-      if (r.approveUrl) { speak('Taking you to PayPal to approve the payment.'); window.location.assign(r.approveUrl); return; }
+      if (r.approveUrl) { speech.stop(); window.location.assign(r.approveUrl); return; }
       nav(`/order/${r.request.id}`);
     } catch (e: any) { setErr(e.message); setPaying(false); }
   };
@@ -72,7 +81,7 @@ export default function Shop() {
       <PageTitle eyebrow="Shop by voice" title={quote ? 'Check before you pay' : 'What do you need?'} lead={quote ? 'Here is exactly what you would pay, and who you would pay.' : 'Tell me, for example: “Find me a reliable kettle under €40.”'} />
       {!quote && (
         <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
-          <MicButton state={busy ? 'processing' : voice.state} onClick={voice.toggle} />
+          <MicButton state={voice.state} onClick={voice.toggle} />
           <div className="space-y-4 min-w-0">
             <form className="flex gap-3" onSubmit={(e) => { e.preventDefault(); if (query.trim()) ask(query.trim()); }}>
               <label htmlFor="q" className="sr-only">Type what you are looking for</label>
@@ -80,12 +89,17 @@ export default function Shop() {
               <Button type="submit" busy={busy} icon={<Search className="size-6" aria-hidden />}>Find</Button>
             </form>
             {voice.error && <p role="alert" className="text-danger font-bold">{voice.error}</p>}
-            <Caption text={caption} />
+            <Caption text={caption} lang={captionLang} />
           </div>
         </div>
       )}
       {err && <div className="mt-6"><Notice tone="danger" title={err} /></div>}
-      {!quote && <p className="mt-6 text-lg text-ink-soft">This is the SaySafe Demo Shop: demo products, real PayPal sandbox payments. <Link to="/discover" className="font-bold text-teal underline underline-offset-4">Compare real shops instead</Link></p>}
+      {!quote && discoverQuery && (
+        <div className="mt-6"><Notice tone="info" title="Not in the demo shop">
+          <Link to="/discover" state={{ query: discoverQuery }} className="font-bold text-teal underline underline-offset-4">Look for “{discoverQuery}” in listings found for Ireland</Link>. You would buy on the shop’s own website.
+        </Notice></div>
+      )}
+      {!quote && <p className="mt-6 text-lg text-ink-soft">This is the SaySafe Demo Shop: demo products, real PayPal sandbox payments. <Link to="/discover" className="font-bold text-teal underline underline-offset-4">Compare real shops instead</Link> · <Link to="/preferences" className="font-bold text-teal underline underline-offset-4">My preferences</Link></p>}
 
       {!quote && products.length > 0 && (
         <section aria-label="Options" className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -132,12 +146,12 @@ export default function Shop() {
               <p className="flex items-start gap-3"><Users className={`size-7 shrink-0 ${quote.needsFamily ? 'text-amber' : 'text-teal'}`} aria-hidden /><span><span className="font-bold block">{quote.needsFamily ? 'Family check needed' : 'No family check needed'}</span><span className="text-ink-soft text-lg">Your protected limit is {eur(quote.thresholdCents)}.</span></span></p>
               <p className="flex items-start gap-3"><Lock className="size-7 text-teal shrink-0" aria-hidden /><span><span className="font-bold block">You approve the payment at PayPal</span><span className="text-ink-soft text-lg">SaySafe never sees your PayPal password.</span></span></p>
             </Card>
-            <Caption text={caption} />
+            <Caption text={caption} lang={captionLang} />
             <div className="flex flex-col gap-3">
               <Button onClick={pay} busy={paying}>{quote.needsFamily ? 'Ask my family to check' : 'Continue to PayPal'}</Button>
               <Button variant="secondary" icon={<ArrowLeft className="size-6" aria-hidden />} onClick={() => { setQuote(null); setCaption(null); }} disabled={paying}>Cancel, go back</Button>
             </div>
-            <div className="flex flex-col items-center pt-2"><MicButton size="md" state={busy ? 'processing' : voice.state} onClick={voice.toggle} label="Or say “yes” or “cancel”" /></div>
+            <div className="flex flex-col items-center pt-2"><MicButton size="md" state={voice.state} onClick={voice.toggle} label="Or say “yes” or “cancel”" /></div>
           </div>
         </div>
       )}

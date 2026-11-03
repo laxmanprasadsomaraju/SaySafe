@@ -39,33 +39,33 @@ export function PageTitle({ eyebrow, title, lead }: { eyebrow?: string; title: s
   );
 }
 
-/** Large, labelled mic button with explicit states (never icon-only). */
+/** Large, labelled mic button with explicit states (never icon-only). Tap: listen / cancel / interrupt. */
 export function MicButton({ state, onClick, size = 'lg', label = 'Tap to speak' }: { state: VoiceState; onClick: () => void; size?: 'lg' | 'md'; label?: string }) {
-  if (state === 'unsupported') return null;
+  if (state === 'unsupported') return <p className="max-w-xs text-center text-lg text-ink-soft font-bold">Voice input isn’t available in this browser. Please type instead.</p>;
   const dims = size === 'lg' ? 'size-36 md:size-40' : 'size-20';
-  const text = state === 'listening' ? 'Listening… tap to stop' : state === 'processing' ? 'Working it out…' : label;
+  const aria = state === 'listening' ? 'Stop listening' : state === 'processing' ? 'Cancel' : state === 'speaking' ? 'Interrupt and speak' : 'Start listening';
+  const text = state === 'listening' ? 'Listening… tap to cancel' : state === 'processing' ? 'Thinking… tap to cancel' : state === 'speaking' ? 'Tap to interrupt' : label;
   return (
     <div className="flex flex-col items-center gap-3">
       <button
         type="button"
         onClick={onClick}
-        disabled={state === 'processing'}
         aria-pressed={state === 'listening'}
-        aria-label={text}
-        className={`${dims} rounded-full grid place-items-center text-white transition-colors ${state === 'listening' ? 'bg-danger mic-listening' : 'bg-teal hover:bg-teal-deep shadow-[var(--shadow-lift)]'}`}
+        aria-label={aria}
+        className={`${dims} rounded-full grid place-items-center text-white transition-colors ${state === 'listening' ? 'bg-danger ring-8 ring-danger/20' : 'bg-teal hover:bg-teal-deep shadow-[var(--shadow-lift)]'}`}
       >
-        {state === 'processing' ? <Loader2 className="size-12 animate-spin" aria-hidden /> : state === 'listening' ? <Square className="size-10" aria-hidden fill="currentColor" /> : <Mic className={size === 'lg' ? 'size-14' : 'size-9'} aria-hidden />}
+        {state === 'processing' ? <Loader2 className="size-12 motion-safe:animate-spin" aria-hidden /> : state === 'listening' ? <Square className="size-10" aria-hidden fill="currentColor" /> : <Mic className={size === 'lg' ? 'size-14' : 'size-9'} aria-hidden />}
       </button>
-      <span className="font-bold text-lg" aria-live="polite">{text}</span>
+      <span className="font-bold text-lg" aria-hidden>{text}</span>
     </div>
   );
 }
 
 /** What the assistant said, always shown as text too (captions). */
-export function Caption({ text }: { text: string | null }) {
+export function Caption({ text, lang }: { text: string | null; lang?: string }) {
   if (!text) return null;
   return (
-    <div role="status" aria-live="polite" className="fade-up flex gap-3 items-start bg-teal-soft text-navy rounded-2xl px-5 py-4 text-[length:var(--text-lead)]">
+    <div role="status" aria-live="polite" lang={lang && lang !== 'en' ? lang : undefined} className="fade-up flex gap-3 items-start bg-teal-soft text-navy rounded-2xl px-5 py-4 text-[length:var(--text-lead)]">
       <ShieldCheck className="size-7 shrink-0 text-teal mt-0.5" aria-hidden />
       <p>{text}</p>
     </div>

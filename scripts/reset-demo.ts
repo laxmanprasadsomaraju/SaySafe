@@ -17,6 +17,7 @@ const tx = db.transaction(() => {
     db.prepare('DELETE FROM households WHERE id=?').run(h.id);
     for (const u of [h.elder_id, ...fam.map((f) => f.family_id)]) {
       db.prepare('DELETE FROM sessions WHERE user_id=?').run(u);
+      db.prepare('DELETE FROM user_preferences WHERE user_id=?').run(u);
       db.prepare('DELETE FROM users WHERE id=?').run(u);
     }
   }

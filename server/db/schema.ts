@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS security_scans (
   shared_with_family INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Private shopping profile. Only ever read for the signed-in elder it belongs to (never family, never logs).
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile_json TEXT NOT NULL CHECK (length(profile_json) <= 4096),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   household_id TEXT,
@@ -96,7 +102,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `;
 
 /** Every table the app owns, in an order that respects foreign keys (parents first). Used by backup/migration scripts. */
-export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'approvals', 'webhook_events', 'security_scans', 'audit_log'] as const;
+export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'] as const;
 
 export function initSchema(db: Db) {
   db.exec(SCHEMA_SQL);

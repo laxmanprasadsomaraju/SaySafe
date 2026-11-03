@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ImageUp, ExternalLink, Users, Home as HomeIcon, ShieldAlert, ShieldQuestion, ShieldCheck, Volume2 } from 'lucide-react';
+import { ImageUp, ExternalLink, Users, Home as HomeIcon, ShieldAlert, ShieldQuestion, ShieldCheck } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, TextInput, MicButton, Notice } from '../components/ui';
 import { api, type ScanResult } from '../lib/api';
-import { speak, useVoiceInput } from '../lib/voice';
+import { speech, useVoiceInput } from '../lib/voice';
+import { spokenScam } from '../lib/spoken';
+import { ReadAloud } from '../components/VoiceBar';
 import { useMe } from '../lib/session';
 
 const VERDICT = {
@@ -36,17 +38,23 @@ export default function Check() {
     started.current = true; setText(s.text); scan(s.text);
   }, [scenario, samples]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const turn = useRef(0);
   const show = (r: ScanResult) => {
     setResult(r); setShared(false);
-    speak(r.spokenSummary);
+    // Spoken: risk first, then the protective action. The full explanation stays on screen.
+    // In another reply language, speak the AI summary only if the server confirmed it is in that language.
+    const lang = speech.getSnapshot().prefs.lang;
+    if (lang !== 'en' && r.spokenLang === lang) speech.speak(r.spokenSummary, { priority: 'critical', turn: turn.current, lang });
+    else speech.speak(spokenScam(r), { priority: 'critical', turn: turn.current, lang: 'en' });
     setTimeout(() => { resultRef.current?.focus({ preventScroll: true }); resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   };
   const scan = useCallback(async (t: string) => {
     if (!t.trim()) { setErr('Please paste or type the message first.'); return; }
     setBusy(true); setErr(null); setResult(null);
-    try { show(await api<ScanResult>('/api/scan', { body: { text: t } })); }
+    const myTurn = (turn.current = speech.beginTurn());
+    try { const r = await api<ScanResult>('/api/scan', { body: { text: t } }); if (speech.isCurrent(myTurn)) show(r); }
     catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); speech.endThinking(); }
   }, []);
   useEffect(() => { if (loc.state?.text) scan(loc.state.text); }, []); // eslint-disable-line
 
@@ -54,9 +62,10 @@ export default function Check() {
     if (!f) return;
     if (f.size > 4 * 1024 * 1024) { setErr('That picture is too large (max 4 MB).'); return; }
     setBusy(true); setErr(null); setResult(null);
+    turn.current = speech.beginTurn();
     try { const fd = new FormData(); fd.append('image', f); const r = await api<ScanResult>('/api/scan/image', { form: fd }); setText(r.extractedText ?? ''); show(r); }
     catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); if (fileRef.current) fileRef.current.value = ''; }
+    finally { setBusy(false); speech.endThinking(); if (fileRef.current) fileRef.current.value = ''; }
   };
 
   const voice = useVoiceInput((t) => { setText(t); scan(t); });
@@ -112,8 +121,8 @@ export default function Check() {
               <div className={`border-l-[8px] rounded-[var(--radius-card)] p-6 ${v.cls}`}>
                 <p className={`flex items-center gap-2 font-bold uppercase tracking-wider text-sm ${v.ic}`}><v.icon className="size-6" aria-hidden />{v.label}</p>
                 <h2 className="text-[1.9rem] mt-2">{result.headline}</h2>
-                <p className="mt-3 text-[length:var(--text-lead)]">{result.spokenSummary}</p>
-                <button onClick={() => speak(result.spokenSummary)} className="mt-3 inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-12"><Volume2 className="size-5" aria-hidden />Read it to me again</button>
+                <p className="mt-3 text-[length:var(--text-lead)]" lang={result.spokenLang && result.spokenLang !== 'en' ? result.spokenLang : undefined}>{result.spokenSummary}</p>
+                <ReadAloud className="mt-3" text={result.spokenLang && result.spokenLang !== 'en' ? result.spokenSummary : [result.headline, result.spokenSummary]} lang={result.spokenLang} label="Read the full result aloud" />
               </div>
               {result.aiNotice && <Notice tone="info" title={result.aiNotice}>This result comes from SaySafe's built-in safety checks only. The safe steps are the same.</Notice>}
               {result.ocrUncertain && <Notice tone="warn" title="Some letters in the screenshot were hard to read.">Please check the address carefully, or paste the text instead.</Notice>}

@@ -17,6 +17,11 @@ export function onServerStatus(l: (s: ServerStatus) => void) { listeners.add(l);
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 12000, 15000, 15000, 15000, 15000];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Reply language (beta) from the voice preferences; the server whitelists it. */
+function replyLang(): string {
+  try { return JSON.parse(localStorage.getItem('ss-voice-prefs') ?? '{}').lang ?? 'en'; } catch { return 'en'; }
+}
+
 /**
  * GETs are retried automatically. POSTs only when `idempotent` is set (the server dedupes them, e.g. by
  * idempotency key or PayPal-Request-Id), because a POST that timed out may still have reached the server.
@@ -24,12 +29,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; form?: FormData; idempotent?: boolean } = {}): Promise<T> {
   const method = opts.method ?? (opts.body || opts.form ? 'POST' : 'GET');
   const retryable = method === 'GET' || opts.idempotent === true;
+  const headers: Record<string, string> = { 'X-SaySafe-Lang': replyLang() };
+  if (!opts.form && opts.body) headers['Content-Type'] = 'application/json';
   for (let attempt = 0; ; attempt++) {
     let res: Response | null = null;
     try {
       res = await fetch(path, {
         method,
-        headers: opts.form ? undefined : opts.body ? { 'Content-Type': 'application/json' } : undefined,
+        headers,
         body: opts.form ?? (opts.body ? JSON.stringify(opts.body) : undefined),
         credentials: 'same-origin',
       });
@@ -85,7 +92,7 @@ export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pe
 export interface ScanResult {
   scanId: string;
   verdict: 'suspicious' | 'needs_verification' | 'verified_official_contact';
-  headline: string; spokenSummary: string;
+  headline: string; spokenSummary: string; spokenLang?: string;
   signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string }[];
   aiReasons: string[];
   safeActions: { label: string; url: string }[];

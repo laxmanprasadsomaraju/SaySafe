@@ -1,4 +1,9 @@
-import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3.js';
+import { searchChannel3, Channel3Error, channel3Configured } from './catalogue/channel3.js';
+import { parseRequest, recommend, spokenRecommendation, sanitizeProfile, profileIsEmpty } from '../shared/shopping.js';
+import { getProfile, saveProfile, clearProfile } from './prefs/store.js';
+import { explainBest } from './ai/explain.js';
+import { normaliseLang } from '../shared/lang.js';
+import { dropTranscript } from '../shared/voice.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
@@ -102,6 +107,8 @@ export function createApp() {
     next();
   });
 
+  /** Reply language (beta), whitelisted: en, es, pl, fr, de, pt. Anything else is English. */
+  const langOf = (req: Request) => normaliseLang(req.get('x-saysafe-lang') ?? req.body?.lang);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
   const originOf = (req: Request) => process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`;
   const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
@@ -145,7 +152,7 @@ export function createApp() {
   app.post('/api/scan', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const text = z.string().trim().min(1).max(8000).parse(req.body?.text);
-    const result = await scanMessage(text, { userName: s?.name ?? 'Mary' });
+    const result = await scanMessage(text, { userName: s?.name ?? 'Mary', lang: langOf(req) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY });
@@ -163,7 +170,7 @@ export function createApp() {
     try { extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`); }
     catch { return res.status(503).json({ error: 'ai_unavailable', aiNotice: AI_RULES_ONLY, message: 'Screenshot reading is not available right now. You can paste the text instead, and I will run the rule checks.' }); }
     // The image is processed in memory and never stored.
-    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain });
+    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain, lang: langOf(req) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY, extractedText: extracted.text });
@@ -181,8 +188,9 @@ export function createApp() {
     const q = z.string().trim().min(1).max(300).parse(req.body?.question);
     const scan = req.body?.scan;
     const safe = 'Please do not use links or numbers from that message. Open the PayPal app yourself, or ask your family member.';
+    const lang = langOf(req);
     if (!aiConfigured() || !scan?.verdict) return res.json({ answer: safe, aiNotice: AI_RULES_ONLY });
-    try { res.json({ answer: guardModelText(await explainMore(q, scan, readSession(req, 'elder')?.name), safe) }); }
+    try { res.json({ answer: guardModelText(await explainMore(q, scan, readSession(req, 'elder')?.name, lang), safe), lang }); }
     catch { res.json({ answer: safe, aiNotice: AI_RULES_ONLY }); }
   }));
 
@@ -191,8 +199,12 @@ export function createApp() {
     const f = (req as any).file as Express.Multer.File | undefined;
     if (!f) return res.status(400).json({ error: 'no_audio' });
     try {
-      const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm');
-      res.json({ text });
+      // Tiny uploads are silence: never send them to Whisper (it answers silence with "Thank you.").
+      if (f.size < 2000) return res.json({ text: '', dropped: 'too_short' });
+      const voicedMs = z.coerce.number().min(0).max(60000).catch(0).parse(req.body?.voicedMs);
+      const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm', langOf(req));
+      const dropped = dropTranscript(text, voicedMs);
+      res.json(dropped ? { text: '', dropped } : { text: text.trim() });
     } catch (e) {
       if (e instanceof AIUnavailableError) return res.status(503).json({ error: 'stt_unavailable', message: 'Voice is not available right now. You can type instead.' });
       throw e;
@@ -202,17 +214,29 @@ export function createApp() {
   app.post('/api/assistant', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const name = s?.name ?? 'Mary';
-    const said = z.string().trim().min(1).max(4000).parse(req.body?.text);
+    const said = z.string().trim().min(1).max(4000).refine((t) => /\p{L}/u.test(t)).parse(req.body?.text); // never call the AI on empty/punctuation
     const lastResults = z.array(z.string().max(100)).max(5).catch([]).parse(req.body?.lastResults);
     const step = z.string().max(40).catch('home').parse(req.body?.step);
-    const { intent, ai } = await interpret(said, { name, lastResults, step });
+    const lang = langOf(req);
+    const { intent, ai, replyLang: aiLang } = await interpret(said, { name, lastResults, step, lang });
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
+    let replyLang = aiLang;
+    let discover: { query: string; suggested: boolean } | null = null;
     if (intent.action === 'shop') {
-      products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
-      reply = describeOptions(products, name);
+      // Real-product questions go to Channel3 discovery (same rules as /discover). The Demo Shop flow is unchanged.
+      const wantsReal = /\b(real (shops?|products?|listings?|prices?)|retailers?|other shops|currys|harvey norman|argos|did electrical|online shops?|compare (prices|shops)|in ireland)\b/i.test(said);
+      if (wantsReal && channel3Configured()) {
+        discover = { query: said, suggested: false };
+        reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website."; replyLang = 'en';
+      } else {
+        products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
+        // English template, unless the AI already answered in the chosen reply language.
+        if (lang === 'en' || replyLang !== lang) { reply = describeOptions(products, name); replyLang = 'en'; }
+        if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }
+      }
     }
-    res.json({ intent, products, reply, ai });
+    res.json({ intent, products, reply, replyLang, ai, discover });
   }));
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
@@ -239,12 +263,26 @@ export function createApp() {
   app.post('/api/discover', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const said = z.string().trim().min(1).max(400).parse(req.body?.text);
-    const { intent, ai } = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
-    const query = (intent.action === 'shop' && intent.query) ? intent.query : said;
-    const maxPrice = intent.action === 'shop' && intent.max_price_eur ? intent.max_price_eur : null;
+    const overrideMax = z.number().positive().max(100000).nullable().catch(null).parse(req.body?.maxPrice ?? null);
+    // Signed in: the profile comes only from this user's own row. No session: the browser's local copy, sanitised.
+    const profile = s ? getProfile(s.userId) : sanitizeProfile(req.body?.profile);
+    const parsed = parseRequest(said);
+    let query = parsed.productQuery;
+    let ai: boolean | undefined;
+    if (!query) {
+      const r = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
+      ai = r.ai;
+      query = (r.intent.action === 'shop' && r.intent.query) ? r.intent.query : said;
+    }
+    const maxPrice = overrideMax ?? parsed.budget.max;
     try {
       const result = await searchChannel3(query, { maxPrice, userId: s?.householdId });
-      res.json({ ...result, reply: describeDiscovery(result), ai });
+      const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
+      const byId = new Map(result.products.map((p) => [p.id, p]));
+      const products = rec.rankedIds.map((id) => byId.get(id)!);
+      const best = rec.picks.find((p) => p.role === 'best');
+      const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice) : null;
+      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
       const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
@@ -252,6 +290,21 @@ export function createApp() {
       res.status(status).json({ error: `channel3_${e.code}`, products: [], message: `I couldn't get recommendations right now. ${e.message} The SaySafe Demo Shop still works.` });
     }
   }));
+
+  // ---------- Private shopping profile (elder only; never shared with family, never logged) ----------
+  app.get('/api/preferences', requireRole('elder'), (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ profile: getProfile(sessionOf(req).userId) });
+  });
+  app.put('/api/preferences', requireRole('elder'), (req, res) => {
+    if (JSON.stringify(req.body ?? {}).length > 4096) return res.status(413).json({ error: 'too_large', message: 'That is too much to save. Please shorten your lists.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ profile: saveProfile(sessionOf(req).userId, req.body?.profile) });
+  });
+  app.delete('/api/preferences', requireRole('elder'), (req, res) => {
+    clearProfile(sessionOf(req).userId);
+    res.json({ ok: true });
+  });
 
   // ---------- Shop ----------
   app.get('/api/products', (req, res) => {
