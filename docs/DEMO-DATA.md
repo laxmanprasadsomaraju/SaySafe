@@ -45,18 +45,25 @@ What was checked and is not the cause:
 |---|---|---|---|---|
 | John Smith | €80.00 | bank transfer | 12 | Fence repair |
 | John Smith | €80.00 | bank transfer | 10 | Fence repair (paid again?) — **possible duplicate pair** |
-| Currys | €89.00 | card | 24 | Microwave |
+| Hearthside Appliances (fictional shop) | €89.00 | card | 24 | Microwave |
 | Pat Doyle | €40.00 | cash | 5 | Hedge trimming |
 | Riverside Pharmacy | €18.50 | card | 2 | Prescription |
 
-### Subscriptions (`companion_subscriptions`, example=1, source manual; amounts illustrative)
+### Subscriptions (`companion_subscriptions`, example=1, source manual; fictional companies, amounts illustrative)
+
+Sample data version **3** (3 Nov 2026) replaced the real brands used before with fictional names. Households seeded
+earlier are migrated in place at server start (`migrateSampleData`, only `example=1` rows with the old names; ids,
+dates and statuses kept; records the visitor typed are never touched).
 
 | Merchant | Amount | Frequency | Next charge | How it is managed |
 |---|---|---|---|---|
-| Netflix | €12.99 | monthly | in 6 days | official link (help.netflix.com/en/node/407) |
-| Spotify Premium | €11.99 | monthly | in 13 days | official link |
-| The Irish Times digital | €9.99 | monthly | in 20 days | general steps (no checked link — none is invented) |
-| Amazon Prime | €95.00 | yearly | in 41 days | official link |
+| StreamBox Plus | €12.99 | monthly | in 6 days | sample: in-app "This is sample data" note, no link |
+| TuneWave Premium | €11.99 | monthly | in 13 days | sample: in-app note, no link |
+| The Daily Ledger digital | €9.99 | monthly | in 20 days | sample: in-app note, no link |
+| ParcelPass yearly | €95.00 | yearly | in 41 days | sample: in-app note, no link |
+
+Cancellation help for a sample subscription never links to a real company page. Subscriptions the visitor adds
+themselves (for example "Netflix") still get that company's checked official cancellation page (`shared/cancelGuides.ts`).
 
 Plus the **real** SaySafe Demo Membership (PayPal Sandbox subscription, €2.99/month) offered as "Try the Demo Membership": start → approve at PayPal → cancel in chat by tap (PayPal API, then GET-confirmed).
 

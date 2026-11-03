@@ -73,7 +73,7 @@ Real captures (PayPal sandbox, fictional data; ids and emails redacted). The fla
 
 1. Open https://saysafe.onrender.com and choose **Try as Mary**. No sign-up. You get your **own private copy** of Mary's account (family limit €75) with labelled **sample data**, stored in the database (Turso), so it survives restarts and redeploys. Other visitors never see it. The free host sleeps when idle, so the first load can take about a minute.
 2. The Assistant opens on a **welcome card** with six prompts that work on the sample data: *Check this suspicious message* · *Show my last payment* · *Did I already pay for the microwave?* · *Show my subscriptions* · *Find Alex in my contacts* · *Help me buy a demo item*.
-3. **More to ask:** "Did I already pay John €80?" (two sample transfers two days apart → possible duplicate) · "Which costs the most?" · "What's coming out next?" · "Cancel my streaming subscription" (Netflix → its official cancel page; SaySafe can't cancel other companies) · "Who is my gardener?" · "Send Alex €50" (choose Alex → check the details → **Open PayPal Send money**; *Nothing is sent by SaySafe*).
+3. **More to ask:** "Did I already pay John €80?" (two sample transfers two days apart → possible duplicate) · "Which costs the most?" · "What's coming out next?" · "Cancel my streaming subscription" (sample subscriptions are **fictional companies** — StreamBox Plus, TuneWave Premium, The Daily Ledger digital, ParcelPass — so it shows a *This is sample data* note instead of a link; for a subscription you add yourself it shows that company's own cancellation steps; SaySafe can't cancel other companies) · "Who is my gardener?" · "Send Alex €50" (choose Alex → check the details → **Open PayPal Send money**; *Nothing is sent by SaySafe*).
 4. **Scam training:** three tap-to-try "Training example" messages: a PayPal invoice with a phone number (Suspicious), "Hi Mum, new number" (doesn't match Sarah's saved number), an ordinary order notice (no obvious warning signs).
 5. **Family review:** Profile › Trusted family › **Try as Alex too** opens Alex's family view for the same account in this browser. As Mary buy the €120 Demo Shop microwave; as Alex approve or decline it. Mary can never approve her own purchase. Sample family reviews are history only (no Approve/Decline).
 6. **Pay:** approve on PayPal's sandbox page with a PayPal **sandbox personal (buyer)** account. SaySafe checks with PayPal and shows the receipt as a **Real PayPal Sandbox transaction**.
@@ -219,13 +219,25 @@ Earlier on the hosted demo, 3 November 2026 (ids truncated):
 - Payments v2 capture lookup shown on the timeline.
 - Sandbox refund …3901 made through the PayPal API (the in-app admin refund is disabled on the hosted demo).
 
-## 20. Limitations and roadmap
+## 20. Security & limitations
+
+- **PayPal Sandbox only.** Every payment uses fake test money; nothing real is bought, charged or delivered.
+- **No real PayPal accounts.** Only PayPal Sandbox test accounts work. Never enter a real PayPal login.
+- **The AI never pays and never approves.** It suggests; the person approves at PayPal themselves, and purchases over the family limit need the family member's approval first. The amount always comes from the server catalogue, never from the AI.
+- **English only is verified.** Other reply languages are beta and unverified.
+- **Voice tested in Chromium only** (headless, simulated microphone). Real phones and other browsers are untested. Spoken replies are **off until the person turns them on** (consent); the microphone works either way.
+- **Scam detection is not independently verified.** Held-out set of 42 messages: 2 false alarms, 1 missed scam. Nothing about the sender is verified, and links are never opened.
+- **Sample data is fictional** (made-up company names, drama-range phone numbers, example.com emails) and labelled "Sample data". Channel3 listings are real products from real retailers, bought on the retailer's own site.
+- **Free hosting:** the hosted demo sleeps when idle; the first visit can take about **60 seconds** to wake up.
+- **Judges' PayPal Sandbox buyer login is shared only via Devpost**, never in the app or this repository.
+
+## 21. Limitations and roadmap
 
 **Limitations:** sandbox only; English is the only verified language; voice interruption is tap-only and verified in Chromium only; iOS is unsupported/untested; scam checks make mistakes (held-out set of 42: 2 false positives, 1 false negative) and nothing about the sender is independently verified; voice is tap-to-interrupt only and tested in Chromium only; non-English replies are beta; no real-person usability testing yet (scripted walkthroughs only); Android share target untested on a device; Channel3 purchases happen off SaySafe; refunds are admin-only and off on the hosted demo; Render's free plan sleeps when idle.
 
 **Roadmap:** real-phone and real-person testing; screen-reader testing; verified non-English replies; independent URL reputation lists.
 
-## 21. Licence and credits
+## 22. Licence and credits
 
 [MIT](LICENSE) © 2026 Laxman Prasad Somaraju.
 
