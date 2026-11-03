@@ -33,6 +33,11 @@ import { buildInsights } from './insights/model.js';
 import { answerInsightsQuestion } from './insights/agent.js';
 import { insightsConfig } from './insights/config.js';
 import { listActivity, ActivityQuery } from './activity.js';
+import { registerCompanion } from './companion/routes.js';
+import { answerCompanion, isCompanionAction } from './companion/assistant.js';
+import { listContacts } from './companion/store.js';
+import { demoFromWebhook } from './companion/demoMembership.js';
+import type { SavedContact } from './scam/contactMismatch.js';
 
 export const AI_RULES_ONLY = 'AI unavailable — rule checks only';
 
@@ -80,13 +85,15 @@ export function createApp() {
     };
     const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, minimal.event_type, minimal.resource_id, JSON.stringify(minimal));
     if (ins.changes === 0) return res.status(200).json({ ok: true, duplicate: true });
-    const outcome = minimal.event_type === 'PAYMENT.CAPTURE.REFUNDED' ? refundFromWebhook(event) : pay.reconcileFromWebhook(event);
+    // Signed BILLING.SUBSCRIPTION.* events only ever touch the SaySafe Demo Membership row they name (id + custom_id).
+    const outcome = minimal.event_type.startsWith('BILLING.SUBSCRIPTION.') ? demoFromWebhook(event)
+      : minimal.event_type === 'PAYMENT.CAPTURE.REFUNDED' ? refundFromWebhook(event) : pay.reconcileFromWebhook(event);
     res.json({ ok: true, outcome });
   });
 
   app.use(express.json({ limit: '100kb' }));
 
-  const apiLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
+  const apiLimiter = rateLimit({ windowMs: 60_000, limit: Number(process.env.API_LIMIT_PER_MIN ?? 120), standardHeaders: true, legacyHeaders: false });
   const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
   const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
   // Per-session limit on AI routes on top of the per-IP one (several people can share an IP; one session cannot bypass by rotating IPs).
@@ -117,6 +124,8 @@ export function createApp() {
   const langOf = (req: Request) => normaliseLang(req.get('x-saysafe-lang') ?? req.body?.lang);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
   const originOf = (req: Request) => process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`;
+  /** The signed-in elder's own saved contacts, for the scam check only. Never sent to the AI provider. */
+  const contactsFor = (s: { householdId: string } | null): SavedContact[] => (s ? listContacts(s.householdId).map((c) => ({ name: c.name, relation: c.relation, phone: c.phone, email: c.email })) : []);
   const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
 
   // ---------- Status ----------
@@ -158,7 +167,7 @@ export function createApp() {
   app.post('/api/scan', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const text = z.string().trim().min(1).max(8000).parse(req.body?.text);
-    const result = await scanMessage(text, { userName: s?.name ?? 'Mary', lang: langOf(req) });
+    const result = await scanMessage(text, { userName: s?.name ?? 'Mary', lang: langOf(req), contacts: contactsFor(s) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY });
@@ -176,7 +185,7 @@ export function createApp() {
     try { extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`); }
     catch { return res.status(503).json({ error: 'ai_unavailable', aiNotice: AI_RULES_ONLY, message: 'Screenshot reading is not available right now. You can paste the text instead, and I will run the rule checks.' }); }
     // The image is processed in memory and never stored.
-    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain, lang: langOf(req) });
+    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain, lang: langOf(req), contacts: contactsFor(s) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY, extractedText: extracted.text });
@@ -229,6 +238,12 @@ export function createApp() {
     let reply = intent.reply;
     let replyLang = aiLang;
     let discover: { query: string; suggested: boolean } | null = null;
+    if (isCompanionAction(intent.action)) {
+      // The AI only chose the intent and extracted parameters. The server queries this elder's own records and
+      // writes the reply from a template: the model's own reply is discarded (it can't claim "marked as paid").
+      const out = await answerCompanion(intent.action, intent, s);
+      return res.json({ intent: { action: intent.action, reply: out.reply }, products, reply: out.reply, replyLang: 'en', ai, discover, companion: out.card });
+    }
     if (intent.action === 'shop') {
       // Real-product questions go to Channel3 discovery (same rules as /discover). The Demo Shop flow is unchanged.
       const wantsReal = /\b(real (shops?|products?|listings?|prices?)|retailers?|other shops|currys|harvey norman|argos|did electrical|online shops?|compare (prices|shops)|in ireland)\b/i.test(said);
@@ -244,6 +259,9 @@ export function createApp() {
     }
     res.json({ intent, products, reply, replyLang, ai, discover });
   }));
+
+  // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------
+  registerCompanion(app, { originOf });
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
   // Read-only: asks PayPal what actually happened to an order this app created. Never captures, never creates.

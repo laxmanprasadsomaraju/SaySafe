@@ -9,6 +9,8 @@ import { TRUSTED_HELP_PAGES, PAYPAL_PHONE_POLICY } from './directory.js';
 import { checkReputation, type ReputationResult } from './reputation.js';
 import { vouchesOrInstructs } from '../ai/outputGuard.js';
 import { replyLanguageInstruction, looksLike, type LangCode } from '../../shared/lang.js';
+import { checkContacts, type SavedContact, type ContactCheck } from './contactMismatch.js';
+import { decideFromSignals, maxVerdict } from './verdicts.js';
 
 const VisionExtract = z.object({
   text: z.string().transform((x) => x.slice(0, 8000)),
@@ -69,7 +71,12 @@ export interface ScanResult {
   };
   extractedText?: string;
   ocrUncertain?: boolean;
+  /** Only when the signed-in elder has saved contacts and the message claims to be one of them. Never sent to the AI. */
+  contactCheck?: ContactCheck | null;
 }
+
+/** Signals built from the user's saved contacts. Never shown to the AI provider. */
+const isContactSignal = (code: string) => code === 'contact_mismatch' || code === 'contact_same_number_spoofable';
 
 function headlineFor(v: Verdict) {
   if (v === 'suspicious') return 'This message may be a scam.';
@@ -87,7 +94,7 @@ function fallbackSpoken(name: string, v: Verdict, r: RuleResult) {
   return `${name}, this needs checking.${why} Please don't use its links or call any number in it. Open the PayPal app yourself, or ask your family member.`;
 }
 
-export async function scanMessage(input: string, opts: { userName?: string; extractedFromImage?: boolean; ocrUncertain?: boolean; lang?: LangCode } = {}): Promise<ScanResult> {
+export async function scanMessage(input: string, opts: { userName?: string; extractedFromImage?: boolean; ocrUncertain?: boolean; lang?: LangCode; contacts?: SavedContact[] } = {}): Promise<ScanResult> {
   const name = opts.userName ?? 'Mary';
   const lang = opts.lang ?? 'en';
   const rules = analyseText(input);
@@ -99,6 +106,13 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
   let verdict: Verdict = rules.verdict;
   if (reputation.some((r) => r.listed)) verdict = 'suspicious';
   if (opts.ocrUncertain && verdict === 'no_obvious_warning_signs') verdict = 'needs_checking';
+  const verdictForAi: Verdict = verdict; // the AI never learns anything derived from the user's contacts
+  // Trusted-contact check (server-side only, with this elder's own saved contacts).
+  const contact = opts.contacts?.length ? checkContacts(input, { phones: rules.phones, emails: rules.emails }, opts.contacts) : { signals: [], check: null };
+  if (contact.signals.length) {
+    rules.signals.unshift(...contact.signals);
+    verdict = maxVerdict(verdict, decideFromSignals(rules.signals, rules.links, { ocrUncertain: opts.ocrUncertain }));
+  }
 
   let aiValid: ValidatedReason[] = [];
   let spoken = '';
@@ -106,10 +120,10 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
   const ai: ScanResult['ai'] = { used: false, mode: 'rules_only' };
   if (aiConfigured() && input.trim().length > 0) {
     try {
-      const signalsBrief = rules.signals.map((s) => `- [${s.severity}] ${s.title}${s.evidence ? ` (${s.evidence})` : ''}`).join('\n') || '- none';
+      const signalsBrief = rules.signals.filter((s) => !isContactSignal(s.code)).map((s) => `- [${s.severity}] ${s.title}${s.evidence ? ` (${s.evidence})` : ''}`).join('\n') || '- none';
       const msgs = [
         { role: 'system' as const, content: SYSTEM + replyLanguageInstruction(lang) },
-        { role: 'user' as const, content: `User's name: ${name}\nRule engine verdict: ${verdict}\nRule signals:\n${signalsBrief}\n\n<untrusted_message>\n${input.slice(0, 6000)}\n</untrusted_message>` },
+        { role: 'user' as const, content: `User's name: ${name}\nRule engine verdict: ${verdictForAi}\nRule signals:\n${signalsBrief}\n\n<untrusted_message>\n${input.slice(0, 6000)}\n</untrusted_message>` },
       ];
       // Strict schema, one bounded retry inside chatJSON; then AIInvalidOutputError -> rules only.
       let res = await chatJSON(AiAssessment, msgs, { fast: lang === 'en', maxTokens: 900 });
@@ -134,9 +148,11 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
     }
   }
   // Spoken words must always match the FINAL verdict, never a softer AI opinion.
-  if (!spoken || aiVerdict !== verdict) spoken = fallbackSpoken(name, verdict, rules);
+  if (!spoken || aiVerdict !== verdict) spoken = fallbackSpoken(name, verdict, { ...rules, signals: rules.signals.filter((s) => !isContactSignal(s.code)) });
+  const mismatch = rules.signals.find((s) => s.code === 'contact_mismatch');
+  if (mismatch) spoken = `${name}, ${mismatch.title.charAt(0).toLowerCase()}${mismatch.title.slice(1)}. ${mismatch.detail} ${spoken.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},\\s*`), '')}`.slice(0, 900);
   // The English fallback (or AI text in the wrong language) is tagged English, so the browser shows it but won't speak it in another reply language.
-  const spokenLang: LangCode = lang !== 'en' && spoken !== fallbackSpoken(name, verdict, rules) && looksLike(spoken, lang) ? lang : 'en';
+  const spokenLang: LangCode = lang !== 'en' && !mismatch && spoken !== fallbackSpoken(name, verdict, { ...rules, signals: rules.signals.filter((s) => !isContactSignal(s.code)) }) && looksLike(spoken, lang) ? lang : 'en';
 
   return {
     verdict,
@@ -160,6 +176,7 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
     phonePolicy: rules.phones.length ? PAYPAL_PHONE_POLICY : null,
     ai,
     ocrUncertain: opts.ocrUncertain,
+    contactCheck: contact.check,
   };
 }
 
@@ -181,7 +198,7 @@ export async function extractFromImage(dataUrl: string) {
 export async function explainMore(question: string, scan: ScanResult, name = 'Mary', lang: LangCode = 'en') {
   const r = await chat([
     { role: 'system', content: 'You are SaySafe, a calm helper for older adults. Answer in at most 3 short sentences. Never say a message is safe. Never tell the user to click links or call numbers from the message. Point to official PayPal help when relevant.' + replyLanguageInstruction(lang) },
-    { role: 'user', content: `${name} asks: "${question}". The scan verdict was ${scan.verdict}. Signals: ${scan.signals.map((s) => s.title).join('; ')}` },
+    { role: 'user', content: `${name} asks: "${question}". The scan verdict was ${scan.verdict}. Signals: ${(scan.signals ?? []).filter((s) => !isContactSignal(String(s?.code))).map((s) => s.title).join('; ')}` },
   ], { fast: lang === 'en', maxTokens: 300 });
   return r.text;
 }

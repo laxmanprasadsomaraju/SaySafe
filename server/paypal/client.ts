@@ -142,3 +142,29 @@ export function approveLink(order: any): string | null {
   } catch { /* ignore */ }
   return null;
 }
+
+// ---------- Subscriptions v1 (SaySafe Demo Membership only; plan id from PAYPAL_DEMO_PLAN_ID) ----------
+// Verified live in the sandbox on 2026-11-03 (work/subs-probe): create -> 201 APPROVAL_PENDING with an `approve` link,
+// GET -> 200, cancel on an APPROVAL_PENDING subscription -> 404 RESOURCE_NOT_FOUND (cancel applies to ACTIVE/SUSPENDED).
+
+/** `requestId` must be stored before the call (durable PayPal-Request-Id): a retry after a timeout returns the same subscription. */
+export const createSubscription = (args: { planId: string; customId: string; requestId: string; returnUrl: string; cancelUrl: string; brandName: string }) =>
+  call('POST', '/v1/billing/subscriptions', {
+    plan_id: args.planId,
+    custom_id: args.customId,
+    application_context: { brand_name: args.brandName, user_action: 'SUBSCRIBE_NOW', shipping_preference: 'NO_SHIPPING', return_url: args.returnUrl, cancel_url: args.cancelUrl },
+  }, { 'PayPal-Request-Id': args.requestId, Prefer: 'return=representation' });
+
+export const getSubscription = (id: string, opts: { timeoutMs?: number } = {}) =>
+  call('GET', `/v1/billing/subscriptions/${encodeURIComponent(id)}`, undefined, {}, false, opts.timeoutMs ?? 15000);
+
+/** 204 No Content on success. Callers must GET afterwards before treating it as cancelled. */
+export const cancelSubscription = (id: string, reason: string, opts: { timeoutMs?: number } = {}) =>
+  call('POST', `/v1/billing/subscriptions/${encodeURIComponent(id)}/cancel`, { reason: reason.slice(0, 128) }, {}, false, opts.timeoutMs ?? 15000);
+
+export function subscriptionApproveLink(sub: any): string | null {
+  const l = (sub?.links ?? []).find((x: any) => x.rel === 'approve');
+  if (!l) return null;
+  try { const host = new URL(l.href).hostname; if (host === 'www.sandbox.paypal.com' || host === 'www.paypal.com') return l.href; } catch { /* ignore */ }
+  return null;
+}
