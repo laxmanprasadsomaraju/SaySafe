@@ -107,4 +107,13 @@ dialog::backdrop { background: rgb(21 40 59 / .5); }
 main .grid > * { min-width: 0; }
 /* Short viewports (landscape phones, 400 % browser zoom ≈ 320×200 CSS px): the sticky header would take a third of
    the screen on top of the bottom tab bar, so it scrolls away with the page instead (WCAG 1.4.10 reflow). */
-@media (max-height: 30rem) { header.sticky { position: static; } }
+@media (max-height: 30rem) {
+  header.sticky { position: static; }
+  /* The bottom stack (composer, voice bar, tabs) would cover two thirds of a 200 px-tall screen: it joins the end of
+     the page instead, so content is never trapped in a sliver between fixed bars. */
+  [data-testid="bottom-stack"] { position: static; }
+  div[style*="--stack-h"] { padding-bottom: 0 !important; }
+  html { scroll-padding-bottom: 1rem; }
+}
+/* A standalone underlined link (e.g. a source citation on its own line) is still a 44 px target. */
+.link.inline-block { display: inline-flex; align-items: center; min-height: 2.75rem; }

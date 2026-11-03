@@ -223,16 +223,36 @@ function DemoAndHelp({ family }: { family: boolean }) {
   );
 }
 
+type Circle = { active: { name: string }[]; pendingInvites: number; policy: { thresholdCents: number } };
+/** Mary's family circle in Profile: loading, an explicit error with Retry (never a silent blank), or the circle. */
+export function FamilyCircleBody({ circle, error, onRetry }: { circle: Circle | null; error: string | null; onRetry: () => void }) {
+  if (error) return (
+    <div role="alert" data-testid="family-circle-error">
+      <p className="font-bold text-danger">Couldn’t load your family circle: {error}</p>
+      <p className="mt-1 text-base text-ink-soft">This is a loading error, not an empty circle. Your family settings are unchanged.</p>
+      <button type="button" onClick={onRetry} className={`mt-3 ${btnSecondary}`}>Retry</button>
+    </div>
+  );
+  if (circle === null) return <p className="text-ink-soft" role="status">Loading…</p>;
+  return (
+    <>
+      <p className="font-bold">{circle.active.length ? `Connected: ${circle.active.map((a) => a.name).join(', ')}` : 'No family member connected yet.'}</p>
+      <p className="mt-1 text-base text-ink-soft">Above {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(circle.policy.thresholdCents / 100)} they review first.{circle.pendingInvites ? ` ${circle.pendingInvites} unused invite code${circle.pendingInvites > 1 ? 's' : ''}.` : ''}</p>
+      <ul className="mt-1 divide-y divide-line"><li><Link to="/help" className={linkRow}>{circle.active.length ? 'Family help and invite codes' : 'Invite a family member'}<ChevronRight className="size-5" aria-hidden /></Link></li></ul>
+    </>
+  );
+}
+
 export default function Profile() {
   const { role, name, loading } = useShellRole();
   const nav = useNavigate();
   const cfg = useConfig();
   const family = role === 'family';
-  const [circle, setCircle] = useState<{ active: { name: string }[]; pendingInvites: number; policy: { thresholdCents: number } } | null>(null);
+  const [circle, setCircle] = useState<Circle | null>(null);
   const [circleErr, setCircleErr] = useState<string | null>(null);
   const [cleared, setCleared] = useState(false);
   // Family circle: an error is shown as an error with Retry, never as an endless "Loading…".
-  const loadCircle = () => { setCircleErr(null); setCircle(null); api<NonNullable<typeof circle>>('/api/family/status').then(setCircle).catch((e) => setCircleErr(e?.message || 'Something went wrong.')); };
+  const loadCircle = () => { setCircleErr(null); setCircle(null); api<Circle>('/api/family/status').then(setCircle).catch((e) => setCircleErr(e?.message || 'Something went wrong.')); };
   useEffect(() => { if (!loading && !role) nav('/', { replace: true }); }, [loading, role, nav]);
   useEffect(() => { if (role === 'elder') loadCircle(); }, [role]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -275,19 +295,7 @@ export default function Profile() {
             <li><Link className={linkRow} to="/home">Back to Mary (if you’re trying the demo)<ChevronRight className="size-5" aria-hidden /></Link></li>
           </ul>
         </>
-      ) : circleErr ? (
-        <div role="alert" data-testid="family-circle-error">
-          <p className="font-bold text-danger">Couldn’t load your family circle: {circleErr}</p>
-          <p className="mt-1 text-base text-ink-soft">This is a loading error, not an empty circle. Your family settings are unchanged.</p>
-          <button type="button" onClick={loadCircle} className={`mt-3 ${btnSecondary}`}>Retry</button>
-        </div>
-      ) : circle === null ? <p className="text-ink-soft" role="status">Loading…</p> : (
-        <>
-          <p className="font-bold">{circle.active.length ? `Connected: ${circle.active.map((a) => a.name).join(', ')}` : 'No family member connected yet.'}</p>
-          <p className="mt-1 text-base text-ink-soft">Above {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(circle.policy.thresholdCents / 100)} they review first.{circle.pendingInvites ? ` ${circle.pendingInvites} unused invite code${circle.pendingInvites > 1 ? 's' : ''}.` : ''}</p>
-          <ul className="mt-1 divide-y divide-line"><li><Link to="/help" className={linkRow}>{circle.active.length ? 'Family help and invite codes' : 'Invite a family member'}<ChevronRight className="size-5" aria-hidden /></Link></li></ul>
-        </>
-      )}
+      ) : <FamilyCircleBody circle={circle} error={circleErr} onRetry={loadCircle} />}
     </Section>
   );
   const privacy = (

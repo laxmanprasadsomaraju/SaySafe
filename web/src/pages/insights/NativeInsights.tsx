@@ -165,7 +165,7 @@ function AskBox() {
         <div className="flex-1 min-w-[12rem]"><label htmlFor="ask-q" className="block font-bold mb-1 text-base">Your question</label><input id="ask-q" value={q} onChange={(e) => setQ(e.target.value)} maxLength={500} className="w-full min-h-12 rounded-2xl border-2 border-line px-4 bg-paper focus:border-teal outline-none text-base" /></div>
         <Button type="submit" busy={busy} className="!min-h-12">Ask</Button>
       </form>
-      <div className="mt-3 flex flex-wrap gap-2">{examples.map((x) => <button key={x} type="button" onClick={() => { setQ(x); ask(x); }} className="rounded-full border-2 border-line px-3 py-1 text-sm font-bold hover:border-teal min-h-10">{x}</button>)}</div>
+      <div className="mt-3 flex flex-wrap gap-2">{examples.map((x) => <button key={x} type="button" onClick={() => { setQ(x); ask(x); }} className="rounded-full border-2 border-line px-4 py-1 text-base font-bold text-left hover:border-teal min-h-12">{x}</button>)}</div>
       <div aria-live="polite">
         {err && <div className="mt-3"><Notice tone="danger" title={err} /></div>}
         {a && <div className="mt-4 rounded-2xl bg-teal-soft p-4"><p className="font-bold">{a.q}</p><p className="mt-1 whitespace-pre-line">{a.text}</p><p className="mt-2 text-sm text-ink-soft">{a.ai ? 'Answered with AI from your household data only.' : 'Answered directly from your household data.'}</p></div>}

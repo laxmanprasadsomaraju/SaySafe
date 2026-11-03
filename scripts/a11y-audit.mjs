@@ -25,7 +25,7 @@ const last = (k) => p.locator(`[data-card="${k}"]`).last();
 async function axe(name) {
   for (const w of [390, 1440]) {
     await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(200);
-    const r = await new AxeBuilder({ page: p }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
+    const r = await new AxeBuilder({ page: p }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).options({ rules: { 'label-content-name-mismatch': { enabled: true } } }).analyze(); // 2.5.3 label in name is experimental in axe: switched on explicitly
     report.axe.push({ page: name, width: w, violations: r.violations.map((v) => ({ id: v.id, impact: v.impact, n: v.nodes.length, sample: v.nodes[0]?.target?.join(' ') })) });
   }
 }

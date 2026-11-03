@@ -146,7 +146,8 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
         // Each part draws its own top border, so an empty stack on desktop (no dock, no voice bar, tabs in the header)
         // no longer leaves a stray 1 px line across the bottom of the screen, and stacked parts never double up.
         <div ref={stack} data-testid="bottom-stack" className="fixed inset-x-0 bottom-0 z-30 bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
-          {dock && !handoff && <div className="border-t border-line">{dock}</div>}
+          {/* The composer is a labelled region (like the voice bar) so its controls and sr-only label sit inside a landmark. */}
+          {dock && !handoff && <div role="region" aria-label="Message composer" className="border-t border-line">{dock}</div>}
           {mode === 'elder' && <VoiceBar scope={p === '/assistant' ? 'assistant' : 'other'} />}
           {showNav && <nav aria-label="Main" className="lg:hidden border-t border-line"><NavItems mode={mode as 'elder' | 'family'} variant="bottom" /></nav>}
         </div>
