@@ -13,7 +13,7 @@ const b = await chromium.launch();
 const report = { axe: [], keyboard: {}, reflow: [], motion: {} };
 const ctxFor = async (opts = {}) => {
   const c = await b.newContext({ viewport: { width: 1440, height: 900 }, locale: 'en-IE', ...opts });
-  await c.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
+  await c.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
   return c;
 };
 const c = await ctxFor({ reducedMotion: 'reduce' });

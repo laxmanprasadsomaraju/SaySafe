@@ -30,7 +30,7 @@ fs.mkdirSync(DIR, { recursive: true });
 
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce', locale: 'en-IE', timezoneId: 'Europe/Dublin', deviceScaleFactor: 1 });
-await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
+await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
 const p = await ctx.newPage();
 await p.clock.setFixedTime(new Date('2026-11-03T10:00:00Z'));
 const post = (u, body) => p.evaluate(async ([url, x]) => { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(x) }); return r.json().catch(() => ({})); }, [u, body]);
