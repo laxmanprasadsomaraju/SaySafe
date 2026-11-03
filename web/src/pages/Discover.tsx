@@ -186,7 +186,7 @@ export default function Discover() {
                       <p className="mt-3 rounded-xl bg-teal-soft px-4 py-3 text-base"><span className="font-bold">Why: </span>{cap(k.reasons.slice(0, 3).join('; '))}.</p>
                       {k.role === 'best' && res.explanation && <p className="mt-2 text-base text-ink-soft"><span className="font-bold text-navy">In short: </span>{res.explanation} <span className="text-sm">(AI summary of the listing data)</span></p>}
                       {p.features.length > 0 && <ul className="mt-3 text-base text-ink-soft list-disc pl-5 flex-1">{p.features.slice(0, 4).map((f) => <li key={f}>{f}</li>)}</ul>}
-                      {p.rating && <p className="mt-2 flex items-center gap-1 text-sm text-ink-soft"><Star className="size-4 fill-amber text-amber" aria-hidden />Listed rating {p.rating.value.toFixed(1)} out of 5 from {p.rating.count} ratings (as provided by Channel3; no reviews checked)</p>}
+                      {p.rating && <p className="mt-2 flex items-start gap-1.5 text-sm text-ink-soft"><Star className="size-4 shrink-0 mt-0.5 fill-amber text-amber" aria-hidden />Listed rating {p.rating.value.toFixed(1)} out of 5 from {p.rating.count} ratings (as provided by Channel3; no reviews checked)</p>}
                       <div className="mt-4 flex flex-col gap-2">
                         <a href={o.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center justify-center gap-2 min-h-12 rounded-full bg-navy text-white px-4 font-bold hover:bg-teal-deep"
                           aria-label={`View ${p.title} at ${o.retailer}, ${money(o.price, o.currency)}. Opens the shop’s website in a new tab`}>

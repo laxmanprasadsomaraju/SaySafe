@@ -160,7 +160,24 @@ export const priceOf = (p: ShopItem) => bestOffer(p)?.price ?? Infinity;
 
 interface Scored { p: ShopItem; score: number; reasons: string[]; matched: number }
 
-function scoreItem(p: ShopItem, req: ParsedRequest, profile: ShoppingProfile, effMax: number | null, minPrice: number, maxPrice: number): Scored {
+/**
+ * The category most of the matching listings share (e.g. "Microwave Ovens" for "microwave"),
+ * so accessories that merely mention the word (brackets, rice cookers) don't outrank the thing itself.
+ */
+export function primaryCategory(items: ShopItem[], keywords: string[]): string | null {
+  const counts = new Map<string, { n: number; kw: number }>();
+  for (const p of items) {
+    if (!p.category) continue;
+    const c = p.category.toLowerCase();
+    const kw = keywords.filter((k) => c.includes(stem(k))).length;
+    const e = counts.get(c) ?? { n: 0, kw };
+    e.n++; counts.set(c, e);
+  }
+  const best = [...counts.entries()].filter(([, v]) => v.kw > 0 || v.n >= 2).sort((a, b) => b[1].kw - a[1].kw || b[1].n - a[1].n || a[0].localeCompare(b[0]))[0];
+  return best && best[1].n >= 2 ? best[0] : null;
+}
+
+function scoreItem(p: ShopItem, req: ParsedRequest, profile: ShoppingProfile, effMax: number | null, minPrice: number, maxPrice: number, primary: string | null = null): Scored {
   const hay = listingText(p);
   const titleCat = `${p.title} ${p.category ?? ''}`.toLowerCase();
   const reasons: string[] = [];
@@ -172,6 +189,10 @@ function scoreItem(p: ShopItem, req: ParsedRequest, profile: ShoppingProfile, ef
   const matchedKw = kws.filter((k) => hay.includes(stem(k)) || hasWord(hay, k));
   const featureKw = matchedKw.filter((k) => !titleCat.includes(stem(k)));
   if (kws.length) score += 40 * (matchedKw.length / kws.length) + 10 * (kws.filter((k) => titleCat.includes(stem(k))).length / kws.length);
+  if (primary && p.category?.toLowerCase() === primary) {
+    const kwInCat = kws.length ? kws.filter((k) => primary.includes(stem(k))).length / kws.length : 1;
+    score += 25 * Math.max(kwInCat, kws.length ? 0 : 1);
+  }
   if (featureKw.length) reasons.push(`its listing mentions ${featureKw.map((k) => `“${k}”`).join(' and ')}`);
 
   // 2. Price, strictly inside the budget (already filtered).
@@ -218,11 +239,13 @@ export function recommend(items: ShopItem[], req: ParsedRequest, profile: Shoppi
 
   const prices = pool.map(priceOf);
   const minP = Math.min(...prices), maxP = Math.max(...prices);
-  const scored = pool.map((p) => scoreItem(p, req, profile, effMax, minP, maxP))
+  const primary = primaryCategory(pool, req.keywords);
+  const scored = pool.map((p) => scoreItem(p, req, profile, effMax, minP, maxP, primary))
     .sort((a, b) => b.score - a.score || priceOf(a.p) - priceOf(b.p) || a.p.id.localeCompare(b.p.id));
 
   const picks: Pick[] = [];
-  const relevantEnough = (s: Scored) => !req.keywords.length || s.matched > 0;
+  // Alternatives must be close to the best match in relevance, not just cheaper accessories.
+  const relevantEnough = (s: Scored) => (!req.keywords.length || s.matched > 0) && (!scored[0] || s.score >= scored[0].score * 0.85);
   const best = scored[0];
   if (best) {
     picks.push({ role: 'best', id: best.p.id, reasons: best.reasons.length ? best.reasons : ['it matched your search most closely'], score: best.score });
@@ -295,7 +318,8 @@ export function spokenRecommendation(items: ShopItem[], rec: Recommendation, que
   const o = p.offers[0];
   const why = best.reasons.filter((r) => !r.startsWith('€')).slice(0, 2);
   const budget = best.reasons.find((r) => r.includes('budget'));
-  const reasonText = [budget ? `it's within your budget` : null, ...why.filter((r) => !r.includes('budget'))].filter(Boolean).slice(0, 2).join(', and ');
+  const clause = (r: string) => (/^(listed|the lowest)/.test(r) ? `it's ${r}` : /^matches/.test(r) ? `it ${r}` : r);
+  const reasonText = [budget ? `it's within your budget` : null, ...why.filter((r) => !r.includes('budget')).map(clause)].filter(Boolean).slice(0, 2).join(', and ');
   const followUp = rec.picks.length > 1 ? ' Would you like a cheaper option or a comparison?' : '';
   return `My best match is the ${shortTitle(p.title)}, ${money(o.price, o.currency)} at ${o.retailer}${reasonText ? `. I picked it because ${reasonText}` : ''}. You'd buy it on the shop's own website.${followUp}`;
 }
@@ -356,7 +380,7 @@ export function parseFollowup(text: string, hasResults: boolean): Followup {
 }
 
 // ---------- AI explanation guard ----------
-const BANNED_ALWAYS = /\b(deliver|delivery|shipping|warrant|guarantee|trusted|trustworthy|reputable|reliable|best[- ]?selling|popular|safe to buy|genuine)\w*/i;
+const BANNED_ALWAYS = /\b(deliver|delivery|shipping|warrant|guarantee|trusted|trustworthy|reputable|reliable|best[- ]?selling|popular|safe to buy|genuine|appeal|ideal|perfect|great|excellent|eas(?:y|ier|ily)|straightforward|helpful|safe|safety|older|senior|convenient|older adults?|elderly|quality|durable|value for money|bargain)\w*/i;
 const RATING_WORDS = /\b(review|reviews|rating|ratings|rated|stars?)\b/i;
 
 /**

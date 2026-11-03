@@ -138,6 +138,9 @@ describe('speech controller', () => {
     expect(await u.speak('hello')).toBe(false);
   });
 
+  it('splitSentences keeps prices and domains whole', () => {
+    expect(splitSentences('Best match is the X, €99.99 at currys.ie. It is listed as in stock! Ok?')).toEqual(['Best match is the X, €99.99 at currys.ie.', 'It is listed as in stock!', 'Ok?']);
+  });
   it('splitSentences keeps each utterance short', () => {
     const parts = splitSentences(`Short one. ${'word, '.repeat(80)}end.`);
     expect(parts[0]).toBe('Short one.');

@@ -56,17 +56,19 @@ export function VoiceBar() {
           </fieldset>
         </div>
       )}
-      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-2 grid grid-cols-[auto_1fr] sm:grid-cols-[auto_1fr_auto] items-center gap-x-3 gap-y-1.5">
-        <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap ${chip.cls}`}>
-          <span className={`size-2.5 rounded-full ${chip.dot} ${s.status === 'speaking' || s.status === 'listening' ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
-          <span><span className="sr-only">Voice status: </span>{chip.label}</span>
-        </span>
-        <p className="min-w-0 text-base text-ink-soft line-clamp-2 sm:order-none col-span-2 sm:col-span-1 row-start-2 sm:row-start-auto" title={s.caption || undefined}>
-          {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
-          {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
-          {s.error && <span className="text-danger font-bold"> {s.error}</span>}
-        </p>
-        <div className="flex gap-1.5 justify-end row-start-1 col-start-2 sm:col-start-3">
+      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-2 flex flex-col-reverse sm:flex-row sm:items-center gap-x-3 gap-y-1.5">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap shrink-0 ${chip.cls}`}>
+            <span className={`size-2.5 rounded-full ${chip.dot} ${s.status === 'speaking' || s.status === 'listening' ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
+            <span><span className="sr-only">Voice status: </span>{chip.label}</span>
+          </span>
+          <p className="min-w-0 flex-1 text-base text-ink-soft line-clamp-2 break-words" title={s.caption || undefined}>
+            {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
+            {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
+            {s.error && <span className="text-danger font-bold"> {s.error}</span>}
+          </p>
+        </div>
+        <div className="flex gap-1.5 justify-end shrink-0">
           <button type="button" onClick={() => speech.stop()} disabled={!active} aria-label="Stop speaking"
             className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
             <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>

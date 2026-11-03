@@ -101,6 +101,7 @@ describe('wording never invents reviews, delivery or trust', () => {
     expect(explanationIsGrounded('It has 1234 W of power.', p)).toBe(false);
     expect(explanationIsGrounded('Customers rate it 4.9 stars.', item({ id: 'x', price: 10 }))).toBe(false);
     expect(explanationIsGrounded('A trusted shop.', p)).toBe(false);
+    expect(explanationIsGrounded('Its water level indicator makes it easier to use, helpful for older users.', p)).toBe(false);
   });
 });
 
@@ -174,5 +175,24 @@ describe('read everything', () => {
     expect(segs).toHaveLength(under150.length);
     expect(segs[0]).toContain(under150[0].offers[0].retailer);
     expect(segs[0]).toMatch(/^Listing 1 of /);
+  });
+});
+
+describe('accessories do not outrank the product itself', () => {
+  const mk = (id: string, title: string, category: string, price: number) => item({ id, title, category, price, features: ['a', 'b', 'c'], image: 'x' });
+  const items = [
+    mk('br', 'TILLREDA brackets for microwave oven', 'Brackets & Reinforcement Braces', 12.99),
+    mk('rc', 'Microwave Rice Cooker', 'Rice Cookers', 29.99),
+    mk('m1', 'H25MOBS7HUK Solo Microwave', 'Microwave Ovens', 99.99),
+    mk('m2', 'Digital 800w 20l Microwave', 'Microwave Ovens', 112),
+    mk('m3', 'RHMT2305S Solo Microwave', 'Microwave Ovens', 119.99),
+  ];
+  it('best and alternatives come from the main category', () => {
+    const rec = recommend(items, parseRequest('microwave under €150'));
+    expect(rec.picks.map((p) => p.id).every((id) => id.startsWith('m'))).toBe(true);
+    expect(rec.picks[0].id).toBe('m1');
+  });
+  it('an explicit accessory request still finds the accessory', () => {
+    expect(recommend(items, parseRequest('microwave brackets')).picks[0].id).toBe('br');
   });
 });

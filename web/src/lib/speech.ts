@@ -41,7 +41,8 @@ const DEFAULT_PREFS: SpeechPrefs = { muted: false, autoSpeak: true, rate: 0.95, 
 
 /** Split into sentences; very long sentences are split again at commas so each utterance stays short. */
 export function splitSentences(text: string): string[] {
-  const parts = text.replace(/\s+/g, ' ').trim().match(/[^.!?]+(?:[.!?]+["”’)]*|$)/g) ?? [];
+  // Split only where punctuation is followed by a space, so "€99.99" and "currys.ie" stay whole.
+  const parts = text.replace(/\s+/g, ' ').trim().split(/(?<=[.!?]["”’)]?)\s+(?=\S)/);
   const out: string[] = [];
   for (const raw of parts) {
     const s = raw.trim();
