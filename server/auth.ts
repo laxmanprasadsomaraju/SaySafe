@@ -63,6 +63,25 @@ export function redeemPairingCode(res: Response, code: string, familyName: strin
   return { householdId: row.household_id, familyId: row.family_id };
 }
 
+/**
+ * "Try as Alex too": pairs a family session for the SAME household in this browser, through the normal pairing
+ * code flow (a one-time code is created and redeemed server-side, so the code never leaves the server). If this
+ * household already has an active Alex, a new family session is issued for that same member.
+ * Only the elder of the household can call it (route uses requireRole('elder')).
+ */
+export function pairDemoFamily(res: Response, householdId: string, actor: string, familyName = 'Alex') {
+  const existing = db.prepare("SELECT f.family_id FROM family_links f WHERE f.household_id=? AND f.status='active' ORDER BY f.created_at ASC LIMIT 1").get(householdId) as { family_id: string } | undefined;
+  if (existing?.family_id) {
+    issue(res, 'family', existing.family_id, householdId);
+    audit(householdId, actor, 'family.demo_session', existing.family_id);
+    return { familyId: existing.family_id, reused: true };
+  }
+  const { code } = createPairingCode(householdId, actor);
+  const r = redeemPairingCode(res, code, familyName);
+  if (!r) throw new Error('pairing failed');
+  return { familyId: r.familyId, reused: false };
+}
+
 export function readSession(req: Request, role: Role): Session | null {
   const token = req.cookies?.[COOKIE[role]];
   if (!token || typeof token !== 'string') return null;

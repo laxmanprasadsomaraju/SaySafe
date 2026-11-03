@@ -7,7 +7,7 @@ import { newId } from '../auth.js';
 import { PaymentError } from '../payments/service.js';
 import {
   CANCELLATION_SCOPE, COMPANION_LABELS, DEMO_SHOP_RECIPIENT, MAX_CONTACTS, MAX_MANUAL_PAYMENTS, MAX_SUBSCRIPTIONS, SUB_TRANSITIONS, SUB_STATUS_LABEL,
-  type ManualPaymentT, type SubscriptionT, type ContactT, type SubStatus, type SubscriptionSummaryT,
+  categoryOf, type ManualPaymentT, type SubscriptionT, type ContactT, type SubStatus, type SubscriptionSummaryT,
 } from '../../shared/companion.js';
 import { findCancelGuide } from '../../shared/cancelGuides.js';
 import type { Candidate } from './match.js';
@@ -21,7 +21,7 @@ const todayUtc = (now = new Date()) => Date.UTC(now.getUTCFullYear(), now.getUTC
 // ---------- Manual payments ----------
 const payView = (r: any): ManualPaymentT => ({
   id: r.id, recipient: r.recipient, amountCents: Number(r.amount_cents), currency: r.currency, paidOn: r.paid_on,
-  method: r.pay_method, note: r.memo ?? null, label: COMPANION_LABELS.manual, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
+  method: r.pay_method, note: r.memo ?? null, label: COMPANION_LABELS.manual, sample: Number(r.example ?? 0) === 1, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
 });
 
 export function listManualPayments(hh: string): ManualPaymentT[] {
@@ -53,19 +53,28 @@ export function deleteManualPayment(hh: string, id: string) {
 
 /** Search candidates: this household's Demo Shop payments where money moved, plus manual records. */
 export function paymentCandidates(hh: string): Candidate[] {
-  const shop = db.prepare("SELECT id, state, items_json, amount_cents, currency, paypal_capture_id, created_at FROM payment_requests WHERE household_id=? AND state IN ('CAPTURED','REFUND_PENDING','REFUNDED') ORDER BY created_at DESC LIMIT 200").all(hh) as any[];
+  const shop = db.prepare("SELECT id, state, items_json, amount_cents, currency, paypal_capture_id, created_at, example FROM payment_requests WHERE household_id=? AND state IN ('CAPTURED','REFUND_PENDING','REFUNDED') ORDER BY created_at DESC LIMIT 200").all(hh) as any[];
   const out: Candidate[] = shop.map((r) => {
     let items: string | null = null;
     try { items = (JSON.parse(r.items_json) as { name?: string; quantity?: number }[]).map((i) => i.name).filter(Boolean).join(', ') || null; } catch { items = null; }
     const webhookVerified = Boolean(r.paypal_capture_id && db.prepare("SELECT 1 AS ok FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id));
     const captureStatus = r.state === 'REFUNDED' ? 'REFUNDED' : r.paypal_capture_id ? 'COMPLETED' : null;
+    if (Number(r.example ?? 0) === 1) {
+      // Sample shop purchase: still a shop purchase (the person-name rule applies), but never shown as a PayPal record.
+      return {
+        id: r.id, source: 'paypal_sandbox' as const, recipient: DEMO_SHOP_RECIPIENT, description: items, amountCents: Number(r.amount_cents), currency: r.currency,
+        date: String(r.created_at).slice(0, 10), sample: true, evidence: { kind: 'sample' as const, label: COMPANION_LABELS.sampleEvidence, basis: 'shop' as const, method: null, orderState: r.state },
+      };
+    }
     return {
       id: r.id, source: 'paypal_sandbox' as const, recipient: DEMO_SHOP_RECIPIENT, description: items, amountCents: Number(r.amount_cents), currency: r.currency,
       date: String(r.created_at).slice(0, 10), evidence: { kind: 'paypal_sandbox' as const, captureStatus, webhookVerified, orderState: r.state },
     };
   });
   for (const m of listManualPayments(hh)) {
-    out.push({ id: m.id, source: 'manual', recipient: m.recipient, description: m.note, amountCents: m.amountCents, currency: m.currency, date: m.paidOn, evidence: { kind: 'manual', label: COMPANION_LABELS.manual, method: m.method } });
+    out.push(m.sample
+      ? { id: m.id, source: 'manual', recipient: m.recipient, description: m.note, amountCents: m.amountCents, currency: m.currency, date: m.paidOn, sample: true, evidence: { kind: 'sample', label: COMPANION_LABELS.sampleEvidence, basis: 'record', method: m.method, orderState: null } }
+      : { id: m.id, source: 'manual', recipient: m.recipient, description: m.note, amountCents: m.amountCents, currency: m.currency, date: m.paidOn, evidence: { kind: 'manual', label: COMPANION_LABELS.manual, method: m.method } });
   }
   return out;
 }
@@ -87,6 +96,9 @@ export const subView = (r: any, now = new Date()): SubscriptionT => {
     confirmedBy: r.confirmed_by ?? null,
     stoppedTrackingAt: r.stopped_at ? iso(r.stopped_at) : null,
     guide: g ? { id: g.id, name: g.name, url: g.url } : null,
+    managementMethod: demo ? 'paypal_api' : g ? 'official_link' : 'generic_steps',
+    category: demo ? 'membership' : categoryOf(r.merchant),
+    sample: Number(r.example ?? 0) === 1,
     paypal: demo && r.paypal_subscription_id ? {
       subscriptionId: r.paypal_subscription_id, status: r.paypal_status ?? null, lastCheckedAt: r.last_checked_at ? iso(r.last_checked_at) : null,
       webhookVerified: Boolean(Number(r.webhook_verified)), approveUrl: r.paypal_status === 'APPROVAL_PENDING' ? r.paypal_approve_url ?? null : null,
@@ -186,7 +198,7 @@ export function summarise(subs: SubscriptionT[]): SubscriptionSummaryT {
 // ---------- Trusted contacts ----------
 const contactView = (r: any): ContactT => ({
   id: r.id, name: r.display_name, relation: r.relation ?? null, phone: r.phone ?? null, email: r.email ?? null, note: r.memo ?? null,
-  label: COMPANION_LABELS.contact, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
+  label: COMPANION_LABELS.contact, sample: Number(r.example ?? 0) === 1, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
 });
 export function listContacts(hh: string): ContactT[] {
   return (db.prepare('SELECT * FROM companion_contacts WHERE household_id=? ORDER BY display_name ASC LIMIT ?').all(hh, MAX_CONTACTS) as any[]).map(contactView);

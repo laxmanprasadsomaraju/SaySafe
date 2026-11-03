@@ -13,7 +13,7 @@ export type ActivitySection = 'purchases' | 'scans' | 'family' | 'refunds';
 
 export interface ActivityItem {
   id: string;
-  type: 'payment' | 'scan';
+  type: 'payment' | 'scan' | 'record';
   at: string; // ISO, UTC
   updatedAt: string;
   title: string;
@@ -30,6 +30,11 @@ export interface ActivityItem {
   sandbox: boolean;
   /** Local QA/example row (idempotency key seed_… or capture SEED…). Seed scripts refuse hosted databases. */
   example: boolean;
+  /** Where the row comes from, shown as a label: sample data, a real PayPal Sandbox transaction, or a record the user typed. */
+  source: 'sample' | 'paypal_sandbox' | 'user_entered' | 'scan';
+  sourceLabel: string;
+  /** What backs it: PayPal evidence, or "Illustrative — no PayPal record" for samples. */
+  evidence: string | null;
   approval: { status: string; decidedAt: string | null; reason: string | null } | null;
   verdict: string | null;
   sharedWithFamily?: boolean;
@@ -80,7 +85,10 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
       section: groupOf(shown) === 'refunded' ? 'refunds' : a ? 'family' : 'purchases',
       amountCents: r.amount_cents, currency: r.currency, merchant: r.merchant,
       captured: Boolean(r.paypal_capture_id), webhookConfirmed: webhook, sandbox: true,
-      example: Boolean(String(r.idempotency_key ?? '').startsWith('seed_') || String(r.paypal_capture_id ?? '').startsWith('SEED')),
+      example: Number(r.example ?? 0) === 1 || Boolean(String(r.idempotency_key ?? '').startsWith('seed_') || String(r.paypal_capture_id ?? '').startsWith('SEED')),
+      source: Number(r.example ?? 0) === 1 ? 'sample' : 'paypal_sandbox',
+      sourceLabel: Number(r.example ?? 0) === 1 ? 'Sample data' : 'Real PayPal Sandbox transaction',
+      evidence: Number(r.example ?? 0) === 1 ? 'Illustrative — no PayPal record' : r.paypal_capture_id ? (webhook ? 'PayPal capture + signed webhook verified' : 'PayPal capture recorded') : r.paypal_order_id ? 'PayPal order created, not captured' : 'No PayPal order yet',
       approval: a ? { status: a.status === 'pending' && a.expires_at < Date.now() ? 'expired' : a.status, decidedAt: a.decided_at ? iso(a.decided_at) : null, reason: a.reason ?? null } : null,
       verdict: null, href: `/order/${r.id}`,
     };
@@ -90,16 +98,30 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
   for (const s of scans) {
     items.push({
       id: s.id, type: 'scan', at: iso(s.created_at), updatedAt: iso(s.created_at), title: String(s.summary), status: String(s.verdict), statusGroup: 'scan', section: 'scans',
-      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, approval: null,
+      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, source: 'scan', sourceLabel: 'Scam check', evidence: null, approval: null,
       verdict: String(s.verdict), sharedWithFamily: Boolean(s.shared_with_family), href: null,
     });
+  }
+
+  // Payment records Mary typed (or sample ones) are PRIVATE to her: listed for the elder only, never for family.
+  if (role === 'elder') {
+    const recs = db.prepare('SELECT id, recipient, amount_cents, currency, paid_on, pay_method, memo, example, created_at, updated_at FROM companion_payments WHERE household_id=? ORDER BY paid_on DESC LIMIT 500').all(householdId) as any[];
+    for (const m of recs) {
+      const sample = Number(m.example ?? 0) === 1;
+      items.push({
+        id: m.id, type: 'record', at: `${m.paid_on}T12:00:00Z`, updatedAt: iso(m.updated_at), title: `${m.recipient}${m.memo ? ` · ${m.memo}` : ''}`,
+        status: 'RECORDED', statusGroup: 'other', section: 'purchases', amountCents: Number(m.amount_cents), currency: m.currency, merchant: m.recipient,
+        captured: false, webhookConfirmed: false, sandbox: false, example: sample, source: sample ? 'sample' : 'user_entered',
+        sourceLabel: sample ? 'Sample data' : 'Recorded by you — not verified', evidence: sample ? 'Illustrative — no PayPal record' : 'Only what you typed — SaySafe can’t see your bank', approval: null, verdict: null, href: null,
+      });
+    }
   }
 
   const text = (query.q ?? query.item ?? '').toLowerCase();
   const fromMs = query.from ? Date.parse(`${query.from}T00:00:00Z`) : null;
   const toMs = query.to ? Date.parse(`${query.to}T23:59:59.999Z`) : null;
   const filtered = items.filter((it) => {
-    if (query.type && query.type !== 'all' && it.type !== query.type) return false;
+    if (query.type && query.type !== 'all' && it.type !== query.type && !(query.type === 'payment' && it.type === 'record')) return false;
     if (query.status && query.status !== 'all' && it.statusGroup !== query.status) return false;
     if (query.section && query.section !== 'all' && it.section !== query.section) return false;
     if (text && !`${it.title} ${it.merchant ?? ''}`.toLowerCase().includes(text)) return false;

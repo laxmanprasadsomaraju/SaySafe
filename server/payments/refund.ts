@@ -18,7 +18,7 @@ import crypto from 'node:crypto';
 import { db, audit, isUniqueViolation } from '../db/index.js';
 import * as paypal from '../paypal/client.js';
 import { DEMO_MERCHANT } from '../catalogue/products.js';
-import { PaymentError, transition, publicView, load } from './service.js';
+import { PaymentError, transition, publicView, load, loadActionable, assertNotSample } from './service.js';
 import { checkCapture } from './captureCheck.js';
 import { recordEvidence, evidenceRows } from './evidence.js';
 import { newId } from '../auth.js';
@@ -76,7 +76,7 @@ function backToCaptured(id: string, actor: string) {
 
 // ---------- Buyer request (not a refund) ----------
 export function requestRefund(householdId: string, actor: string, requestId: string, reason?: unknown) {
-  const r = load(requestId, householdId); // household scoping: 404 for anyone else's purchase
+  const r = loadActionable(requestId, householdId); // household scoping: 404 for anyone else's purchase; 409 for a sample row
   if (r.state === 'REFUNDED') throw new PaymentError('already_refunded', 'This payment has already been refunded.', 409);
   if (!['CAPTURED', 'REFUND_PENDING'].includes(r.state)) throw new PaymentError('not_paid', 'Only a completed payment can have a refund request.', 409);
   const existing = db.prepare('SELECT id FROM refund_requests WHERE request_id=?').get(r.id);
@@ -120,6 +120,7 @@ function result(r: any, outcome: AdminRefundResult['outcome'], message: string, 
 async function doRefund(requestId: string, actor: string, opts: { householdId?: string; amount?: unknown; currency?: unknown; captureId?: unknown }): Promise<AdminRefundResult> {
   const r = fresh(requestId);
   if (!r || (opts.householdId && opts.householdId !== r.household_id)) throw new PaymentError('not_found', 'Payment not found.', 404);
+  assertNotSample(r);
   if (opts.amount != null && opts.amount !== '') {
     if (cents(opts.amount) !== r.amount_cents || (opts.currency != null && opts.currency !== r.currency)) {
       throw new PaymentError('partial_refund_unsupported', 'Partial refunds are not supported. Only a full refund of the captured amount can be made.', 400);

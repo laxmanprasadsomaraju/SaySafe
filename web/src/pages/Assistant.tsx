@@ -26,6 +26,9 @@ import { parseFollowup, ageAnswer, sellerAnswer, sellerFacts, toShopItem } from 
 import { RenderBlock, ProductSheet, type BlockActions } from '../assistant/blocks';
 import { COMPANION_CHIPS, TAP_ONLY_REPLY, looksCompanion, shortSpoken, money as companionMoney } from '../assistant/companion';
 import { SubscriptionSummary } from '../../../shared/companion';
+import { TRAINING_EXAMPLES, WELCOME_PROMPTS } from '../../../shared/demoData';
+
+const trainingBlock = () => ({ kind: 'training_examples', items: TRAINING_EXAMPLES.map((t) => ({ id: t.id, label: t.label, howToTest: t.howToTest, text: t.text })) });
 
 const KEY = THREAD_KEY;
 const MODES: { mode: Exclude<Mode, 'chat'>; label: string; icon: typeof Mic; placeholder: string }[] = [
@@ -256,7 +259,8 @@ export default function Assistant() {
       const f = parseFollowup(text, Boolean(ctx));
       if (f.kind === 'refund') return await showRefund(turn);
       if (f.kind === 'search') return await showHistory(turn, f.q);
-      if (f.kind === 'last_payment') return await showLastPayment(turn);
+      // "Show my last payment" is answered by the server from every source (Demo Shop, records, sample data).
+      if (f.kind === 'last_payment' && /\breceipt\b/i.test(text)) return await showLastPayment(turn);
       if (f.kind === 'payments') return await showHistory(turn);
       if (ctx) {
         const focus = ctx.items.find((i) => i.id === threadRef.current.focusId) ?? ctx.items[0];
@@ -274,9 +278,20 @@ export default function Assistant() {
           return showDemo(cheaper, ctx.query, `I found ${cheaper.length} cheaper option${cheaper.length > 1 ? 's' : ''}.`, turn);
         }
       }
-      if (mode === 'check') return await scan(text, turn);
+      // In "check a message" mode, a short request ("Compare real shops for a kettle") is a request, not a message to check.
+      const shortRequest = text.length < 80 && !/https?:|www\.|@|\+?\d[\d\s-]{6,}|€|\$|£/.test(text) && /^(please\s+)?(find|buy|compare|show|help me|i need|i want|look for|search|get me|cancel|send|who|what|which|did i|have i)\b/i.test(text);
+      if (mode === 'check' && !looksCompanion(text) && !shortRequest) return await scan(text, turn);
+      if (mode === 'check' && shortRequest) setMode('chat');
+      // "Help me cancel this one" right after a subscriptions card: name the highlighted subscription.
+      let sendText = text;
+      const listCard = lastBlock('subscriptions_list');
+      if (listCard && /\b(cancel|stop)\b.{0,20}\b(this|that|it)( one)?\b/i.test(text)) {
+        const hid = listCard.focus === 'next' ? listCard.highlight.nextId : listCard.focus === 'most' ? listCard.highlight.mostMonthlyId : null;
+        const sub = listCard.subscriptions.find((x) => x.id === hid);
+        if (sub) sendText = `cancel ${sub.merchant}`;
+      }
       if (mode === 'payments' && !looksCompanion(text)) return await showHistory(turn);
-      const r = await api<any>('/api/assistant', { body: { text, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
+      const r = await api<any>('/api/assistant', { body: { text: sendText, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
       if (!speech.isCurrent(turn)) return;
       const a = r.intent?.action;
       // Payment companion: the server answered from Mary's own records (template reply + one card). Spoken reply stays short.
@@ -287,7 +302,7 @@ export default function Assistant() {
       if (a === 'check_message') {
         const msg = r.intent.message_text && r.intent.message_text !== text ? r.intent.message_text : text.length > 40 ? text : '';
         if (msg) return await scan(msg, turn);
-        setMode('check'); add('assistant', PROMPT.check); return say(PROMPT.check, turn);
+        setMode('check'); add('assistant', PROMPT.check, [trainingBlock()]); return say(PROMPT.check, turn);
       }
       if (a === 'shop' || r.discover) {
         setMode('find');
@@ -306,7 +321,8 @@ export default function Assistant() {
       add('assistant', r.reply, [], r.replyLang);
       say(r.reply, turn, r.replyLang);
     } catch (e: any) {
-      if (speech.isCurrent(turn)) add('assistant', e.message || 'Something went wrong. Nothing was charged.');
+      // A failed request is an error with Retry, never "no records".
+      if (speech.isCurrent(turn)) add('assistant', '', [{ kind: 'retry_error', message: String(e?.message || 'Something went wrong. Nothing was charged.').slice(0, 400), retryText: text, done: false }]);
     } finally { setBusy(false); speech.endThinking(); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -339,6 +355,8 @@ export default function Assistant() {
     synced: (p) => { const rc = receiptFrom(p); if (rc) updateBlock((b) => b.kind === 'receipt' && b.requestId === p.id, rc); },
     audience: 'elder',
     append: (text, blocks, o) => { add('assistant', text, blocks, 'en'); if (o?.speak) say(shortSpoken(text)); },
+    send: (text) => { void handle(text); },
+    scan: (text) => { add('user', 'Check this training example'); setBusy(true); const turn = speech.beginTurn(); scan(text, turn).catch((e: any) => add('assistant', '', [{ kind: 'retry_error', message: String(e?.message ?? 'The check failed.').slice(0, 400), retryText: text, done: false }])).finally(() => { setBusy(false); speech.endThinking(); }); },
     speak: (text) => say(text),
   };
 
@@ -360,6 +378,14 @@ export default function Assistant() {
     const t = 'Here are the contacts you saved. You can also ask, for example, “my son’s number”.';
     add('assistant', t, [{ kind: 'companion_records', section: 'contacts' }]); say(shortSpoken(t, 1), turn);
   });
+
+  // First "Try as Mary" visit (?welcome=1): a short welcome with six prompts that work on the sample data.
+  useEffect(() => {
+    if (!me || sp.get('welcome') !== '1') return;
+    setThread((t) => (t.messages.some((m) => m.blocks.some((b) => b.kind === 'demo_welcome')) ? t : fresh('chat')));
+    setTimeout(() => add('assistant', `Hello ${me.name}. Here’s what you can try.`, [{ kind: 'demo_welcome', prompts: [...WELCOME_PROMPTS] }], 'en'), 0);
+    nav('/assistant', { replace: true });
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Back from PayPal after starting the Demo Membership (?membership=<PayPal status>), or opened from Profile
   // (?records=payments|subscriptions|contacts). The card re-reads the server; the URL value is only a hint.

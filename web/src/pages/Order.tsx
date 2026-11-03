@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Clock, XCircle, Volume2, PackageX, RefreshCw, ShieldCheck, CircleDashed, RotateCcw, MessageCircle, ListChecks } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Volume2, PackageX, RefreshCw, ShieldCheck, CircleDashed, RotateCcw, MessageCircle, ListChecks, ShoppingBag } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, type PaymentRequest, type PaymentState, type PaymentTimeline, type ReconcileOutcome } from '../lib/api';
@@ -122,7 +122,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
         .finally(() => setBusy(false));
     } else {
       // Also the path for a lost redirect: opening /order/:id directly asks PayPal what really happened.
-      load().then((x) => { noteInConversation(x); if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); });
+      load().then((x) => { noteInConversation(x); if (x && !x.sample && RECONCILABLE.includes(x.state)) checkWithPayPal(); });
     }
   }, [me, id]); // eslint-disable-line
 
@@ -168,6 +168,23 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   const money = (cents: number, cur: string) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: cur }).format(cents / 100);
   const row = (k: string, v: React.ReactNode) => <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 py-2"><dt className="text-ink-soft">{k}</dt><dd className="font-bold text-right min-w-0 break-words">{v}</dd></div>;
   const ref = r.receipt?.orderId ?? null;
+  if (r.sample) return (
+    <Layout>
+      <h1 className="text-[length:var(--text-title)]">Sample purchase</h1>
+      <Card className="mt-4 p-5 md:p-8" data-testid="sample-order">
+        <p className="flex flex-wrap gap-2"><span className="inline-flex rounded-xl border border-amber/40 bg-amber-soft px-3 py-0.5 font-bold text-amber" data-testid="sample-badge">{r.sample.label}</span><span className="inline-flex rounded-xl border border-line px-3 py-0.5 font-bold">{r.sample.evidence}</span></p>
+        <p className="mt-3 font-display text-5xl font-semibold leading-none">{money(r.amountCents, r.currency)}</p>
+        <p className="mt-2 text-lg font-bold" data-testid="order-state">{stateLabel(r.state)}{r.approval ? ` · family ${r.approval.status}` : ''}</p>
+        <ul className="mt-4 divide-y divide-line border-y border-line">{r.items.map((l) => <li key={l.productId} className="py-3 font-bold">{l.name} <span className="font-normal text-ink-soft">× {l.quantity} · {eur(l.lineCents)}</span></li>)}</ul>
+        <p className="mt-4">This is an illustrative example in Mary’s demo account. It never went to PayPal: there is no order, capture or receipt, and it can’t be paid, approved, refunded or checked with PayPal.</p>
+        <p className="mt-2 text-ink-soft">To see a real PayPal Sandbox payment, buy something in the Demo Shop: it will show as “Real PayPal Sandbox transaction”.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Button variant="secondary" icon={<ListChecks className="size-6" aria-hidden />} onClick={() => nav('/activity')}>Back to Activity</Button>
+          <Button variant="ghost" icon={<ShoppingBag className="size-6" aria-hidden />} onClick={() => nav('/assistant?mode=find')}>Try a real sandbox purchase</Button>
+        </div>
+      </Card>
+    </Layout>
+  );
   return (
     <Layout>
       <h1 className="sr-only">{paid ? 'Payment successful' : stateLabel(r.state)}</h1>

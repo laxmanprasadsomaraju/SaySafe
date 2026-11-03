@@ -22,7 +22,7 @@ import {
 import {
   UI_LABEL, METHOD_LABEL, ServerPaymentsList, ServerSubsList, ServerContactsList, ServerDemoStatus, ServerDemoStart, ServerCancelIntent,
   ServerCancelResult, ServerCancelHelp, helpFromCancelHelp, cancelCardFrom, cancelPhase, searchQueryString, parseAmount, money, day, todayIso,
-  telHref, mailHref, FREQ_LABEL, nextChargeText, isDemo, sourceText, EXTERNAL_DISCLAIMER, matchesCardText, MATCHES_SCOPE_NOTE,
+  telHref, mailHref, FREQ_LABEL, nextChargeText, isDemo, sourceText, managedText, EXTERNAL_DISCLAIMER, matchesCardText, MATCHES_SCOPE_NOTE,
 } from './companion';
 import { parseServer, type BlockOf, type Block } from './schemas';
 import type { BlockActions } from './blocks';
@@ -68,7 +68,12 @@ function ConfirmDelete({ what, onYes, busy }: { what: string; onYes: () => void;
 // =====================================================================================================
 // Payments
 // =====================================================================================================
-function SourceBadge({ source }: { source: PaymentMatchT['source'] }) {
+/** The one label every sample ("Try as Mary") row carries, everywhere it is shown. */
+export function SampleBadge({ evidence = false }: { evidence?: boolean }) {
+  return <span className="inline-flex items-center rounded-xl border border-amber/40 bg-amber-soft px-2.5 py-0.5 text-sm font-bold text-amber" data-testid="sample-badge">Sample data{evidence ? ' · Illustrative — no PayPal record' : ''}</span>;
+}
+function SourceBadge({ source, sample }: { source: PaymentMatchT['source']; sample?: boolean }) {
+  if (sample) return <SampleBadge />;
   return source === 'paypal_sandbox' ? <Pill label={UI_LABEL.sandbox} tone="ok" /> : <Pill label={UI_LABEL.manual} tone="pending" />;
 }
 
@@ -125,12 +130,14 @@ function MatchRow({ m, onEdit, onDelete, busy }: { m: PaymentMatchT; onEdit?: ()
         <span className="font-display text-xl font-semibold">{money(m.amountCents, m.currency)}</span>
       </div>
       <p className="text-base text-ink-soft">{day(m.date)}{m.description ? ` · ${m.description}` : ''}</p>
-      <p className="mt-1 flex flex-wrap gap-2"><SourceBadge source={m.source} /></p>
+      <p className="mt-1 flex flex-wrap gap-2"><SourceBadge source={m.source} sample={m.sample} /></p>
       <p className="mt-1 text-base break-words">
         <span className="text-ink-soft">Evidence: </span>
         {ev.kind === 'paypal_sandbox'
           ? `PayPal capture ${ev.captureStatus ?? 'not recorded'}${ev.webhookVerified ? ' · signed PayPal notice verified' : ' · signed notice not verified yet'} · SaySafe Demo Shop purchase`
-          : `${METHOD_LABEL[ev.method]} — only what you typed`}
+          : ev.kind === 'sample'
+            ? `${UI_LABEL.sampleEvidence}${ev.basis === 'shop' ? ` · sample Demo Shop purchase${ev.orderState ? ` (${ev.orderState.replace(/_/g, ' ').toLowerCase()})` : ''}` : ev.method ? ` · ${METHOD_LABEL[ev.method]} (illustrated)` : ''}`
+            : `${METHOD_LABEL[ev.method]} — only what you typed`}
       </p>
       {m.matchReasons.length > 0 && (
         <ul className="mt-1 space-y-0.5 text-base" aria-label="Why this matches">
@@ -178,13 +185,15 @@ function PaymentMatchesCard({ b, act }: { b: BlockOf<'payment_matches'>; act: Bl
   };
   const who = r.query.q;
   const shown = matchesCardText(r);
-  const ask = [who ? `paying ${who}` : 'a payment', r.query.amountCents != null ? money(r.query.amountCents, 'EUR') : null].filter(Boolean).join(' · ');
+  // "Did I already pay for the microwave?" names an item, not a person: word the card that way.
+  const itemQuery = Boolean(who) && r.matches.length > 0 && r.matches.every((m) => !m.recipient.toLowerCase().includes(String(who).toLowerCase()));
+  const ask = [who ? (itemQuery ? `“${who}”` : `paying ${who}`) : 'a payment', r.query.amountCents != null ? money(r.query.amountCents, 'EUR') : null].filter(Boolean).join(' · ');
   if (!elderOnly(act)) return null;
   return (
     <div className={`${cardCls} p-4 sm:p-5`} data-card="payment_matches">
       <Head icon={Search} right={<Pill label={r.matches.length ? `${r.matches.length} possible match${r.matches.length === 1 ? '' : 'es'}` : 'No match found'} tone={r.matches.length ? 'pending' : 'muted'} />}>Your records: {ask}</Head>
       <div className="mt-3 rounded-2xl border-2 border-amber bg-amber-soft p-3">
-        <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-5 shrink-0 text-amber" aria-hidden />{UI_LABEL.dontPayAgain}{who ? ` with ${who}` : ''}.</p>
+        <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-5 shrink-0 text-amber" aria-hidden />{itemQuery ? 'Don’t buy or pay again until you’ve checked' : <>{UI_LABEL.dontPayAgain}{who ? ` with ${who}` : ''}</>}.</p>
         {shown.guidance && <p className="mt-1 break-words">{shown.guidance}</p>}
       </div>
       {r.matches.length > 0 && (
@@ -219,6 +228,8 @@ function LastPaymentCard({ b, act }: { b: BlockOf<'last_payment'>; act: BlockAct
       {p ? <ul className="divide-y divide-line"><MatchRow m={p} /></ul> : <p className="mt-2 font-bold">No record found.</p>}
       <p className="mt-1 text-base break-words">{b.guidance}</p>
       <div className="mt-2 flex flex-wrap gap-2">
+        {p && p.evidence.kind === 'paypal_sandbox' && /^pay_/.test(p.id) && <button type="button" onClick={() => act.receipt(p.id)} className={btnSecondary}>Show the PayPal receipt</button>}
+        <a href="/activity" className={btnSecondary}>Open Activity</a>
         <button type="button" onClick={() => act.append?.('Here are all the payment records you saved.', [{ kind: 'companion_records', section: 'payments' }])} className={btnSecondary}>All my records</button>
       </div>
       <PrivateNote />
@@ -264,6 +275,7 @@ function PaymentsManager({ act }: { act: BlockActions }) {
                 <>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="font-bold break-words min-w-0">{p.recipient}</span><span className="font-bold">{money(p.amountCents, p.currency)}</span></div>
                   <p className="text-base text-ink-soft break-words">{day(p.paidOn)} · {METHOD_LABEL[p.method]}{p.note ? ` · ${p.note}` : ''}</p>
+                  {p.sample && <p className="mt-1"><SampleBadge evidence /></p>}
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button type="button" onClick={() => setEditing(p.id)} className={btnSecondary}><Pencil className="size-5" aria-hidden />Edit<span className="sr-only"> record of {p.recipient}</span></button>
                     <ConfirmDelete what={`the record of ${money(p.amountCents, p.currency)} to ${p.recipient}`} onYes={() => void del(p.id)} busy={busy} />
@@ -346,7 +358,7 @@ function Totals({ summary }: { summary: SubscriptionSummaryT }) {
   );
 }
 
-function SubscriptionRow({ s, selected, onSelect, act, reload }: { s: SubscriptionT; selected: boolean; onSelect: () => void; act: BlockActions; reload: () => Promise<void> }) {
+function SubscriptionRow({ s, selected, onSelect, act, reload, tags = [] }: { s: SubscriptionT; selected: boolean; onSelect: () => void; act: BlockActions; reload: () => Promise<void>; tags?: string[] }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -369,12 +381,15 @@ function SubscriptionRow({ s, selected, onSelect, act, reload }: { s: Subscripti
   const live = !s.stoppedTrackingAt && s.status !== 'provider_confirmed' && s.status !== 'user_reported_cancelled';
   return (
     <li className={`py-2 ${selected ? 'bg-teal-soft/40 rounded-2xl' : ''}`} data-sub={s.merchant}>
+      {tags.length > 0 && <p className="mt-1 flex flex-wrap gap-2 px-2">{tags.map((t) => <Pill key={t} label={t} tone="ok" />)}</p>}
       <button type="button" aria-expanded={selected} onClick={onSelect} className="w-full text-left flex items-start gap-3 p-2 min-h-14 rounded-2xl hover:bg-teal-soft">
         <Repeat className="size-6 shrink-0 text-teal mt-0.5" aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="font-bold break-words min-w-0">{s.merchant}</span><span className="font-bold whitespace-nowrap">{money(s.amountCents, s.currency)} <span className="font-normal text-ink-soft">/ {s.frequency === 'weekly' ? 'week' : s.frequency === 'monthly' ? 'month' : 'year'}</span></span></span>
           <span className="block text-base text-ink-soft">{nextChargeText(s)}</span>
           <span className="block text-base text-ink-soft">{sourceText(s)}</span>
+          <span className="block text-base text-ink-soft">{managedText(s)}</span>
+          {s.sample && <span className="mt-1 flex"><SampleBadge /></span>}
           {(s.status !== 'tracking' || s.stoppedTrackingAt) && <span className="mt-1 flex flex-wrap gap-2"><Pill label={s.stoppedTrackingAt ? 'Not tracked — not counted' : s.statusLabel} tone={statusTone(s)} /></span>}
         </span>
       </button>
@@ -727,11 +742,13 @@ function ContactForm({ initial, onSaved, onCancel }: { initial?: ContactT; onSav
 }
 
 function ContactItem({ c, onEdit, onDelete, busy }: { c: ContactT; onEdit: () => void; onDelete: () => void; busy?: boolean }) {
-  const tel = telHref(c.phone); const mail = mailHref(c.email);
+  // Sample contacts have fictional, non-routable details: no call or email links, so nobody is ever contacted by accident.
+  const tel = c.sample ? null : telHref(c.phone); const mail = c.sample ? null : mailHref(c.email);
   return (
     <li className="py-3" data-contact={c.name}>
       <p className="flex flex-wrap items-center gap-2"><UserRound className="size-6 text-teal shrink-0" aria-hidden /><span className="font-bold text-lg break-words min-w-0">{c.name}</span>{c.relation && <span className="text-ink-soft">· your {c.relation}</span>}</p>
-      <p className="mt-1"><Pill label={UI_LABEL.contact} tone="pending" /></p>
+      <p className="mt-1 flex flex-wrap gap-2">{c.sample ? <SampleBadge /> : <Pill label={UI_LABEL.contact} tone="pending" />}</p>
+      {c.sample && <p className="mt-1 text-sm text-ink-soft">Fictional contact for the demo: the number is in a range reserved for TV drama, so Call and Email are turned off.</p>}
       {c.phone && <p className="mt-1 text-base break-words"><span className="text-ink-soft">Phone you saved: </span><span className="font-bold">{c.phone}</span></p>}
       {c.email && <p className="text-base break-all"><span className="text-ink-soft">Email you saved: </span><span className="font-bold">{c.email}</span></p>}
       {c.note && <p className="text-base text-ink-soft break-words">{c.note}</p>}
@@ -821,6 +838,166 @@ function SignInCard({ b, act }: { b: BlockOf<'companion_sign_in'>; act: BlockAct
   return <div className={`${cardCls} p-4`} data-card="companion_sign_in"><p className="font-bold">{b.message}</p></div>;
 }
 
+
+// =====================================================================================================
+// "Try as Mary": subscriptions list, send money, welcome, training examples, error with Retry
+// =====================================================================================================
+const per = (f: SubscriptionT['frequency']) => (f === 'weekly' ? 'week' : f === 'monthly' ? 'month' : 'year');
+
+/** "Show my subscriptions" / "Which costs the most?" / "What's coming out next?" — re-read from the server on mount. */
+function SubscriptionsListCard({ b, act }: { b: BlockOf<'subscriptions_list'>; act: BlockActions }) {
+  const [subs, setSubs] = useState<SubscriptionT[]>(b.subscriptions);
+  const [err, setErr] = useState<string | null>(null);
+  const [sel, setSel] = useState<string | null>(b.focus === 'most' ? b.highlight.mostMonthlyId : b.focus === 'next' ? b.highlight.nextId : null);
+  const reload = async () => {
+    try { setSubs(parseServer(ServerSubsList, await api('/api/companion/subscriptions')).subscriptions); setErr(null); } catch (e) { setErr(errMsg(e)); }
+  };
+  useEffect(() => { void reload(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!elderOnly(act)) return null;
+  const tag = (id: string) => [id === b.highlight.mostMonthlyId && 'Costs the most each month', id === b.highlight.largestChargeId && id !== b.highlight.mostMonthlyId && 'Largest single charge', id === b.highlight.nextId && 'Comes out next'].filter(Boolean) as string[];
+  const title = b.focus === 'most' ? 'Which costs the most' : b.focus === 'next' ? 'What’s coming out next' : 'Your subscriptions';
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="subscriptions_list" data-focus={b.focus}>
+      <Head icon={Repeat} right={subs.some((x) => x.sample) ? <SampleBadge /> : <Pill label="Prototype" tone="muted" />}>{title}</Head>
+      <Totals summary={b.summary} />
+      {subs.length === 0 ? <p className="mt-3">No subscriptions yet. You can add one yourself.</p> : (
+        <ul className="mt-2" aria-label="Your subscriptions">
+          {subs.map((s) => <SubscriptionRow key={s.id} s={s} tags={tag(s.id)} act={act} reload={reload} selected={sel === s.id} onSelect={() => setSel(sel === s.id ? null : s.id)} />)}
+        </ul>
+      )}
+      <Err e={err} />
+      <p className="mt-2 text-base text-ink-soft">Tap one, then “Help me cancel”. For other companies SaySafe shows their official page: it can’t cancel for you.</p>
+      {b.demoOffer && !subs.some(isDemo) && (
+        <div className="mt-3 rounded-2xl border-2 border-teal/40 p-3">
+          <p className="font-bold">Real PayPal Sandbox subscription you can start and cancel here</p>
+          <p className="text-base text-ink-soft">{DEMO_MEMBERSHIP.name}: {money(DEMO_MEMBERSHIP.amountCents, DEMO_MEMBERSHIP.currency)} a month to {DEMO_MEMBERSHIP.merchant}. Sandbox, no real money.</p>
+          <button type="button" onClick={() => act.append?.('The SaySafe Demo Membership is a real PayPal Sandbox subscription. You approve it at PayPal, and SaySafe can cancel it for you after you tap to confirm.', [{ kind: 'demo_membership', returned: null }])} className={`${btnSecondary} mt-2`}>Try the Demo Membership</button>
+        </div>
+      )}
+      <PrivateNote />
+    </div>
+  );
+}
+
+/**
+ * "Send Alex €50": 1) choose the saved contact, 2) review amount + recipient and confirm, 3) hand over to PayPal's own
+ * Send money page. SaySafe never sends money and never says it was sent.
+ */
+function SendMoneyCard({ b, act }: { b: BlockOf<'send_money'>; act: BlockActions }) {
+  const cur = useRef(b); cur.current = b;
+  const id = useId();
+  const [amount, setAmount] = useState(b.amountCents ? (b.amountCents / 100).toFixed(2) : '');
+  const [err, setErr] = useState<string | null>(null);
+  if (!elderOnly(act)) return null;
+  const chosen = b.contacts.find((c) => c.id === b.selectedId) ?? null;
+  const set = (patch: Partial<BlockOf<'send_money'>>) => act.replace(cur.current, { ...cur.current, ...patch });
+  const review = () => {
+    const cents = parseAmount(amount);
+    if (!cents) return setErr('Please enter the amount, for example 50.');
+    setErr(null); set({ amountCents: cents, phase: 'handoff' });
+    act.speak?.('SaySafe can’t send money. Open PayPal and send it yourself. Nothing has been sent.');
+  };
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="send_money" data-phase={b.phase}>
+      <Head icon={Wallet} right={<Pill label="Nothing is sent by SaySafe" tone="pending" />}>Send money to someone you know</Head>
+      {b.phase === 'choose' && (
+        b.contacts.length === 0 ? <p className="mt-2 font-bold">No saved contact matches{b.query ? ` “${b.query}”` : ''}. Nothing was prepared.</p> : (
+          <>
+            <p className="mt-2 font-bold">Step 1 of 3 · Who is it?</p>
+            <ul className="mt-1 divide-y divide-line" aria-label="Matching contacts">
+              {b.contacts.map((c) => (
+                <li key={c.id} className="py-2 flex flex-wrap items-center justify-between gap-2">
+                  <span className="min-w-0"><span className="font-bold break-words">{c.name}</span>{c.relation && <span className="text-ink-soft"> · your {c.relation}</span>}{c.sample && <span className="ml-2"><SampleBadge /></span>}</span>
+                  <button type="button" onClick={() => set({ selectedId: c.id, phase: 'review' })} className={btnSecondary}>Choose<span className="sr-only"> {c.name}</span></button>
+                </li>
+              ))}
+            </ul>
+          </>
+        )
+      )}
+      {b.phase === 'review' && chosen && (
+        <div className="mt-2">
+          <p className="font-bold">Step 2 of 3 · Check the details</p>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+            <dt className="text-ink-soft">To</dt><dd className="font-bold break-words">{chosen.name}{chosen.relation ? ` (your ${chosen.relation})` : ''}</dd>
+            <dt className="text-ink-soft">Currency</dt><dd className="font-bold">{b.currency}</dd>
+          </dl>
+          <label htmlFor={`${id}-a`} className="mt-2 block font-bold">Amount (€)</label>
+          <input id={`${id}-a`} className={inputCls} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" maxLength={12} placeholder="50.00" />
+          <Err e={err} />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button type="button" onClick={review} className={btnPrimary}>Yes, these details are right</button>
+            <button type="button" onClick={() => set({ phase: 'choose', selectedId: null })} className={btnSecondary}>Choose someone else</button>
+            <button type="button" onClick={() => set({ phase: 'cancelled' })} className={btnSecondary}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {b.phase === 'handoff' && chosen && (
+        <div className="mt-2" role="status">
+          <p className="font-bold">Step 3 of 3 · Send it yourself in PayPal</p>
+          <p className="mt-1 text-lg"><span className="font-bold">{b.amountCents ? money(b.amountCents, b.currency) : ''}</span> to <span className="font-bold">{chosen.name}</span> — not sent yet.</p>
+          <p className="mt-2 break-words">SaySafe’s PayPal connection is a shop (merchant) account. It can take payment for Demo Shop items you approve, but it can’t take money from your PayPal wallet and give it to a person, so it doesn’t try.</p>
+          <a href={b.paypalSendUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex w-full items-center justify-between gap-3 rounded-2xl bg-teal text-white font-bold px-5 min-h-14 hover:bg-teal-deep" data-testid="paypal-send-link">
+            <span>Open PayPal Send money</span><ExternalLink className="size-5 shrink-0" aria-hidden /><span className="sr-only"> (opens paypal.com in a new tab)</span>
+          </a>
+          <p className="mt-1 text-sm text-ink-soft break-all">{new URL(b.paypalSendUrl).hostname} · sign in to PayPal yourself, then choose {chosen.name} by the email or number you know is theirs.</p>
+          <p className="mt-2 rounded-2xl border-2 border-amber bg-amber-soft p-3 font-bold" data-testid="nothing-sent">Nothing is sent by SaySafe.</p>
+          {chosen.sample && <p className="mt-2 text-sm text-ink-soft">This is a sample contact with a fictional email, so don’t use it in PayPal.</p>}
+        </div>
+      )}
+      {b.phase === 'cancelled' && <p className="mt-2 font-bold" role="status">Okay. Nothing was prepared and nothing was sent.</p>}
+      <p className="mt-3 text-sm text-ink-soft">{b.notice}</p>
+      <PrivateNote />
+    </div>
+  );
+}
+
+function DemoWelcomeCard({ b, act }: { b: BlockOf<'demo_welcome'>; act: BlockActions }) {
+  if (!elderOnly(act)) return null;
+  return (
+    <div className={`${cardCls} p-4 sm:p-5 border-2 border-teal/50`} data-card="demo_welcome">
+      <Head icon={Info} right={<SampleBadge />}>Welcome to the Mary demo</Head>
+      <p className="mt-2">You’re Mary. Her account has <span className="font-bold">sample payments, subscriptions, contacts and family reviews</span> so you can try everything. Sample items are labelled “Sample data” and can’t be paid or refunded. Payments you make in the Demo Shop are real PayPal Sandbox transactions (no real money).</p>
+      <p className="mt-3 font-bold">Tap one to try it:</p>
+      <div className="mt-2 grid gap-2 min-[480px]:grid-cols-2" role="group" aria-label="Example questions">
+        {b.prompts.map((p) => <button key={p} type="button" onClick={() => act.send?.(p)} className="min-h-12 px-4 rounded-2xl border-2 border-teal text-teal-deep bg-paper font-bold text-left hover:bg-teal-soft">{p}</button>)}
+      </div>
+      <p className="mt-3 text-sm text-ink-soft">You can also try “Did I already pay John €80?”, “Which costs the most?”, “Cancel my streaming subscription” or “Send Alex €50”. Reset the sample data any time in Profile.</p>
+    </div>
+  );
+}
+
+function TrainingExamplesCard({ b, act }: { b: BlockOf<'training_examples'>; act: BlockActions }) {
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="training_examples">
+      <Head icon={ShieldCheck} right={<Pill label="Training examples" tone="muted" />}>Try a scam check</Head>
+      <p className="mt-2 text-base text-ink-soft">Fictional messages for practice. Tap one to check it, or paste your own.</p>
+      <ul className="mt-2 space-y-2">
+        {b.items.map((it) => (
+          <li key={it.id} className="rounded-2xl border border-line p-3">
+            <p className="font-bold">{it.label}</p>
+            <p className="mt-1 text-base break-words italic">“{it.text}”</p>
+            <p className="mt-1 text-sm text-ink-soft">{it.howToTest}</p>
+            <button type="button" onClick={() => act.scan?.(it.text)} className={`${btnSecondary} mt-2`}>Check this training example</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function RetryErrorCard({ b, act }: { b: BlockOf<'retry_error'>; act: BlockActions }) {
+  const cur = useRef(b); cur.current = b;
+  return (
+    <div className={`${cardCls} p-4 border-2 border-danger`} data-card="retry_error" role="alert">
+      <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-6 text-danger shrink-0" aria-hidden />That didn’t work, so I can’t say what your records show.</p>
+      <p className="mt-1 break-words">{b.message}</p>
+      <p className="mt-1 text-sm text-ink-soft">This is an error, not “no records”. Nothing was paid or changed.</p>
+      {!b.done && <button type="button" onClick={() => { act.replace(cur.current, { ...cur.current, done: true }); act.send?.(b.retryText); }} className={`${btnSecondary} mt-2`}><RotateCcw className="size-5" aria-hidden />Retry</button>}
+    </div>
+  );
+}
+
 /** Registry entries for the companion kinds (merged into REGISTRY in blocks.tsx). */
 export const COMPANION_REGISTRY = {
   payment_matches: ({ b, act }: { b: BlockOf<'payment_matches'>; act: BlockActions }) => <PaymentMatchesCard b={b} act={act} />,
@@ -832,5 +1009,10 @@ export const COMPANION_REGISTRY = {
   companion_sign_in: ({ b, act }: { b: BlockOf<'companion_sign_in'>; act: BlockActions }) => <SignInCard b={b} act={act} />,
   companion_records: ({ b, act }: { b: BlockOf<'companion_records'>; act: BlockActions }) => <RecordsCard b={b} act={act} />,
   demo_membership: ({ b, act }: { b: BlockOf<'demo_membership'>; act: BlockActions }) => <DemoMembershipCard b={b} act={act} />,
+  subscriptions_list: ({ b, act }: { b: BlockOf<'subscriptions_list'>; act: BlockActions }) => <SubscriptionsListCard b={b} act={act} />,
+  send_money: ({ b, act }: { b: BlockOf<'send_money'>; act: BlockActions }) => <SendMoneyCard b={b} act={act} />,
+  demo_welcome: ({ b, act }: { b: BlockOf<'demo_welcome'>; act: BlockActions }) => <DemoWelcomeCard b={b} act={act} />,
+  training_examples: ({ b, act }: { b: BlockOf<'training_examples'>; act: BlockActions }) => <TrainingExamplesCard b={b} act={act} />,
+  retry_error: ({ b, act }: { b: BlockOf<'retry_error'>; act: BlockActions }) => <RetryErrorCard b={b} act={act} />,
 };
 export type CompanionBlock = Extract<Block, { kind: keyof typeof COMPANION_REGISTRY }>;

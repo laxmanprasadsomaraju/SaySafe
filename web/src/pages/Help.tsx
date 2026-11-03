@@ -34,11 +34,28 @@ const FAQ: { q: string; a: string }[] = [
 
 const TOPICS: Topic[] = [
   {
+    id: 'try-as-mary', title: 'Try as Mary: a five-minute walkthrough', summary: 'What the sample data is, how it is labelled, and what to try.',
+    steps: [
+      'Choose “Try as Mary” on the SaySafe website. You get your own private copy of Mary’s account, with sample data. Other visitors can’t see it, and it is kept in the database, so it is still there after the server restarts.',
+      'The welcome card in the Assistant has six questions to tap: check a suspicious message, show my last payment, did I already pay for the microwave, show my subscriptions, find Alex, and buy a demo item.',
+      'Payments: try “Did I already pay John €80?”. Two sample bank transfers to John Smith, two days apart, show a possible duplicate. “Show my payments” lists everything in Activity.',
+      'Subscriptions: “Show my subscriptions”, “Which costs the most?”, “What’s coming out next?” and “Cancel my streaming subscription” (Netflix: its official cancel page, because SaySafe can’t cancel other companies). The SaySafe Demo Membership is a real PayPal Sandbox subscription you can start and then cancel inside the chat.',
+      'Contacts: “Find Alex”, “Show my contacts”, “Who is my gardener?”. “Send Alex €50” finds Alex, lets you check the details, then opens PayPal’s own Send money page. Nothing is sent by SaySafe.',
+      'Scam training: the three “Training example” messages (a PayPal invoice with a phone number, “Hi Mum, new number”, and an ordinary order notice) show a warning, a contact mismatch, and no obvious warning signs.',
+      'Family: Profile › Trusted family › “Try as Alex too” opens Alex’s view for the same account in this browser. Buy something above €75 as Mary, then approve or decline it as Alex. Mary can’t approve her own purchase.',
+      'Profile › Mary’s demo › “Reset Mary’s demo” puts the sample data back. Your real sandbox payments and anything you typed are kept. “SaySafe website” (top of every screen) goes back to the website without signing out.',
+    ],
+    notes: [
+      'Labels: “Sample data” = illustrative, with no PayPal record — it can’t be paid, approved, refunded or checked with PayPal. “Real PayPal Sandbox transaction” = a Demo Shop payment you made here (no real money). “Recorded by you — not verified” = only what you typed.',
+      'Sample contacts use fictional numbers from ranges reserved for TV drama and @example.com emails, so Call and Email are turned off for them.',
+    ],
+  },
+  {
     id: 'getting-started', title: 'Getting started', summary: 'Open the demo as Mary in under a minute. No sign-up.',
     steps: [
-      'Go to the SaySafe home page and choose “Try SaySafe” (or “Try it free as Mary”).',
-      'SaySafe creates a private demo household for “Mary”, with a €75 family limit. Nobody else can see it.',
-      'You land on a sample suspicious message. After that, use the four tabs at the bottom of the screen (at the top on a computer): Home, Assistant, Activity and Profile.',
+      'Go to the SaySafe home page and choose “Try as Mary”.',
+      'SaySafe creates a private demo household for “Mary”, with a €75 family limit and labelled sample data. Nobody else can see it.',
+      'You land on the Assistant’s welcome card. After that, use the four tabs at the bottom of the screen (at the top on a computer): Home, Assistant, Activity and Profile.',
       'Home shows your shortcuts. Assistant is where you check messages, ask questions and shop. Activity is your history. Profile holds your settings, family and help.',
       'If a page says it is waking up, wait a moment. The free server sleeps when idle.',
     ],

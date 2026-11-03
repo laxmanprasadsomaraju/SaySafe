@@ -45,7 +45,8 @@ export default function FamilyAssistant() {
     const o = await api<Overview>('/api/family/overview');
     const elderName = typeof o?.elder?.name === 'string' ? o.elder.name.slice(0, 40) : null;
     const rows = (Array.isArray(o?.requests) ? o.requests : []).map((r) => ServerPayment.safeParse(r)).filter((r) => r.success).map((r) => r.data!);
-    const waiting = rows.filter((r) => r.state === 'FAMILY_APPROVAL_PENDING' && r.approval?.status === 'pending' && r.approval.expiresAt > Date.now());
+    // Sample ("Try as Mary") reviews are history only: never shown as something to approve.
+    const waiting = rows.filter((r) => !(r as { sample?: unknown }).sample && r.state === 'FAMILY_APPROVAL_PENDING' && r.approval?.status === 'pending' && r.approval.expiresAt > Date.now());
     const seen = shownIds();
     const list = (onlyNew ? waiting.filter((r) => !seen.has(r.id)) : waiting).slice(0, 3);
     const blocks = list.map((r) => familyReviewFrom({ ...r, elderName })).filter(Boolean);

@@ -25,11 +25,15 @@ export default function Welcome() {
   const nav = useNavigate();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const start = async (to = '/check', state: any = { scenario: 'mary' }) => {
+  // A fresh "Try as Mary" household (with its own labelled sample data), landing on the Assistant's welcome card.
+  const start = async (to = '/assistant?welcome=1', state: any = { scenario: 'mary' }) => {
     setBusy(true); setErr(null);
     try { await api('/api/demo/start', { body: { name: 'Mary' } }); nav(to, { state }); }
     catch (e: any) { setErr(e.message); setBusy(false); }
   };
+  // Already trying it in this browser: offer to carry on (same data) instead of only starting over.
+  const [signedIn, setSignedIn] = useState<string | null>(null);
+  useEffect(() => { api('/api/me').then((r) => setSignedIn(r?.elder?.name ?? null)).catch(() => {}); }, []);
   // Gentle reveal on scroll. Content is visible without JS and with reduced motion.
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches || !('IntersectionObserver' in window)) return;
@@ -94,7 +98,7 @@ export default function Welcome() {
     { t: 'APIMatic', d: 'The PayPal integration was audited against APIMatic’s PayPal Context Plugin guidance. Fixes: 401 token refresh, sandbox-only guard, unknown-outcome capture handling.' },
     { t: 'AG Studio', d: 'An optional AG Studio dashboard was built but is switched off publicly: the trial licence is for evaluation only. The public site uses SaySafe’s own dashboard.' },
   ];
-  const tryNow = ['Choose “Try SaySafe”. A private demo household is created for “Mary”, with a €75 family limit. No sign-up.', 'Check the sample “PayPal” invoice and see the warning signs.', 'Ask for a kettle, by voice or typing, and compare real Channel3 products.', 'Buy a Demo Shop item over €75: it waits for family. Open the family view as “Alex” to approve.', 'Approve the payment on PayPal’s sandbox page with a sandbox buyer account.', 'SaySafe confirms with PayPal and shows the receipt. Open Activity to see it again.'];
+  const tryNow = ['Choose “Try as Mary”. A private demo household is created for “Mary”, with a €75 family limit and labelled sample data. No sign-up.', 'Tap a welcome question: “Did I already pay for the microwave?”, “Show my subscriptions”, or check a training scam message.', 'Ask for a kettle, by voice or typing, and compare real Channel3 products.', 'Buy a Demo Shop item over €75: it waits for family. Open the family view as “Alex” to approve.', 'Approve the payment on PayPal’s sandbox page with a sandbox buyer account.', 'SaySafe confirms with PayPal and shows the receipt. Open Activity to see it again.'];
 
   return (
     <Layout mode="public">
@@ -105,7 +109,9 @@ export default function Welcome() {
           <h1 className="mt-6 text-[2.75rem] leading-[1.04] sm:text-[3.5rem] lg:text-[4.5rem] tracking-[-0.025em] max-w-[13ch]">Pay with confidence, not doubt.</h1>
           <p className="mt-6 text-[1.375rem] leading-relaxed text-ink-soft max-w-[36ch]">SaySafe is a payment safety companion for older adults and the family who help them. It checks the request, brings in family when it matters, and confirms with PayPal before telling you it’s paid.</p>
           <div className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-3">
-            <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try SaySafe</Button>
+            {signedIn
+              ? <><Button onClick={() => nav('/home')} icon={<ArrowRight className="size-6" aria-hidden />}>Continue as {signedIn}</Button><Button variant="secondary" onClick={() => start()} busy={busy}>Start a fresh demo</Button></>
+              : <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try as Mary</Button>}
             {DEMO_VIDEO_URL && <a href={DEMO_VIDEO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline"><CirclePlay className="size-6" aria-hidden />Watch Demo<span className="sr-only"> (opens in a new tab)</span></a>}
             <a href="#how" className="inline-flex items-center min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline">How It Works</a>
             <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline"><Code className="size-5" aria-hidden />View Source Code<span className="sr-only"> (opens in a new tab)</span></a>
@@ -334,7 +340,7 @@ export default function Welcome() {
         <div className="wrap py-20 md:py-24 flex flex-col md:flex-row md:items-end md:justify-between gap-8">
           <h2 className="display-2 max-w-[16ch] text-white">Shop simply. Pay safely.</h2>
           <div className="flex flex-wrap items-center gap-4">
-            <Button onClick={() => start()} busy={busy} className="!bg-white !text-navy hover:!bg-teal-soft" icon={<ArrowRight className="size-6" aria-hidden />}>Try SaySafe</Button>
+            <Button onClick={() => start()} busy={busy} className="!bg-white !text-navy hover:!bg-teal-soft" icon={<ArrowRight className="size-6" aria-hidden />}>Try as Mary</Button>
             <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-white underline underline-offset-4"><Code className="size-5" aria-hidden />View Source Code<span className="sr-only"> (opens in a new tab)</span></a>
           </div>
         </div>

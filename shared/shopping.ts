@@ -67,7 +67,9 @@ const hasWord = (hay: string, word: string) => word.trim().length > 0 && new Reg
 const stem = (w: string) => w.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/(es|s)$/, '');
 export const money = (n: number, currency = 'EUR') => (currency === 'EUR' ? `€${n.toFixed(n % 1 ? 2 : 0)}` : `${n.toFixed(2)} ${currency}`);
 
-const STOP = new Set(['find', 'me', 'a', 'an', 'the', 'some', 'i', 'need', 'want', 'looking', 'for', 'get', 'buy', 'show', 'only', 'just', 'please', 'can', 'you', 'with', 'and', 'or', 'of', 'to', 'in', 'on', 'that', 'is', 'it', 'my', 'new', 'good', 'nice', 'best', 'cheap', 'cheaper', 'cheapest', 'affordable', 'budget', 'price', 'under', 'below', 'less', 'than', 'up', 'max', 'maximum', 'euro', 'euros', 'eur', 'around', 'about', 'between', 'real', 'shop', 'shops', 'ireland', 'irish', 'online', 'would', 'like', 'something', 'one', 'ones', 'which', 'what', 'have', 'has', 'any']);
+const STOP = new Set(['find', 'me', 'a', 'an', 'the', 'some', 'i', 'need', 'want', 'looking', 'for', 'get', 'buy', 'show', 'only', 'just', 'please', 'can', 'you', 'with', 'and', 'or', 'of', 'to', 'in', 'on', 'that', 'is', 'it', 'my', 'new', 'good', 'nice', 'best', 'cheap', 'cheaper', 'cheapest', 'affordable', 'budget', 'price', 'under', 'below', 'less', 'than', 'up', 'max', 'maximum', 'euro', 'euros', 'eur', 'around', 'about', 'between', 'real', 'shop', 'shops', 'ireland', 'irish', 'online', 'would', 'like', 'something', 'one', 'ones', 'which', 'what', 'have', 'has', 'any',
+  // "Compare real shops for X": request words, not product features (they used to show up as "its listing mentions 'compare'").
+  'compare', 'comparing', 'comparison', 'compared', 'prices', 'listings', 'listing', 'retailers', 'retailer', 'stores', 'store', 'other', 'look', 'search', 'see']);
 
 /** Text a listing actually contains, lower-cased, for matching. */
 export function listingText(p: ShopItem): string {

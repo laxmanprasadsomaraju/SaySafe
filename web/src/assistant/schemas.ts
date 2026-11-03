@@ -123,7 +123,7 @@ const Receipt = z.object({
   refundStatus: z.enum(['REFUND_REQUESTED', 'REFUND_PENDING', 'REFUNDED']).nullable().optional(),
   familyApproval: Str(20).nullable().optional(),
 });
-const HistoryItem = z.object({ id: z.string().regex(/^(pay|scan)_[A-Za-z0-9_-]{4,60}$/), type: z.enum(['payment', 'scan']).default('payment'), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), webhookConfirmed: z.boolean().optional() });
+const HistoryItem = z.object({ id: z.string().regex(/^(pay|scan|mpay)_[A-Za-z0-9_-]{4,60}$/), type: z.enum(['payment', 'scan', 'record']).default('payment'), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), webhookConfirmed: z.boolean().optional(), sample: z.boolean().optional(), sourceLabel: Str(60).optional() });
 const PaymentHistory = z.object({
   kind: z.literal('payment_history'),
   items: z.array(HistoryItem).max(10),
@@ -209,7 +209,7 @@ export const ServerPayment = z.object({
 export type ServerPayment = z.infer<typeof ServerPayment>;
 export const ServerActivity = z.object({
   total: z.number().int().min(0),
-  items: z.array(z.object({ id: Str(80), type: z.enum(['payment', 'scan']), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), statusGroup: Str(20), webhookConfirmed: z.boolean() }).passthrough()).max(50),
+  items: z.array(z.object({ id: Str(80), type: z.enum(['payment', 'scan', 'record']), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), statusGroup: Str(20), webhookConfirmed: z.boolean() }).passthrough()).max(50),
 }).passthrough();
 /** Throws if the server sent something unexpected: a card is never built from unvalidated data. */
 export function parseServer<T>(schema: z.ZodType<T>, raw: unknown): T {
@@ -244,5 +244,6 @@ export function refundFrom(p: ServerPayment): BlockOf<'refund'> {
 }
 export function historyFrom(a: z.infer<typeof ServerActivity>, query?: string, as?: 'elder' | 'family'): BlockOf<'payment_history'> {
   return { kind: 'payment_history', total: a.total, query: query?.slice(0, 100) || undefined, ...(as === 'family' ? { as } : {}),
-    items: a.items.filter((i) => /^(pay|scan)_/.test(i.id)).slice(0, 10).map((i) => ({ id: i.id, type: i.type, title: i.title, amountCents: i.amountCents, currency: i.currency, status: i.status, at: i.at, webhookConfirmed: i.webhookConfirmed })) };
+    items: a.items.filter((i) => /^(pay|scan|mpay)_/.test(i.id)).slice(0, 10).map((i) => ({ id: i.id, type: i.type, title: i.title, amountCents: i.amountCents, currency: i.currency, status: i.status, at: i.at, webhookConfirmed: i.webhookConfirmed,
+      ...((i as Record<string, unknown>).example === true ? { sample: true } : {}), ...(typeof (i as Record<string, unknown>).sourceLabel === 'string' ? { sourceLabel: String((i as Record<string, unknown>).sourceLabel).slice(0, 60) } : {}) })) };
 }
