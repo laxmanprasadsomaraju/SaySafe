@@ -185,13 +185,15 @@ function PaymentMatchesCard({ b, act }: { b: BlockOf<'payment_matches'>; act: Bl
   };
   const who = r.query.q;
   const shown = matchesCardText(r);
-  const ask = [who ? `paying ${who}` : 'a payment', r.query.amountCents != null ? money(r.query.amountCents, 'EUR') : null].filter(Boolean).join(' · ');
+  // "Did I already pay for the microwave?" names an item, not a person: word the card that way.
+  const itemQuery = Boolean(who) && r.matches.length > 0 && r.matches.every((m) => !m.recipient.toLowerCase().includes(String(who).toLowerCase()));
+  const ask = [who ? (itemQuery ? `“${who}”` : `paying ${who}`) : 'a payment', r.query.amountCents != null ? money(r.query.amountCents, 'EUR') : null].filter(Boolean).join(' · ');
   if (!elderOnly(act)) return null;
   return (
     <div className={`${cardCls} p-4 sm:p-5`} data-card="payment_matches">
       <Head icon={Search} right={<Pill label={r.matches.length ? `${r.matches.length} possible match${r.matches.length === 1 ? '' : 'es'}` : 'No match found'} tone={r.matches.length ? 'pending' : 'muted'} />}>Your records: {ask}</Head>
       <div className="mt-3 rounded-2xl border-2 border-amber bg-amber-soft p-3">
-        <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-5 shrink-0 text-amber" aria-hidden />{UI_LABEL.dontPayAgain}{who ? ` with ${who}` : ''}.</p>
+        <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-5 shrink-0 text-amber" aria-hidden />{itemQuery ? 'Don’t buy or pay again until you’ve checked' : <>{UI_LABEL.dontPayAgain}{who ? ` with ${who}` : ''}</>}.</p>
         {shown.guidance && <p className="mt-1 break-words">{shown.guidance}</p>}
       </div>
       {r.matches.length > 0 && (

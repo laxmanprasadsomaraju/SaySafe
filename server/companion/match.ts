@@ -191,7 +191,7 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
   if (itemHits.length > 1 && new Set(itemHits.map((m) => normName(m.recipient))).size > 1) {
     notes.push(`These look like separate purchases of "${q}" from ${[...new Set(itemHits.map((m) => m.recipient))].join(' and ')}. Check you meant to buy more than one.`);
   }
-  if (excludedShop > 0) notes.push(`${DEMO_SHOP_RECIPIENT} payments are not shown: they are shop purchases, not payments to ${q}.`);
+  if (excludedShop > 0 && byItem.size === 0) notes.push(`${DEMO_SHOP_RECIPIENT} payments are not shown: they are shop purchases, not payments to ${q}.`);
   notes.push('SaySafe only knows Demo Shop payments made in this app and records you typed in. It cannot see your bank or your PayPal wallet.');
 
   const who = itemHits.length && itemHits.length === matches.length ? 'the shop' : q ?? 'them';

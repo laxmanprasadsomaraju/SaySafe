@@ -41,15 +41,28 @@ Real captures (PayPal sandbox, fictional data; ids and emails redacted). New cap
 |---|---|---|---|---|
 | <img src="web/public/screens/check-result.webp" width="160" alt="Suspicious result for a fake PayPal invoice"> | <img src="web/public/screens/family-waiting.webp" width="160" alt="Mary's purchase waiting for family"> | <img src="web/public/screens/family-request.webp" width="160" alt="Alex sees the exact item and price with Approve and Decline"> | <img src="web/public/screens/receipt.webp" width="160" alt="Receipt confirmed by PayPal, sandbox EUR 32.00"> | <img src="web/public/screens/shop-voice.webp" width="160" alt="Tap to speak with a caption of the reply"> |
 
-## 6. Try the hosted demo
+## 6. Try the hosted demo ("Try as Mary")
 
-1. Open https://saysafe.onrender.com and choose **Try SaySafe**. No sign-up; a private demo household for "Mary" is created (family limit €75). The free host sleeps when idle, so the first load can take about a minute.
-2. **Check a message:** use the sample "PayPal" invoice, or paste text, a link, an email address or a phone number.
-3. **Find a product:** say or type "a reliable kettle under €40". Channel3 results open the retailer's own site.
-4. **Family review:** in Profile, invite a family member and open the family view ("Alex") in another tab. As Mary, buy the €120 Demo Shop microwave; Alex approves or declines it.
-5. **Pay:** approve on PayPal's sandbox page with a PayPal **sandbox personal (buyer)** account. SaySafe checks the order with PayPal and shows the receipt. Open **Activity** to find it again.
+1. Open https://saysafe.onrender.com and choose **Try as Mary**. No sign-up. You get your **own private copy** of Mary's account (family limit €75) with labelled **sample data**, stored in the database (Turso), so it survives restarts and redeploys. Other visitors never see it. The free host sleeps when idle, so the first load can take about a minute.
+2. The Assistant opens on a **welcome card** with six prompts that work on the sample data: *Check this suspicious message* · *Show my last payment* · *Did I already pay for the microwave?* · *Show my subscriptions* · *Find Alex in my contacts* · *Help me buy a demo item*.
+3. **More to ask:** "Did I already pay John €80?" (two sample transfers two days apart → possible duplicate) · "Which costs the most?" · "What's coming out next?" · "Cancel my streaming subscription" (Netflix → its official cancel page; SaySafe can't cancel other companies) · "Who is my gardener?" · "Send Alex €50" (choose Alex → check the details → **Open PayPal Send money**; *Nothing is sent by SaySafe*).
+4. **Scam training:** three tap-to-try "Training example" messages: a PayPal invoice with a phone number (Suspicious), "Hi Mum, new number" (doesn't match Sarah's saved number), an ordinary order notice (no obvious warning signs).
+5. **Family review:** Profile › Trusted family › **Try as Alex too** opens Alex's family view for the same account in this browser. As Mary buy the €120 Demo Shop microwave; as Alex approve or decline it. Mary can never approve her own purchase. Sample family reviews are history only (no Approve/Decline).
+6. **Pay:** approve on PayPal's sandbox page with a PayPal **sandbox personal (buyer)** account. SaySafe checks with PayPal and shows the receipt as a **Real PayPal Sandbox transaction**.
+7. **Reset Mary's demo** (Profile) puts the sample data back; your real sandbox payments and anything you typed are kept. **SaySafe website** (top right of every screen, and in Profile) goes back to the landing page without signing out; the landing page then offers **Continue as Mary**.
 
-Step-by-step, non-technical instructions are in the in-app [Help centre](https://saysafe.onrender.com/help).
+### Data labels
+
+| Label | Meaning |
+|---|---|
+| **Sample data** · *Illustrative — no PayPal record* | Seeded for the demo. No PayPal order, capture, refund or webhook exists. The server refuses checkout, confirm, cancel, finish, reconcile, refund requests and family decisions on it (409 `sample_not_actionable`). |
+| **Real PayPal Sandbox transaction** | A Demo Shop payment made in this app; evidence is PayPal's own (capture, Payments v2 read-back, signed webhook). No real money. |
+| **Recorded by you — not verified** | A payment, subscription or contact the user typed. Only what they typed. |
+| *User-imported* | Not implemented (no bank/PayPal wallet import). |
+
+The sample set (9 Demo Shop-style purchases incl. family reviews pending/approved/declined/expired, 5 payment records, 4 subscriptions, 5 contacts, 3 training messages) is defined in [`shared/demoData.ts`](shared/demoData.ts) and seeded by [`server/demo/seed.ts`](server/demo/seed.ts) on `POST /api/demo/start` and `POST /api/demo/reset`. Contacts use Ofcom drama-range numbers (+44 7700 900xxx, +44 20 7946 0xxx) and `@example.com` emails; Call/Email buttons are off for them. Details: [docs/DEMO-DATA.md](docs/DEMO-DATA.md).
+
+Step-by-step, non-technical instructions are in the in-app [Help centre](https://saysafe.onrender.com/help#try-as-mary).
 
 ## 7. Run locally
 
