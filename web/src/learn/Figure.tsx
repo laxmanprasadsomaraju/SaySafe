@@ -36,7 +36,7 @@ export function Figure({ shot, prefer = 'phone', compact = false }: { shot: Shot
       </button>
       <figcaption id={capId} className="mt-2 text-base font-bold text-ink-soft">
         {shot.cap}
-        {cur.paypalMock && <span className="block text-sm font-normal text-amber">Illustration from local test build (mock PayPal; IDs hidden)</span>}
+        {cur.source === 'local' && <span className="block text-sm font-normal text-amber">Illustration from local test build{cur.paypalMock ? ' (mock PayPal; IDs hidden)' : ''}</span>}
       </figcaption>
       {both && (
         <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Screenshot size: ${shot.cap}`}>
@@ -48,12 +48,12 @@ export function Figure({ shot, prefer = 'phone', compact = false }: { shot: Shot
           ))}
         </div>
       )}
-      {open && <Lightbox src={cur.file} alt={shot.alt} cap={shot.cap} mock={cur.paypalMock} w={cur.width} h={cur.height} onClose={() => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }} />}
+      {open && <Lightbox src={cur.file} alt={shot.alt} cap={shot.cap} local={cur.source === 'local'} mock={cur.paypalMock} w={cur.width} h={cur.height} onClose={() => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); }} />}
     </figure>
   );
 }
 
-export function Lightbox({ src, alt, cap, mock, w, h, onClose }: { src: string; alt: string; cap: string; mock: boolean; w: number; h: number; onClose: () => void }) {
+export function Lightbox({ src, alt, cap, local = false, mock, w, h, onClose }: { src: string; alt: string; cap: string; local?: boolean; mock: boolean; w: number; h: number; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -79,7 +79,7 @@ export function Lightbox({ src, alt, cap, mock, w, h, onClose }: { src: string; 
         <h2 id={titleId} className="text-xl min-w-0 break-words">{cap}</h2>
         <button type="button" data-close onClick={onClose} className="shrink-0 inline-flex items-center gap-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal"><X className="size-5" aria-hidden />Close</button>
       </div>
-      {mock && <p className="mt-2 text-base font-bold text-amber">Illustration from local test build (mock PayPal; IDs hidden). Not a real sandbox payment.</p>}
+      {(local || mock) && <p className="mt-2 text-base font-bold text-amber">{mock ? 'Illustration from local test build (mock PayPal; IDs hidden). Not a real sandbox payment.' : 'Illustration from local test build.'}</p>}
       <img src={src} alt={alt} width={w} height={h} className="mt-4 mx-auto block h-auto max-w-full rounded-xl border border-line" style={{ maxHeight: w < h ? '80dvh' : undefined, width: 'auto' }} />
       <p className="mt-3 text-base text-ink-soft">{alt}</p>
       <a href={src} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-12 items-center font-bold text-teal underline underline-offset-4">Open the image on its own<span className="sr-only"> (opens in a new tab)</span></a>

@@ -42,7 +42,7 @@ const TOPICS: Topic[] = [
       'Subscriptions: “Show my subscriptions”, “Which costs the most?”, “What’s coming out next?” and “Cancel my streaming subscription”. The sample subscriptions (StreamBox Plus, TuneWave Premium, The Daily Ledger, ParcelPass) are made-up companies, so instead of a cancellation link you see a “This is sample data” note. For a subscription you add yourself, SaySafe shows the company’s own cancellation steps; it can’t cancel other companies for you. The SaySafe Demo Membership is a real PayPal Sandbox subscription you can start and then cancel inside the chat.',
       'Contacts: “Find Alex”, “Show my contacts”, “Who is my gardener?”. “Send Alex €50” finds Alex, lets you check the details, then opens PayPal’s own Send money page. Nothing is sent by SaySafe.',
       'Scam training: the three “Training example” messages (a PayPal invoice with a phone number, “Hi Mum, new number”, and an ordinary order notice) show a warning, a contact mismatch, and no obvious warning signs.',
-      'Family: Profile › Trusted family › “Try as Alex too” opens Alex’s view for the same account in this browser. Buy something above €75 as Mary, then approve or decline it as Alex. Mary can’t approve her own purchase.',
+      'Family: buy something above €75 as Mary, then on the pending card choose “Try as Alex too” (the same button is in Profile › Demo & help) to approve or decline it as Alex. Come back with Profile › “Back to Mary”. Mary can’t approve her own purchase.',
       'Profile › Mary’s demo › “Reset Mary’s demo” puts the sample data back. Your real sandbox payments and anything you typed are kept. “SaySafe website” (top of every screen) goes back to the website without signing out.',
     ],
     notes: [
@@ -56,7 +56,7 @@ const TOPICS: Topic[] = [
       'Choose “Try as Mary”. You get a private demo household with labelled sample data and a €75 family limit.',
       'In the Assistant, type “I received a message saying I owe €120. Can you check whether I already paid?”. SaySafe looks through Mary’s own records and shows possible matches. Sample records are marked “Sample data”: they are examples, not real payments, and a matching amount is not proof.',
       'Ask “Can you help me buy a microwave instead?”. You see real products from Channel3 (bought on the shop’s own website), and separately the SaySafe Demo Shop microwave for €120 (PayPal Sandbox). Say “Let’s buy the demo microwave”, check the item, shop and price on the review card, and ask your family to check. Nothing is paid yet.',
-      'Choose “Try as Alex too” on the family review card (or in Profile › Trusted family) to open Alex’s family view. Alex sees the exact item and price and chooses Approve. The answer expires and applies only to this purchase.',
+      'Choose “Try as Alex too” on the family review card (or in Profile › Demo & help) to open Alex’s family view. Alex sees the exact item and price and chooses Approve. The answer expires and applies only to this purchase.',
       'Back as Mary, the same card now says “Approved”. Choose “Continue to PayPal” and approve on PayPal’s own sandbox page with a sandbox buyer account (judges: see the testing instructions on Devpost).',
       'SaySafe checks the order with PayPal, captures it once and shows the receipt. It says “Captured” first, then “Webhook verified” once PayPal’s signed notice arrives (usually within seconds; reload to see it).',
       'Ask “Did my payment go through?”, or open Activity: the purchase is labelled “Real PayPal Sandbox transaction”. Reloading or asking again never charges twice.',
@@ -181,7 +181,7 @@ const TOPICS: Topic[] = [
       'You can ask questions about the activity. Answers are read-only: Insights can explain what happened, but it can’t approve, pay or change anything.',
     ],
     notes: [
-      'An optional AG Studio dashboard exists but is switched off on the public site: its trial licence is for evaluation only.',
+      'The public site uses SaySafe’s own native React dashboard. An optional AG Studio view exists for evaluation only and is not enabled publicly.',
       'Mary’s private scam checks are only visible to Alex if Mary shares them.',
     ],
   },

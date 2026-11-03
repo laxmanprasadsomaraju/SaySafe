@@ -26,7 +26,9 @@ const HOSTED = !/^http:\/\/(127\.0\.0\.1|localhost)/.test(BASE);
 const MOCK = process.env.MOCK_PAYPAL ?? 'http://127.0.0.1:9999';
 const OUT = path.resolve(process.env.OUT ?? 'video-out');
 const W = 1920, H = 1080, FPS = 30, LIMIT = 175; // seconds (2:55)
-const ZOOM = Number(process.env.ZOOM ?? 1.5); // 1920/1.5 = 1280 CSS px: the desktop layout, large enough to read
+// The page is laid out at 1280×720 CSS px and rendered at 1.5× device pixels = a crisp 1920×1080 frame (desktop layout,
+// large enough to read). CSS zoom is not used: it skews element coordinates and clicks.
+const VW = 1280, VH = 720, DPR = W / VW;
 const BUYER = { email: process.env.PAYPAL_BUYER_EMAIL, password: process.env.PAYPAL_BUYER_PASSWORD };
 if (HOSTED && !process.env.NARRATE_ONLY && !(BUYER.email && BUYER.password)) { console.error('Hosted recording needs PAYPAL_BUYER_EMAIL and PAYPAL_BUYER_PASSWORD in the environment (sandbox buyer).'); process.exit(2); }
 for (const d of ['raw', 'segments', 'cards']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
@@ -37,23 +39,23 @@ const proxyOf = (u) => { if (!u) return undefined; const x = new URL(u); return 
 
 // ---------------- The shot list (narration is timed to the measured cut afterwards) ----------------
 const NARRATION = {
-  open: 'Scammers rarely hack accounts. They talk people into approving payments themselves, and older adults lose the most. SaySafe is a second look before paying, family backup for bigger purchases, and proof afterwards.',
+  open: 'Scammers rarely hack accounts. They talk people into approving payments themselves, and older adults are often the target. SaySafe is a second look before paying, family backup for bigger purchases, and proof afterwards.',
   landing: 'SaySafe helps people understand payment requests, avoid accidental repeat payments, get trusted assistance and verify payments. Here is how it works for Mary.',
   scam: 'Mary gets a message: her account is on hold, she owes a hundred and twenty euro, call this number. She pastes it in. The AI reads it and points to the exact warning signs, a number to call and pressure to act. It can make a warning stronger. It never calls a message safe.',
-  paid: 'Did she already pay for a microwave? SaySafe checks her own records and finds a possible match. It is clearly labelled sample data, and SaySafe says plainly that a match is not proof that this message is genuine.',
+  paid: 'So, has she already paid a hundred and twenty euro? SaySafe checks her own records and finds a possible match. It is clearly labelled sample data, and SaySafe says plainly that a matching amount is not proof.',
   shop: 'She would rather buy a new microwave. Real products from Channel3 are bought on the shop’s own website. The SaySafe Demo Shop is where the payment can be protected. The price comes from the server, not the AI. It is over her seventy-five euro limit, so it waits for her family.',
   alex: 'Alex, her family helper, sees exactly what she wants to buy, from which shop and for how much. He only sees requests sent to him. He approves, but he can never pay for her.',
-  approved: 'Back to Mary. The same card now says approved. Mary still approves the payment herself, at PayPal.',
+  approved: 'Back to Mary. The same card, in the same conversation, now says approved. Family approval is not payment approval: Mary still approves the payment herself, on PayPal’s own page.',
   paypal: 'This is PayPal’s own sandbox checkout, with test money.',
   receipt: 'SaySafe captures the payment once and checks it with PayPal before it says paid. PayPal’s signed notice is verified a moment later. When she asks whether her payment went through, she gets the same receipt. Nothing is charged twice.',
-  activity: 'Activity marks it as a real sandbox transaction, kept apart from sample data, and Insights gives her a calm, read-only summary.',
+  activity: 'Activity marks it as a real PayPal Sandbox transaction, kept apart from the sample data. Insights gives Mary a calm, read-only summary: what is waiting, what was paid and what she checked. Insights can explain, but it can’t approve, pay or change anything.',
   arch: 'Under the hood, the AI only interprets and explains. Prices, the family rule and the capture are server code. The payer approves at PayPal, and the server verifies every payment.',
   docs: 'Step-by-step guides, a judges’ guide and a features page show how to test it, and what it can’t do yet.',
-  end: 'SaySafe. Ask first. Pay with confidence.',
+  end: 'SaySafe. Ask first, pay with confidence. Everything you saw runs in the PayPal Sandbox with test money, and the guides show how to try it yourself.',
 };
 const ONSCREEN = {
   open: 'Title card: who it is for and why', landing: 'Landing page: headline, value proposition, How it works', scam: 'Assistant: scam message pasted → “Suspicious” with quoted warning signs',
-  paid: '“Did I already pay for the microwave?” → possible match, labelled Sample data', shop: 'Real Channel3 listings (brief) → Demo Shop microwave €120 → Allow → Family review: Pending',
+  paid: '“Have I already paid €120?” → possible match, labelled Sample data', shop: 'Real Channel3 listings (brief) → Demo Shop microwave €120 → Allow → Family review: Pending',
   alex: 'Try as Alex too → Alex’s review card → Approve', approved: 'Profile › Back to Mary → Assistant: Approved → Continue to PayPal', paypal: 'Title card: PayPal Sandbox checkout — buyer approves on PayPal',
   receipt: 'Receipt: Captured, checked with PayPal → “Did my payment go through?” → same receipt card', activity: 'Activity (Real PayPal Sandbox transaction) → Insights', arch: 'Architecture slide',
   docs: 'Learn SaySafe, Judges’ Guide, Features pages', end: 'End card: name, URLs, sandbox and independence notes',
@@ -116,16 +118,15 @@ async function card(name, html, seconds) {
 }
 
 // ---------------- The recorded browser ----------------
-const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: 'en-IE', timezoneId: 'Europe/Dublin', recordVideo: { dir: path.join(OUT, 'raw'), size: { width: W, height: H } } });
-await ctx.addInitScript(({ zoom, local }) => {
+const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR, locale: 'en-IE', timezoneId: 'Europe/Dublin', recordVideo: { dir: path.join(OUT, 'raw'), size: { width: W, height: H } } });
+await ctx.addInitScript(({ local }) => {
   if (!localStorage.getItem('ss-voice-prefs')) localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: false, rate: 0.95, readAll: false, lang: 'en' }));
   const boot = () => {
-    document.body.style.zoom = String(zoom); // overlays live on <html>, outside the zoom, so they follow the real mouse
     const st = document.createElement('style');
     st.textContent = `#rec-cursor{position:fixed;left:0;top:0;width:30px;height:30px;z-index:2147483647;pointer-events:none;transform:translate(-4px,-2px);transition:left .05s linear,top .05s linear}
       .rec-ring{position:fixed;width:56px;height:56px;margin:-28px 0 0 -28px;border:4px solid #c2410c;border-radius:50%;z-index:2147483646;pointer-events:none;animation:recring .7s ease-out forwards}
       @keyframes recring{from{transform:scale(.3);opacity:1}to{transform:scale(1.4);opacity:0}}
-      #rec-banner{position:fixed;right:14px;top:84px;z-index:2147483645;background:#15283b;color:#fff;font:700 15px/1.2 system-ui,sans-serif;padding:8px 16px;border-radius:10px;pointer-events:none}`;
+      #rec-banner{position:fixed;right:10px;top:72px;z-index:2147483645;background:#15283b;color:#fff;font:700 15px/1.2 system-ui,sans-serif;padding:8px 16px;border-radius:10px;pointer-events:none}`;
     document.head.appendChild(st);
     const c = document.createElement('div'); c.id = 'rec-cursor';
     c.innerHTML = '<svg viewBox="0 0 24 24" width="30" height="30"><path d="M3 2l7 19 2.6-7.4L20 11z" fill="#15283b" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
@@ -141,7 +142,7 @@ await ctx.addInitScript(({ zoom, local }) => {
     }
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
-}, { zoom: ZOOM, local: !HOSTED });
+}, { local: !HOSTED });
 
 let payUrl = null;
 await ctx.route('https://www.sandbox.paypal.com/**', async (r) => { payUrl = r.request().url(); await r.fulfill({ status: 200, contentType: 'text/html', body: '<html lang="en"><body style="background:#f7f8f4;font:32px system-ui;display:grid;place-items:center;height:100vh;margin:0;color:#15283b">Opening PayPal…</body></html>' }); });
@@ -156,7 +157,7 @@ async function cut(fn) { const name = open.name; end(); try { await fn(); } fina
 
 async function moveTo(loc) {
   const el = loc.first(); await el.waitFor({ timeout: 40000 });
-  await el.evaluate((e) => e.scrollIntoView({ behavior: 'smooth', block: 'center' })); await sleep(900);
+  await el.evaluate((e) => { const r = e.getBoundingClientRect(); scrollBy({ top: r.top + r.height / 2 - innerHeight * 0.42, behavior: 'smooth' }); }); await sleep(900);
   const b = await el.boundingBox(); if (!b) return;
   // boundingBox is in CSS px of the zoomed page; the mouse uses viewport px.
   await p.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 18 }); await sleep(450);
@@ -195,8 +196,8 @@ end();
 
 // HAVE I ALREADY PAID?
 begin('paid');
-// Short and without “€”, so it reads as a question even straight after a message check.
-await type('Did I already pay for the microwave?', 'payment_matches');
+// “Have I already paid …” is a payment-memory question in any composer mode (looksCompanion), even straight after a message check.
+await type('Have I already paid €120?', 'payment_matches');
 await sleep(800); await show(last('payment_matches'), 5500);
 end();
 
@@ -278,12 +279,14 @@ await cut(async () => { await p.locator('#spending').waitFor({ timeout: 30000 })
 await sleep(4200);
 end();
 
-// DOCS
+// DOCS (optional, DOCS=1; not in the submission flow)
+if (process.env.DOCS) {
 begin('docs');
 await p.goto(BASE + '/learn'); await p.waitForSelector('h1'); await sleep(2600);
 await click(p.getByRole('link', { name: 'Judges’ Guide' }).first(), 300); await p.waitForSelector('h1'); await sleep(2600);
 await click(p.getByRole('link', { name: 'Features' }).first(), 300); await p.waitForSelector('h1'); await sleep(2200);
 end();
+}
 
 await p.close(); const raw = await p.video().path(); await ctx.close();
 
@@ -302,7 +305,7 @@ const cards = {
 };
 
 // ---------------- Cut + stitch ----------------
-const order = ['open', 'landing', 'scam', 'paid', 'shop', 'alex', 'approved', 'paypal', 'receipt', 'activity', 'arch', 'docs', 'end'];
+const order = ['open', 'landing', 'scam', 'paid', 'shop', 'alex', 'approved', 'paypal', 'receipt', 'activity', 'arch', ...(process.env.DOCS ? ['docs'] : []), 'end'];
 const enc = ['-r', String(FPS), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-an'];
 const pieces = []; let k = 0;
 const shotsOut = [];
