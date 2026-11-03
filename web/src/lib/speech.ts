@@ -9,7 +9,7 @@
  *   speechSynthesis.pause()/resume() and its ~15 s cut-off on long utterances.
  * - Preferences (muted, autoSpeak, rate, readAll) live in localStorage.
  * - Automatic speech is for short replies only. Long text is only read when the user asks
- *   ("Read aloud", "Replay") or has turned on "Read everything".
+ *   ("Read aloud", "Replay") or has turned on "Read entire results".
  */
 
 import { LANGS, normaliseLang, type LangCode } from '../../../shared/lang';
@@ -20,7 +20,7 @@ import { dropTranscript } from '../../../shared/voice';
 /** One state for all of SaySafe's voice: mic, transcription, AI turn and speech. */
 export type SpeechStatus = 'ready' | 'listening' | 'processing' | 'thinking' | 'speaking' | 'paused' | 'cancelled' | 'muted' | 'unavailable' | 'error';
 /** auto: short reply, only if autoSpeak is on. critical: safety warning, spoken if autoSpeak is on even when longer.
- *  user: the user pressed a Read aloud / Replay button (unmutes). list: the opt-in "Read everything" mode. */
+ *  user: the user pressed a Read aloud / Replay button (plays even when muted, without unmuting). list: the opt-in "Read entire results" mode. */
 export type SpeechPriority = 'auto' | 'critical' | 'user' | 'list';
 export interface SpeechPrefs { muted: boolean; autoSpeak: boolean; rate: number; readAll: boolean; lang: LangCode }
 export interface SpeechSnapshot {
@@ -47,6 +47,22 @@ export interface SpeechEnv {
 }
 
 export const AUTO_MAX_CHARS = 320;
+
+/**
+ * What each voice setting actually does right now, for the settings UI. Voice playback is the master switch;
+ * the automatic options are preferences that are kept while muted and take effect again on unmute.
+ * UI, saved preferences and speakNow() all derive from the same SpeechPrefs, so they cannot disagree.
+ */
+export interface VoiceEffect { playback: 'on' | 'muted' | 'unavailable'; autoShort: 'on' | 'off' | 'saved-muted'; readAll: 'on' | 'off' | 'saved-muted'; note: string | null }
+export function voiceEffect(prefs: Pick<SpeechPrefs, 'muted' | 'autoSpeak' | 'readAll'>, supported = true): VoiceEffect {
+  const playback = !supported ? 'unavailable' : prefs.muted ? 'muted' : 'on';
+  const dep = (on: boolean) => (!on ? 'off' : playback === 'on' ? 'on' : 'saved-muted') as VoiceEffect['autoShort'];
+  const autoShort = dep(prefs.autoSpeak), readAll = dep(prefs.readAll);
+  const note = playback === 'unavailable' ? 'This browser can’t speak aloud. Replies are always shown as text.'
+    : playback === 'muted' ? (prefs.autoSpeak || prefs.readAll ? 'Voice playback is muted. Your automatic speaking choices below are saved, but nothing plays until you turn playback on. A “Read aloud” button you press still plays.' : 'Voice playback is muted. A “Read aloud” button you press still plays.')
+    : null;
+  return { playback, autoShort, readAll, note };
+}
 export const PREFS_KEY = 'ss-voice-prefs';
 const DEFAULT_PREFS: SpeechPrefs = { muted: false, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' };
 
@@ -325,10 +341,10 @@ export class SpeechController {
     }
     const total = parts.join(' ').length;
     if (!this.env.synth || !this.env.Utterance) { this.emit(); return false; }
-    if (this.prefs.muted) {
-      if (priority !== 'user') { this.emit(); return false; }
-      this.prefs.muted = false; this.savePrefs(); // pressing "Read aloud" is an explicit request to hear it
-    }
+    // Muted: SaySafe never speaks on its own (short replies, warnings, Read entire results). A "Read aloud" or
+    // Replay the user presses is an explicit request, so it plays once, but it does NOT silently change the saved
+    // playback setting: the switch in Profile and the Assistant menu stays "Muted" and keeps telling the truth.
+    if (this.prefs.muted && priority !== 'user') { this.emit(); return false; }
     if (priority === 'auto' && (!this.prefs.autoSpeak || total > AUTO_MAX_CHARS)) { this.emit(); return false; }
     if (priority === 'critical' && !this.prefs.autoSpeak) { this.emit(); return false; }
 

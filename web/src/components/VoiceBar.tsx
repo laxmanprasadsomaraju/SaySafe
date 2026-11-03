@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
-import { Square, Pause, Play, Volume2, ListMusic } from 'lucide-react';
-import { speech, type SpeechStatus } from '../lib/speech';
+import { useEffect, useId } from 'react';
+import { Square, Pause, Play, Volume2, VolumeX, ListMusic } from 'lucide-react';
+import { speech, voiceEffect, type SpeechStatus } from '../lib/speech';
+import { switchBtn } from './ds';
 import { LANGS, LANG_CODES, normaliseLang } from '../../../shared/lang';
 import { useSpeech } from '../lib/voice';
 
@@ -30,7 +31,7 @@ export function VoiceBar({ scope = 'other' }: { scope?: 'assistant' | 'other' })
   const label = LABEL[s.status] ?? '';
   const dot = s.status === 'listening' ? 'bg-danger' : speakingNow ? 'bg-teal' : 'bg-amber';
   return (
-    <div role="region" aria-label="Voice controls" data-testid="voice-bar">
+    <div role="region" aria-label="Voice controls" data-testid="voice-bar" className="border-t border-line">
       <div className="mx-auto max-w-5xl px-4 sm:px-5 py-1.5 flex items-center gap-2">
         <p className="min-w-0 flex-1 flex items-center gap-2 text-base" aria-live="polite">
           <span className={`size-2.5 rounded-full shrink-0 ${dot}`} aria-hidden />
@@ -52,31 +53,46 @@ export function VoiceBar({ scope = 'other' }: { scope?: 'assistant' | 'other' })
 }
 
 
-/** Voice settings, shared by the voice bar's settings panel and the Profile page. */
+/** Shown under an automatic option that is ticked but held back by muted playback. */
+const Held = () => <span className="mt-1 inline-flex items-center gap-1 rounded-xl border border-amber/40 bg-amber-soft px-2.5 py-0.5 text-sm font-bold text-amber">Saved · won’t play while muted</span>;
+
+/**
+ * Voice settings, shared by the Assistant menu and Profile. Voice playback (MuteSwitch) is the master switch;
+ * these are the automatic-speaking preferences. While playback is muted they stay saved and editable, and the
+ * group says plainly that they won't play until playback is turned on (voiceEffect() in speech.ts is the one
+ * source for that wording and for what speakNow() actually does).
+ */
 export function VoiceSettings({ className = '', parts = 'all' }: { className?: string; parts?: 'all' | 'voice' | 'language' }) {
   const s = useSpeech();
+  const id = useId();
   if (parts === 'language') return <LanguageSetting className={className} />;
+  const fx = voiceEffect(s.prefs, s.supported);
+  const held = fx.playback !== 'on';
+  const row = 'flex items-start gap-3 min-h-12 py-2 cursor-pointer';
   return (
-          <fieldset className={`rounded-2xl border border-line bg-ivory p-4 flex flex-wrap gap-x-6 gap-y-3 items-center ${className}`}>
-            <legend className="sr-only">Voice settings</legend>
-            <label className="inline-flex items-center gap-3 min-h-11 font-bold cursor-pointer">
-              <input type="checkbox" className="size-6 accent-[var(--color-teal)]" checked={s.prefs.autoSpeak} onChange={(e) => speech.setPrefs({ autoSpeak: e.target.checked })} />
-              Speak short replies automatically
-            </label>
-            <label className="inline-flex items-center gap-3 min-h-11 font-bold cursor-pointer">
-              <input type="checkbox" className="size-6 accent-[var(--color-teal)]" checked={s.prefs.readAll} onChange={(e) => speech.setPrefs({ readAll: e.target.checked })} />
-              Read everything (whole results lists)
-            </label>
-            {parts === 'all' && <LanguageSetting bare />}
-            <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
-              Speed
-              <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={String(s.prefs.rate)} onChange={(e) => speech.setPrefs({ rate: Number(e.target.value) })}>
-                <option value="0.8">Slower</option>
-                <option value="0.95">Normal</option>
-                <option value="1.1">Faster</option>
-              </select>
-            </label>
-          </fieldset>
+    <fieldset className={`${className}`} aria-describedby={held ? `${id}-held` : undefined} data-testid="voice-settings">
+      <legend className="sr-only">Automatic speaking</legend>
+      {held && <p id={`${id}-held`} role="status" className="mb-2 rounded-2xl bg-amber-soft text-navy px-4 py-3 text-base" data-testid="voice-held">{fx.note}</p>}
+      <div className="divide-y divide-line">
+        <label className={row}>
+          <input type="checkbox" className="mt-1 size-6 shrink-0 accent-[var(--color-teal)]" checked={s.prefs.autoSpeak} onChange={(e) => speech.setPrefs({ autoSpeak: e.target.checked })} aria-describedby={`${id}-auto`} />
+          <span className="min-w-0 flex-1"><span className="block font-bold">Automatically speak short replies</span><span id={`${id}-auto`} className="block text-base text-ink-soft">Short answers and safety warnings are read out as they arrive.</span>{fx.autoShort === 'saved-muted' && <Held />}</span>
+        </label>
+        <label className={row}>
+          <input type="checkbox" className="mt-1 size-6 shrink-0 accent-[var(--color-teal)]" checked={s.prefs.readAll} onChange={(e) => speech.setPrefs({ readAll: e.target.checked })} aria-describedby={`${id}-all`} />
+          <span className="min-w-0 flex-1"><span className="block font-bold">Read entire results</span><span id={`${id}-all`} className="block text-base text-ink-soft">Reads every product in a results list, one after another.</span>{fx.readAll === 'saved-muted' && <Held />}</span>
+        </label>
+        {parts === 'all' && <div className="py-2"><LanguageSetting bare /></div>}
+        <label className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 min-h-12 py-2 font-bold">
+          Speaking speed
+          <select className="min-h-12 rounded-full border-2 border-line bg-paper px-3" value={String(s.prefs.rate)} onChange={(e) => speech.setPrefs({ rate: Number(e.target.value) })}>
+            <option value="0.8">Slower</option>
+            <option value="0.95">Normal</option>
+            <option value="1.1">Faster</option>
+          </select>
+        </label>
+      </div>
+    </fieldset>
   );
 }
 
@@ -94,9 +110,9 @@ export function LanguageSetting({ className = '', bare = false }: { className?: 
   const s = useSpeech();
   const body = (
     <>
-      <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
+      <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-12 font-bold max-w-full">
         Reply language (beta)
-        <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
+        <select className="min-h-12 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
           {LANG_CODES.map((c) => <option key={c} value={c} lang={LANGS[c].bcp47}>{LANGS[c].label}</option>)}
         </select>
       </label>
@@ -105,14 +121,16 @@ export function LanguageSetting({ className = '', bare = false }: { className?: 
   );
   return bare ? body : <div className={`flex flex-wrap gap-x-6 gap-y-2 items-center ${className}`}>{body}</div>;
 }
-/** Spoken replies on/off (the old mute button). */
+/** Voice playback: the master On / Muted switch (was "Spoken replies"). */
 export function MuteSwitch() {
   const s = useSpeech();
+  const id = useId();
+  const on = !s.prefs.muted && s.supported;
   return (
     <div className="flex items-center justify-between gap-4 py-2">
-      <span className="font-bold" id="mute-l">Spoken replies</span>
-      <button type="button" role="switch" aria-checked={!s.prefs.muted} aria-labelledby="mute-l" disabled={!s.supported} onClick={() => speech.toggleMute()}
-        className={`shrink-0 min-h-12 min-w-20 px-4 rounded-full border-2 font-bold inline-flex items-center gap-2 ${!s.prefs.muted ? 'bg-navy text-white border-navy' : 'bg-paper border-line hover:border-teal'}`}><Volume2 className="size-5" aria-hidden />{s.prefs.muted ? 'Off' : 'On'}</button>
+      <span className="min-w-0"><span className="block font-bold" id={`${id}-l`}>Voice playback</span><span className="block text-base text-ink-soft" id={`${id}-h`}>{!s.supported ? 'Not available in this browser.' : on ? 'SaySafe can speak to you.' : 'Muted: SaySafe won’t speak on its own.'}</span></span>
+      <button type="button" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={`${id}-h`} disabled={!s.supported} onClick={() => speech.toggleMute()}
+        className={switchBtn(on)} data-testid="voice-playback">{on ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}{!s.supported ? 'Off' : on ? 'On' : 'Muted'}</button>
     </div>
   );
 }

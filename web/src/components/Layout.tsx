@@ -1,6 +1,6 @@
 /**
  * App shell: one navigation for the whole app.
- * Mobile: bottom tab bar (Home, Assistant, Activity, Profile). Desktop: the same four in the header.
+ * Mobile and tablet (< 1024 px): bottom tab bar (Home, Assistant, Activity, Profile). Desktop: the same four in the header.
  * Secondary screens get a history-aware Back button with a sensible fallback.
  * The bottom stack (page dock, voice controls, tab bar) is measured so content is never hidden behind it.
  */
@@ -121,7 +121,8 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
         <div className={`mx-auto ${width} px-4 sm:px-5 py-2.5 flex items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home" className="min-h-12 inline-flex items-center"><Logo /></Link>
           <div className="flex items-center gap-1">
-            {showNav && <nav aria-label="Main" className="hidden md:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
+            {/* Top tabs from 1024 px: at 768 the four tabs + website link overflowed the header. Tablets keep the bottom bar. */}
+            {showNav && <nav aria-label="Main" className="hidden lg:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
             {/* Back to the public website (the landing page) without signing out. */}
             {app && <Link to="/" className="inline-flex items-center gap-1.5 min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="website-link"><Globe className="size-5" aria-hidden /><span className="max-[359px]:sr-only">SaySafe website</span></Link>}
           </div>
@@ -142,10 +143,12 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
         </footer>
       )}
       {app && (
-        <div ref={stack} data-testid="bottom-stack" className="fixed inset-x-0 bottom-0 z-30 bg-paper/95 backdrop-blur border-t border-line pb-[env(safe-area-inset-bottom)]">
-          {dock && !handoff && <div className="border-b border-line">{dock}</div>}
+        // Each part draws its own top border, so an empty stack on desktop (no dock, no voice bar, tabs in the header)
+        // no longer leaves a stray 1 px line across the bottom of the screen, and stacked parts never double up.
+        <div ref={stack} data-testid="bottom-stack" className="fixed inset-x-0 bottom-0 z-30 bg-paper/95 backdrop-blur pb-[env(safe-area-inset-bottom)]">
+          {dock && !handoff && <div className="border-t border-line">{dock}</div>}
           {mode === 'elder' && <VoiceBar scope={p === '/assistant' ? 'assistant' : 'other'} />}
-          {showNav && <nav aria-label="Main" className="md:hidden border-t border-line"><NavItems mode={mode as 'elder' | 'family'} variant="bottom" /></nav>}
+          {showNav && <nav aria-label="Main" className="lg:hidden border-t border-line"><NavItems mode={mode as 'elder' | 'family'} variant="bottom" /></nav>}
         </div>
       )}
     </div>

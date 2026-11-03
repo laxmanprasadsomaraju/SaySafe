@@ -14,7 +14,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { CheckCircle2, AlertTriangle, Pencil, Trash2, Plus, ExternalLink, Phone, Mail, UserRound, Repeat, Wallet, Search, ShieldCheck, Loader2, RotateCcw, CircleSlash, Info } from 'lucide-react';
 import { api } from '../lib/api';
 import { goToPayPal } from '../lib/handoff';
-import { TONE_CLS, type Tone } from '../lib/activity';
+import { type Tone } from '../lib/activity';
 import {
   PaymentSearchResult, Subscription, Contact, SubscriptionSummary, ManualPayment, DEMO_MEMBERSHIP, PAY_METHODS, FREQUENCIES,
   type PaymentMatchT, type SubscriptionT, type ContactT, type ManualPaymentT, type SubscriptionSummaryT,
@@ -26,18 +26,14 @@ import {
 } from './companion';
 import { parseServer, type BlockOf, type Block } from './schemas';
 import type { BlockActions } from './blocks';
+import { card, btnPrimary, btnSecondary, btnDanger, linkBtn as linkCls, input as inputCls, pill } from '../components/ds';
 
-const cardCls = 'rounded-[var(--radius-card)] border border-line bg-paper shadow-[var(--shadow-card)]';
-const btnPrimary = 'min-h-14 rounded-full bg-teal text-white font-bold px-5 hover:bg-teal-deep disabled:opacity-60';
-const btnSecondary = 'min-h-12 rounded-full border-2 border-line bg-paper font-bold px-4 hover:border-teal disabled:opacity-60 inline-flex items-center justify-center gap-2';
-const btnDanger = 'min-h-12 rounded-full border-2 border-danger text-danger bg-paper font-bold px-4 hover:bg-danger-soft disabled:opacity-60 inline-flex items-center justify-center gap-2';
-const linkCls = 'font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center gap-1';
-const inputCls = 'w-full min-w-0 min-h-12 rounded-2xl border-2 border-line bg-paper px-4 focus:border-teal outline-none';
+// Shared design-system recipes (components/ds.ts): same targets, radius and spacing as every other page.
+const cardCls = card;
 const errMsg = (e: unknown) => String((e as Error)?.message ?? 'Something went wrong. Nothing was changed.').slice(0, 300);
 
 function Pill({ label, tone }: { label: string; tone: Tone }) {
-  // rounded-xl, not a full pill: long labels wrap at 320px / large text and must still read as a label.
-  return <span className={`inline-flex items-center rounded-xl border px-3 py-0.5 text-sm font-bold ${TONE_CLS[tone]}`}>{label}</span>;
+  return <span className={pill(tone)}>{label}</span>;
 }
 function Head({ icon: Icon, children, right }: { icon: typeof Wallet; children: ReactNode; right?: ReactNode }) {
   return (
@@ -350,7 +346,7 @@ function Totals({ summary }: { summary: SubscriptionSummaryT }) {
       {summary.totals.length === 0 ? <p className="font-bold">Nothing counted yet.</p> : summary.totals.map((t) => (
         <p key={t.currency} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="font-display text-3xl font-semibold" data-testid={`monthly-${t.currency}`}>{money(t.monthlyCents, t.currency)}</span><span className="font-bold">a month</span>
-          <span className="text-ink-soft">· <span data-testid={`annual-${t.currency}`}>{money(t.annualCents, t.currency)}</span> a year · {t.count} counted</span>
+          <span className="text-ink-soft"><span data-testid={`annual-${t.currency}`}>{money(t.annualCents, t.currency)}</span> a year, {t.count} counted</span>
         </p>
       ))}
       <details className="mt-1 text-sm text-ink-soft"><summary className="cursor-pointer font-bold min-h-11 inline-flex items-center">How this is worked out</summary><p className="mt-1">{summary.method}</p></details>
@@ -387,7 +383,7 @@ function SubscriptionRow({ s, selected, onSelect, act, reload, tags = [] }: { s:
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-baseline justify-between gap-x-3"><span className="font-bold break-words min-w-0">{s.merchant}</span><span className="font-bold whitespace-nowrap">{money(s.amountCents, s.currency)} <span className="font-normal text-ink-soft">/ {s.frequency === 'weekly' ? 'week' : s.frequency === 'monthly' ? 'month' : 'year'}</span></span></span>
           <span className="block text-base text-ink-soft">{nextChargeText(s)}</span>
-          <span className="block text-base text-ink-soft">{sourceText(s)}</span>
+          {!s.sample && <span className="block text-base text-ink-soft">{sourceText(s)}</span>}{/* sample rows: the Sample data badge says it */}
           <span className="block text-base text-ink-soft">{managedText(s)}</span>
           {s.sample && <span className="mt-1 flex"><SampleBadge /></span>}
           {(s.status !== 'tracking' || s.stoppedTrackingAt) && <span className="mt-1 flex flex-wrap gap-2"><Pill label={s.stoppedTrackingAt ? 'Not tracked — not counted' : s.statusLabel} tone={statusTone(s)} /></span>}
@@ -746,9 +742,9 @@ function ContactItem({ c, onEdit, onDelete, busy }: { c: ContactT; onEdit: () =>
   const tel = c.sample ? null : telHref(c.phone); const mail = c.sample ? null : mailHref(c.email);
   return (
     <li className="py-3" data-contact={c.name}>
-      <p className="flex flex-wrap items-center gap-2"><UserRound className="size-6 text-teal shrink-0" aria-hidden /><span className="font-bold text-lg break-words min-w-0">{c.name}</span>{c.relation && <span className="text-ink-soft">· your {c.relation}</span>}</p>
+      {/* Name and relation flow as one line of text, so "· your pharmacy" never starts a line on its own. */}
+      <p className="flex items-start gap-2"><UserRound className="size-6 text-teal shrink-0 mt-0.5" aria-hidden /><span className="min-w-0 break-words"><span className="font-bold text-lg">{c.name}</span>{c.relation && <span className="text-ink-soft"> · your {c.relation}</span>}</span></p>
       <p className="mt-1 flex flex-wrap gap-2">{c.sample ? <SampleBadge /> : <Pill label={UI_LABEL.contact} tone="pending" />}</p>
-      {c.sample && <p className="mt-1 text-sm text-ink-soft">Fictional contact for the demo: the number is in a range reserved for TV drama, so Call and Email are turned off.</p>}
       {c.phone && <p className="mt-1 text-base break-words"><span className="text-ink-soft">Phone you saved: </span><span className="font-bold">{c.phone}</span></p>}
       {c.email && <p className="text-base break-all"><span className="text-ink-soft">Email you saved: </span><span className="font-bold">{c.email}</span></p>}
       {c.note && <p className="text-base text-ink-soft break-words">{c.note}</p>}
@@ -767,11 +763,15 @@ function ContactList({ contacts, reload, setMsg, setErr }: { contacts: ContactT[
   const [busy, setBusy] = useState(false);
   const del = async (c: ContactT) => { setBusy(true); try { await api(`/api/companion/contacts/${c.id}`, { method: 'DELETE' }); setMsg(`${c.name} deleted.`); await reload(); } catch (e) { setErr(errMsg(e)); } finally { setBusy(false); } };
   return (
+    <>
+    {/* Said once for the list, not repeated under every sample contact. */}
+    {contacts.some((c) => c.sample) && <p className="mt-2 text-sm text-ink-soft">Sample contacts are fictional: their numbers are in a range reserved for TV drama, so Call and Email are turned off.</p>}
     <ul className="mt-2 divide-y divide-line" aria-label="Trusted contacts">
       {contacts.map((c) => editing === c.id
         ? <li key={c.id}><ContactForm initial={c} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); setMsg('Saved.'); void reload(); }} /></li>
         : <ContactItem key={c.id} c={c} busy={busy} onEdit={() => setEditing(c.id)} onDelete={() => void del(c)} />)}
     </ul>
+    </>
   );
 }
 

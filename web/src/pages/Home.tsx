@@ -69,13 +69,13 @@ export default function Home() {
         <p className="mt-1 text-[length:var(--text-lead)] text-ink-soft">What would you like to do?</p>
       </header>
 
-      <nav aria-label="Shortcuts" className="mt-6 grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 md:gap-5">
+      <nav aria-label="Shortcuts" className="mt-6 grid grid-cols-1 min-[360px]:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-5">
         {SHORTCUTS.map(({ mode, icon: Icon, title, text }) => (
           <button key={mode} type="button" onClick={() => nav(`/assistant?mode=${mode}`)}
-            className="group text-left bg-paper rounded-[var(--radius-card)] border-2 border-line hover:border-teal shadow-[var(--shadow-card)] p-4 md:p-6 min-h-24 flex min-[360px]:flex-col gap-3 items-start">
+            className="group text-left bg-paper rounded-[var(--radius-card)] border-2 border-line hover:border-teal shadow-[var(--shadow-card)] p-4 md:p-5 min-h-24 flex min-[360px]:flex-col gap-3 items-start">
             <span className="size-12 md:size-14 rounded-2xl bg-teal-soft grid place-items-center shrink-0"><Icon className="size-7 md:size-8 text-teal" aria-hidden /></span>
             <span className="min-w-0">
-              <span className="font-display text-[1.3rem] md:text-[1.6rem] font-semibold leading-tight block">{title}</span>
+              <span className="font-display text-[1.3rem] md:text-[1.5rem] font-semibold leading-tight block">{title}</span>
               <span className="text-ink-soft text-base md:text-lg mt-1 hidden md:block">{text}</span>
             </span>
           </button>
@@ -101,10 +101,11 @@ export default function Home() {
         <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">See all activity</Link><Link to="/assistant?welcome=1" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">Things to try</Link></div>
       </Card>
 
-      <Link to="/assistant" className="mt-6 flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-6 hover:bg-teal-deep shadow-[var(--shadow-lift)]">
+      <Link to="/assistant" className="mt-6 flex md:inline-flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-8 hover:bg-teal-deep shadow-[var(--shadow-lift)]">
         <Mic className="size-6" aria-hidden />Talk or type to SaySafe
       </Link>
-      <p className="mt-6 text-ink-soft flex items-start gap-2"><ShieldAlert className="size-6 text-teal shrink-0" aria-hidden /><span>PayPal Sandbox only: no real money moves. <Link to="/activity" className="font-bold text-teal underline underline-offset-4">See all activity</Link></span></p>
+      {/* The "See all activity" link lives once, in Recent activity (it was repeated here). */}
+      <p className="mt-5 text-base text-ink-soft flex items-start gap-2"><ShieldAlert className="size-5 text-teal shrink-0 mt-0.5" aria-hidden /><span>PayPal Sandbox only: no real money moves.</span></p>
     </Layout>
   );
 }
