@@ -1,6 +1,6 @@
 # SaySafe product overview
 
-_Single source of truth for what SaySafe does today. Last checked 3 November 2026 against `main` d71bcac and the hosted demo at https://saysafe.onrender.com._
+_Single source of truth for what SaySafe does today. Last checked 3 November 2026 (12:40 GMT) against `main` 8a6a794 + the QA-fix commit, and the hosted demo at https://saysafe.onrender.com (8a6a794)._
 
 SaySafe is a payment safety companion for older adults and the family members who help them. It checks suspicious payment messages, helps people find products by voice or text, brings a trusted family member in for bigger purchases, and pays only through PayPal's own sandbox checkout, with a receipt it confirms with PayPal.
 
@@ -32,7 +32,7 @@ All payments use the **PayPal sandbox**. No real money moves. SaySafe is an inde
 | Share a message into SaySafe from another app (Android share target) | Implemented, awaiting live verification | Web app manifest share target to `/check/share`. Not tested on a real Android device. |
 | Safe next steps and official PayPal help links | Implemented and hosted | Links come from a fixed, hand-checked directory, never from the message. |
 | SaySafe Assistant (one conversation for checking, shopping and help, by text) | Implemented and hosted | The model returns an intent and text only. It has no tools and cannot pay, approve or change any record. [AI-TOOL-BOUNDARIES.md](AI-TOOL-BOUNDARIES.md) |
-| Assistant interactive cards (scam result with actions, product cards, purchase review, family review status, approve/decline, receipt, history, refund status) | In development | Being finished on a separate branch. Until merged, some steps open their own screens instead of cards. |
+| Assistant interactive cards (scam result with actions, product cards, purchase review, family review status, approve/decline, receipt, history, refund status) | Implemented and hosted | In `main` and on the hosted demo. Hosted browser run 3 Nov 2026: scam card, Channel3 cards, purchase review, Mary's pending/approved status card and Alex's approve card passed with the real PayPal sandbox redirect. The receipt card after buyer approval is verified locally (mock PayPal) only. |
 | Voice input (tap the mic, speak, SaySafe sends after a pause) | Implemented, awaiting live verification | Groq Whisper speech-to-text. Tested in headless Chromium with a fake microphone only. Not yet tested on real phones. |
 | Spoken replies with Stop | Implemented, awaiting live verification | Browser speech synthesis. Stop, Escape and navigation stop speech. Audio not checked on a real device. |
 | Talk over SaySafe without tapping (hands-free barge-in) | Not supported | Tap-to-interrupt only. [VOICE.md](VOICE.md) |
@@ -79,7 +79,7 @@ All payments use the **PayPal sandbox**. No real money moves. SaySafe is an inde
 | Feature | Status | Notes |
 |---|---|---|
 | WCAG 2.2 AA target: large text, 48 px+ touch targets, visible focus, keyboard use, skip link, no colour-only meaning | Implemented and hosted | axe-core: 0 violations on 6 hosted screens (3 November 2026). Automated checks only. |
-| Bigger text and high contrast | Implemented and hosted | Display settings are being moved into Profile on a separate branch (In development). |
+| Bigger text and high contrast | Implemented and hosted | In Profile › Accessibility and in the Assistant under Menu › Display. |
 | Reduced motion | Implemented and hosted | Follows the device setting. |
 | Captions for everything spoken | Implemented and hosted | Every spoken reply is also on screen. |
 | Usability testing with older adults | Not done yet | Only scripted walkthroughs so far. |
@@ -102,6 +102,17 @@ All payments use the **PayPal sandbox**. No real money moves. SaySafe is an inde
 | Voice preferences (mute, auto-speak, speed, read everything, reply language) | Implemented and hosted | Saved on this device only. |
 | Family threshold set by the trusted family member | Implemented and hosted | |
 | Profile sections (voice, accessibility, language, shopping, trusted family, privacy, help) | In development | Being reorganised on a separate branch. |
+
+## Payment companion (Mary's private records)
+
+| Feature | Status | Notes |
+|---|---|---|
+| "Have I already paid?" search over records Mary typed and Demo Shop payments | Implemented, awaiting live verification | Labelled "Recorded by you — not verified". A person's name never matches a Demo Shop payment. Covered by vitest and a local browser test (mock PayPal); the hosted browser run of this part did not complete on 3 Nov 2026. [COMPANION.md](COMPANION.md) |
+| Subscriptions tracker (totals per month/year) and help cancelling with another company | Implemented, awaiting live verification | Mary enters them herself. External cancellations are only ever "You told SaySafe this is cancelled — not confirmed by the provider". |
+| SaySafe Demo Membership (real PayPal sandbox subscription, tap-to-cancel) | Implemented, awaiting live verification | Start reaches PayPal's sandbox approval page. PayPal cancel → 204 → GET CANCELLED proven by script on 3 Nov 2026, not through the app UI. |
+| Trusted contacts and the "number isn't the one you saved" scam warning | Implemented, awaiting live verification | "Saved by you — not verified". Contacts are never sent to the AI and never shown to family. |
+| Reminders before a subscription charge | Not supported | No scheduler on the free hosting. |
+| Bank or PayPal statement import | Planned | Today SaySafe only knows Demo Shop payments and records Mary typed. |
 
 ## 7. What SaySafe will never do
 

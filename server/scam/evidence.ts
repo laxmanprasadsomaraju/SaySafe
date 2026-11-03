@@ -75,6 +75,10 @@ export function extractLinks(src: string): { raw: string; index: number }[] {
 const PHONE_CANDIDATE_RE = /(?<![\w#/@.-])(?:\+|00)?\(?\d[\d\s().-]{6,20}\d(?![\w@/-])/g;
 const ID_LABEL_RE = /(?:\bid|\bno\.?|#|\bref(?:erence)?|\border|\binvoice|\btransaction|\btracking|\breceipt|\baccount|\biban|\bsort code|\bcase|\bnumber|\bcode|\bpin|\botp|\bdate|\bon|\bversion)\s*[:#.]?\s*$/i;
 const PHONE_CONTEXT_RE = /\b(call|ring|phone|tel|telephone|dial|whatsapp|mobile|text|sms|helpline|hotline|toll[- ]?free|contact)\b/i;
+/** "new number 087 …", "my number is …": the word "number" names a phone here, not an ID label. */
+const PHONE_NUMBER_PHRASE_RE = /\b(?:new|my|our|this|mobile|phone|contact|whatsapp)\s+(?:number|no\.?)(?:\s+is)?\s*[:#.]?\s*$/i;
+/** Irish mobile in local form (083–089 + 7 digits), written spaced or not: always a phone shape. */
+const IE_MOBILE_RE = /^08[3-9]\d{7}$/;
 
 export function extractPhones(src: string): { raw: string; index: number }[] {
   const out: { raw: string; index: number }[] = [];
@@ -88,7 +92,7 @@ export function extractPhones(src: string): { raw: string; index: number }[] {
     if (/^\s?(?:eur|euro|usd|gbp|%)/i.test(after) || /[€$£]\s?$/.test(before)) continue; // amounts
     if (/^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(raw) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(raw)) continue; // dates
     if (/^\d{1,2}[:.]\d{2}\s?[-–]\s?\d{1,2}[:.]\d{2}$/.test(raw)) continue; // time ranges
-    const hasPhoneContext = PHONE_CONTEXT_RE.test(before);
+    const hasPhoneContext = PHONE_CONTEXT_RE.test(before) || PHONE_NUMBER_PHRASE_RE.test(before) || IE_MOBILE_RE.test(digits);
     if (ID_LABEL_RE.test(before) && !hasPhoneContext) continue; // order/invoice/transaction ids
     const intl = /^(?:\+|00)/.test(raw);
     const local = /^0\d/.test(digits) || /^\(0/.test(raw);

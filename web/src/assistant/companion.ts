@@ -29,6 +29,20 @@ export const UI_LABEL = {
   dontPayAgain: "Don't pay again until you've checked",
 } as const;
 
+/** The card's own scope footnote (shown once, at the bottom of the payment card). */
+export const MATCHES_SCOPE_NOTE = 'SaySafe only knows SaySafe Demo Shop payments made in this app and records you typed. It never pays, blocks or marks anything as paid.';
+
+/**
+ * What the payment-matches card shows under its warning heading. The heading already says "Don't pay again until
+ * you've checked with John", and the footer already says what SaySafe can see, so the server's guidance sentence
+ * and scope note that repeat them are dropped here (the API keeps them for the spoken reply and other clients).
+ */
+export function matchesCardText(r: Pick<PaymentSearchResultT, 'guidance' | 'notes'>): { guidance: string; notes: string[] } {
+  const guidance = r.guidance.replace(/\s*Don't pay again until you've checked with [^.]*\.\s*/g, ' ').replace(/\s+/g, ' ').trim();
+  const notes = r.notes.filter((n) => !/^SaySafe only knows .*Demo Shop payments made in this app/i.test(n));
+  return { guidance, notes };
+}
+
 export const METHOD_LABEL: Record<(typeof PAY_METHODS)[number], string> = {
   bank_transfer: 'Bank transfer', cash: 'Cash', card: 'Card', paypal: 'PayPal', cheque: 'Cheque', other: 'Other',
 };

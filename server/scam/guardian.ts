@@ -84,6 +84,15 @@ function headlineFor(v: Verdict) {
   return 'This needs checking before you do anything.';
 }
 
+/** "Mary, <mismatch title>. <detail> <rest of the summary>": the rest starts a new sentence, so it is capitalised. */
+export function contactMismatchSummary(name: string, mismatch: { title: string; detail: string }, spoken: string): string {
+  const rest = spoken.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},\\s*`), '').trim();
+  const lead = `${name}, ${mismatch.title.charAt(0).toLowerCase()}${mismatch.title.slice(1)}.`;
+  const detail = mismatch.detail.trim();
+  const sentence = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
+  return [lead, detail && /[.!?]$/.test(detail) ? detail : detail ? `${detail}.` : '', sentence(rest)].filter(Boolean).join(' ').slice(0, 900);
+}
+
 function fallbackSpoken(name: string, v: Verdict, r: RuleResult) {
   const top = r.signals.filter((s) => s.severity !== 'info').slice(0, 2).map((s) => s.title.toLowerCase());
   if (v === 'suspicious')
@@ -150,7 +159,7 @@ export async function scanMessage(input: string, opts: { userName?: string; extr
   // Spoken words must always match the FINAL verdict, never a softer AI opinion.
   if (!spoken || aiVerdict !== verdict) spoken = fallbackSpoken(name, verdict, { ...rules, signals: rules.signals.filter((s) => !isContactSignal(s.code)) });
   const mismatch = rules.signals.find((s) => s.code === 'contact_mismatch');
-  if (mismatch) spoken = `${name}, ${mismatch.title.charAt(0).toLowerCase()}${mismatch.title.slice(1)}. ${mismatch.detail} ${spoken.replace(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')},\\s*`), '')}`.slice(0, 900);
+  if (mismatch) spoken = contactMismatchSummary(name, mismatch, spoken);
   // The English fallback (or AI text in the wrong language) is tagged English, so the browser shows it but won't speak it in another reply language.
   const spokenLang: LangCode = lang !== 'en' && !mismatch && spoken !== fallbackSpoken(name, verdict, { ...rules, signals: rules.signals.filter((s) => !isContactSignal(s.code)) }) && looksLike(spoken, lang) ? lang : 'en';
 
