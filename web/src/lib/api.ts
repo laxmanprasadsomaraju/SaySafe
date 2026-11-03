@@ -69,7 +69,7 @@ export interface Product {
 
 export type PaymentState =
   | 'DRAFT' | 'RISK_REVIEW' | 'BLOCKED' | 'FAMILY_APPROVAL_PENDING' | 'FAMILY_APPROVED' | 'PAYER_APPROVAL_PENDING'
-  | 'PAYER_APPROVED' | 'CAPTURE_PENDING' | 'CAPTURED' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+  | 'PAYER_APPROVED' | 'CAPTURE_PENDING' | 'CAPTURED' | 'FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED';
 
 export interface PaymentRequest {
   id: string; state: PaymentState;
@@ -78,16 +78,18 @@ export interface PaymentRequest {
   risk: { ok: boolean; needsFamily: boolean; reasons: string[] } | null;
   approval: { id: string; status: string; expiresAt: number; decidedAt: string | null; reason: string | null } | null;
   receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string; webhookConfirmed?: boolean } | null;
+  /** REFUND_REQUESTED is only the buyer's request (no money moved). REFUNDED comes from PayPal. */
+  refund?: { status: 'REFUND_REQUESTED' | 'REFUND_PENDING' | 'REFUNDED' | null; label: string | null; requestedAt: string | null; canRequest: boolean; refundId: string | null; lastAttemptFailed: boolean } | null;
   createdAt: string; updatedAt: string;
   timeline?: PaymentTimeline;
 }
 
 export interface PaymentTimeline {
   label: string;
-  events: { kind: 'order_created' | 'buyer_approved' | 'capture_completed' | 'webhook_received'; label: string; at: string; paypalTime: string | null; source: string; verification: string; verified: boolean }[];
+  events: { kind: 'order_created' | 'buyer_approved' | 'capture_completed' | 'capture_verified' | 'webhook_received' | 'refund_asked' | 'refund_requested' | 'refund_completed' | 'refund_verified' | 'refund_webhook'; label: string; at: string; paypalTime: string | null; source: string; verification: string; verified: boolean }[];
   pending: string[];
 }
-export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled';
+export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled' | 'refunded' | 'refund_failed';
 
 export interface ScanResult {
   scanId: string;

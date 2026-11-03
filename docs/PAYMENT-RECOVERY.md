@@ -76,3 +76,103 @@ still hold full payloads (`payload_json`); a one-off cleanup was not run.
 ## Tests
 
 `tests/payment-recovery.test.ts`, `tests/payment-restart.test.ts` (DB file closed and reopened).
+
+## Payments v2 capture check — `server/payments/captureCheck.ts`
+
+`GET /v2/payments/captures/{id}` (`getCapture` in `server/paypal/client.ts`) is the authority on the money once an
+order is `COMPLETED`. It is read:
+
+- by **reconcile** after the order reads `COMPLETED`: the capture id, `custom_id`, order link, amount and currency
+  must match the local record. `COMPLETED` → `CAPTURED`; `PENDING` → stays `CAPTURE_PENDING`; `REFUNDED` →
+  `CAPTURED` then `REFUNDED`; unreachable → `unknown` (nothing changes); any difference → `mismatch`.
+- by the **receipt** (`GET /api/payments/:id`) for a captured payment with no Payments v2 evidence yet (3 s bounded,
+  at most once a minute per payment). If PayPal shows the capture `REFUNDED`, the record follows PayPal.
+- by the **admin refund**, before any money moves.
+
+Each read records `evidence.capture_verified` (source `payments-v2`), shown on the timeline as
+"Capture checked with PayPal".
+
+## Refunds — `server/payments/refund.ts`
+
+Full refunds of **Demo Shop** captures only. Partial refunds are **not supported** (a smaller `amount` is
+rejected with `partial_refund_unsupported`; a capture PayPal shows as `PARTIALLY_REFUNDED` is left for manual review).
+
+| Who | Can | Route |
+|---|---|---|
+| Elder (buyer) | **Request** a refund. Records `REFUND_REQUESTED` in `refund_requests`; the payment stays `CAPTURED`; the UI says "Request sent — not refunded yet". Never calls PayPal. | `POST /api/payments/:id/refund-request` |
+| Family member | Nothing (the old `/api/family/requests/:id/refund` was removed) | — |
+| Merchant admin | Execute a full refund | `POST /api/admin/payments/:id/refund` |
+
+Merchant admin = the `ADMIN_TOKEN` env var (at least 24 characters), sent as the `X-Admin-Token` header and compared
+in constant time (SHA-256 of both sides + `timingSafeEqual`). Missing header → 401, wrong token → 403. With
+`ADMIN_TOKEN` unset (or too short) every admin route answers **503 "Refunds not enabled"**. 10 requests/min per IP.
+
+### Checks before PayPal is called
+
+1. Payment exists (optional `householdId` in the body must match → else 404), merchant is the Demo Shop.
+2. State is `CAPTURED` (already `REFUNDED` → 200 with the stored result, `duplicate: true`, no PayPal call).
+3. Stored capture amount/currency equal the approved amount; optional `captureId` in the body equals the record.
+4. `GET /v2/payments/captures/{id}`: same capture id, `custom_id`, order, amount, currency, status `COMPLETED`.
+   PayPal already shows `REFUNDED` → 409 `already_refunded` (record moved to `REFUNDED`, no POST).
+5. In ONE DB transaction: the `refunds` row is written with `paypal_request_id = refund-{paymentId}-{attempt}` and
+   the state moves `CAPTURED → REFUND_PENDING`. Only then is `POST /v2/payments/captures/{id}/refund` sent with
+   that `PayPal-Request-Id` (body: `custom_id` = payment id, `note_to_payer`; no amount = full).
+
+### Outcomes
+
+| PayPal | Local result | HTTP |
+|---|---|---|
+| 201 `COMPLETED`, id/amount/currency/custom_id/`up` capture link match | `REFUNDED`; then `GET /v2/payments/refunds/{id}` records `refund_verified` | 200 |
+| 201 `PENDING` | stays `REFUND_PENDING` (reconcile resolves via GET refund) | 202 |
+| 4xx (e.g. `REFUND_NOT_ALLOWED`) | refund row `FAILED`, state back to `CAPTURED`, error names PayPal's issue. A later retry uses attempt+1 (new key) | 422 |
+| 422 `CAPTURE_FULLY_REFUNDED` | resolved by reading PayPal (GET capture) | 200/202 |
+| timeout / network / 5xx | stays `REFUND_PENDING`, row `UNKNOWN` | 202 |
+
+Concurrent duplicate calls in one process share one in-flight attempt (one PayPal call, same result). Across
+processes the optimistic lock on `CAPTURED → REFUND_PENDING` lets only one through; a retry of a `REFUND_PENDING`
+record re-sends the **same** stored `PayPal-Request-Id`, which PayPal answers with the original refund (verified live:
+same key → same refund id `1M659057GE5643901`; a new key on that capture → 422 `CAPTURE_FULLY_REFUNDED`).
+
+### Reconcile of `REFUND_PENDING` (read-only)
+
+`reconcile()` (Order page "Check with PayPal", lazy sweep, or `POST /api/admin/payments/:id/reconcile`):
+with a stored refund id → `GET /v2/payments/refunds/{id}` (`COMPLETED` → `REFUNDED`, `FAILED`/`CANCELLED` → `CAPTURED`);
+without one (response lost) → `GET /v2/payments/captures/{id}` (`REFUNDED` → `REFUNDED`, `PARTIALLY_REFUNDED` →
+`mismatch`, still `COMPLETED` → `pending`). Reconcile never sends a refund; the admin re-runs the refund call, which
+reuses the stored key.
+
+### Refund webhook
+
+A signature-verified `PAYMENT.CAPTURE.REFUNDED` (resource = the refund) is correlated by refund id, then the capture
+id from the refund's `up` link, then `custom_id`; any disagreement, a non-full amount or a non-`COMPLETED` status
+changes nothing. It may arrive before our POST returns: it moves `REFUND_PENDING → REFUNDED` and the late response is
+accepted without regressing. Events are deduplicated by event id (and a second distinct event → `already_refunded`).
+The stored minimal payload now also keeps `capture_id` (from the `up` link).
+
+### Timeline events
+
+You asked for a refund (request only) → Refund requested from PayPal → Refund completed (PayPal refund response /
+signed webhook / reconcile) → Refund checked with PayPal (Payments v2 GET refund, or GET capture shows REFUNDED) →
+Signed PayPal refund notice received.
+
+### Admin curl
+
+```bash
+export SAYSAFE=https://saysafe.onrender.com        # or http://localhost:8787
+export ADMIN_TOKEN=...                              # the value set on Render
+# look at a payment (state, refund execution row, timeline)
+curl -s -H "X-Admin-Token: $ADMIN_TOKEN" "$SAYSAFE/api/admin/payments/pay_XXXXXXXX" | jq '{state, refund, refundExecution}'
+# full refund (amount optional; it must equal the full captured amount)
+curl -s -X POST -H "X-Admin-Token: $ADMIN_TOKEN" -H "Content-Type: application/json" \
+  -d '{"amount":"32.00","currency":"EUR"}' "$SAYSAFE/api/admin/payments/pay_XXXXXXXX/refund" | jq '{status, outcome, refundId, duplicate, message}'
+# resolve a REFUND_PENDING (read-only at PayPal)
+curl -s -X POST -H "X-Admin-Token: $ADMIN_TOKEN" -H "Content-Type: application/json" -d '{}' \
+  "$SAYSAFE/api/admin/payments/pay_XXXXXXXX/reconcile" | jq '{outcome, state}'
+```
+
+### Live sandbox evidence (2026-11-03)
+
+One existing sandbox capture was refunded directly through the PayPal API to record real shapes
+(`tests/fixtures/paypal-refund-*.json`, `paypal-capture-*.json`; payer/payee e-mails stripped):
+capture `7GW748197L509353B` (€32.00 EUR, custom_id `pay_kPyY4csvcw_9`) → refund `1M659057GE5643901`, `COMPLETED`,
+€32.00 EUR; `GET /v2/payments/refunds/1M659057GE5643901` → `COMPLETED`; `GET` capture → `REFUNDED`.

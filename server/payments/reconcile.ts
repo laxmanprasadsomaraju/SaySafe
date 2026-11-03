@@ -3,10 +3,14 @@
  * response never arrived, and a server restart (the PayPal order is the source of truth).
  *
  * Rules (never relaxed here):
- *  - It only READS the PayPal order (GET /v2/checkout/orders/:id). It never creates, captures or refunds.
+ *  - It only READS PayPal (GET /v2/checkout/orders/:id, GET /v2/payments/captures/:id, GET /v2/payments/refunds/:id).
+ *    It never creates, captures or refunds.
  *  - It only acts on an existing local record that already has a paypal_order_id. A missing local record
  *    never leads to a capture (ReturnGate stays read-only).
- *  - COMPLETED is recorded as CAPTURED only when custom_id, amount and currency all match the local record.
+ *  - COMPLETED is recorded as CAPTURED only when custom_id, amount and currency all match the local record AND
+ *    Payments v2 (GET /v2/payments/captures/:id) confirms the capture id, status, amount and currency
+ *    (evidence source 'payments-v2'). If Payments v2 cannot be reached the outcome is 'unknown' (no change).
+ *  - REFUND_PENDING (a refund whose outcome was unknown) is resolved from GET refund / GET capture (refund.ts).
  *  - APPROVED moves PAYER_APPROVAL_PENDING -> PAYER_APPROVED (buyer approved) but does NOT capture:
  *    capture happens only on the user's explicit confirm, which repeats every check and family approval.
  *  - VOIDED (or an expired order PayPal no longer knows, long after creation, before any capture) -> CANCELLED.
@@ -16,12 +20,15 @@ import { db, audit } from '../db/index.js';
 import * as paypal from '../paypal/client.js';
 import { load, transition, publicView, PaymentError, confirmAndCapture } from './service.js';
 import { recordEvidence } from './evidence.js';
+import { checkCapture } from './captureCheck.js';
+import { reconcileRefund } from './refund.js';
 import type { PaymentState } from './stateMachine.js';
 
 export type ReconcileOutcome =
-  | 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled';
+  | 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled'
+  | 'refunded' | 'refund_failed';
 
-export const RECONCILABLE: PaymentState[] = ['PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'CAPTURE_PENDING'];
+export const RECONCILABLE: PaymentState[] = ['PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'CAPTURE_PENDING', 'REFUND_PENDING'];
 /** PayPal deletes unapproved orders after ~3 hours (approved ones later). Only then is a 404 treated as "expired". */
 const EXPIRED_AFTER_MS = 3 * 60 * 60 * 1000;
 export const STALE_AFTER_MS = 2 * 60 * 1000;
@@ -50,6 +57,10 @@ export async function reconcile(requestId: string, opts: { householdId?: string 
   const r = opts.householdId ? load(requestId, opts.householdId) : (db.prepare('SELECT * FROM payment_requests WHERE id=?').get(requestId) as any);
   if (!r) throw new PaymentError('not_found', 'Payment request not found.', 404);
   if (!RECONCILABLE.includes(r.state) || !r.paypal_order_id) return { outcome: 'not_applicable', state: r.state };
+  if (r.state === 'REFUND_PENDING') {
+    const out = await reconcileRefund(r);
+    return { outcome: out.outcome === 'not_applicable' ? 'no_change' : out.outcome, state: out.state as PaymentState };
+  }
 
   let order: any;
   try {
@@ -78,21 +89,36 @@ export async function reconcile(requestId: string, opts: { householdId?: string 
       const caps: any[] = pu?.payments?.captures ?? [];
       const cap = caps.find((c) => c?.status === 'COMPLETED') ?? caps[0];
       if (!cap) return { outcome: 'pending', state: r.state };
-      if (cap.status !== 'COMPLETED') {
-        // Capture exists but PayPal is still processing it (e.g. PENDING): money is in flight, nothing more to do yet.
-        const now = stepTo(r, ['PAYER_APPROVED', 'CAPTURE_PENDING']);
-        return { outcome: 'pending', state: now.state };
-      }
       if (cents(cap.amount?.value) !== r.amount_cents || cap.amount?.currency_code !== r.currency || (cap.custom_id && cap.custom_id !== r.id)) {
         return mismatch('capture amount/currency/custom_id differ from the local record');
       }
       if (r.state === 'CAPTURED') return { outcome: 'no_change', state: r.state };
-      recordEvidence(r, 'capture', { source: 'reconcile', captureId: cap.id, amount: cap.amount.value, currency: cap.amount.currency_code, paypalTime: cap.create_time ?? cap.update_time ?? null });
-      const now = stepTo(r, ['PAYER_APPROVED', 'CAPTURE_PENDING', 'CAPTURED'], {
-        paypal_capture_id: cap.id, captured_amount: cap.amount.value, captured_currency: cap.amount.currency_code,
+      // Payments v2 is the authority on the capture itself: confirm id, status, amount and currency before recording money.
+      const v2 = await checkCapture(r, cap.id);
+      if (v2.result === 'unknown') return { outcome: 'unknown', state: r.state };
+      if (v2.result === 'not_found' || v2.result === 'mismatch') return { outcome: 'mismatch', state: r.state };
+      if (v2.result === 'pending' || v2.result === 'other') {
+        // Capture exists but PayPal is still processing it (e.g. PENDING): money is in flight, nothing more to do yet.
+        const now = stepTo(r, ['PAYER_APPROVED', 'CAPTURE_PENDING']);
+        return { outcome: 'pending', state: now.state };
+      }
+      const c = v2.capture;
+      recordEvidence(r, 'capture', { source: 'reconcile', captureId: c.id, amount: c.amount.value, currency: c.amount.currency_code, paypalTime: c.create_time ?? cap.create_time ?? c.update_time ?? null });
+      let now = stepTo(r, ['PAYER_APPROVED', 'CAPTURE_PENDING', 'CAPTURED'], {
+        paypal_capture_id: c.id, captured_amount: c.amount.value, captured_currency: c.amount.currency_code,
         payee_name: r.payee_name ?? pu?.payee?.display_name ?? r.merchant,
       });
-      return { outcome: now.state === 'CAPTURED' ? 'captured' : 'no_change', state: now.state };
+      if (now.state !== 'CAPTURED') return { outcome: 'no_change', state: now.state };
+      if (v2.result === 'refunded') {
+        // Captured and since fully refunded at PayPal (e.g. our capture response and both webhooks were lost).
+        recordEvidence(r, 'refund_verified', { source: 'payments-v2', captureId: c.id, status: 'REFUNDED', amount: c.amount.value, currency: c.amount.currency_code, paypalTime: c.update_time ?? null });
+        now = stepTo(now, ['REFUNDED']);
+        return { outcome: now.state === 'REFUNDED' ? 'refunded' : 'captured', state: now.state };
+      }
+      if (v2.result === 'partially_refunded') {
+        recordEvidence(r, 'refund_mismatch', { source: 'payments-v2', captureId: c.id, status: 'PARTIALLY_REFUNDED', note: 'PayPal shows a partial refund; only full refunds are supported. Needs manual review.' });
+      }
+      return { outcome: 'captured', state: now.state };
     }
     case 'APPROVED': {
       if (!orderMatches) return mismatch('order custom_id/amount/currency differ from the local record');
@@ -141,7 +167,7 @@ export async function sweepHousehold(householdId: string, now = Date.now()) {
   lastByHousehold.set(householdId, now);
   const cutoff = new Date(now - STALE_AFTER_MS).toISOString().replace('T', ' ').slice(0, 19);
   const rows = db.prepare(
-    `SELECT id FROM payment_requests WHERE household_id=? AND paypal_order_id IS NOT NULL AND state IN ('PAYER_APPROVAL_PENDING','PAYER_APPROVED','CAPTURE_PENDING') AND updated_at < ? ORDER BY updated_at ASC LIMIT 5`,
+    `SELECT id FROM payment_requests WHERE household_id=? AND paypal_order_id IS NOT NULL AND state IN ('PAYER_APPROVAL_PENDING','PAYER_APPROVED','CAPTURE_PENDING','REFUND_PENDING') AND updated_at < ? ORDER BY updated_at ASC LIMIT 5`,
   ).all(householdId, cutoff) as { id: string }[];
   const outcomes: Record<string, ReconcileOutcome> = {};
   for (const row of rows) {

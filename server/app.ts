@@ -25,6 +25,8 @@ import { paypalConfigured, verifyWebhook, getOrder as getPayPalOrder } from './p
 import { SAMPLE_MESSAGES } from './scam/samples.js';
 import { reconcileForUser, sweepWithin, finishApproved } from './payments/reconcile.js';
 import { buildTimeline } from './payments/timeline.js';
+import { adminRefund, checkAdminToken, refundFromWebhook, requestRefund, ensureCaptureVerified, ADMIN_HEADER, REFUNDS_DISABLED_MESSAGE } from './payments/refund.js';
+import { reconcile as reconcilePayment } from './payments/reconcile.js';
 import { guardModelText } from './ai/outputGuard.js';
 import { buildInsights } from './insights/model.js';
 import { answerInsightsQuestion } from './insights/agent.js';
@@ -70,11 +72,13 @@ export function createApp() {
       id, event_type: String(event.event_type ?? ''), resource_type: event.resource_type ?? null, resource_id: String(resource.id ?? ''),
       status: resource.status ?? null, amount: resource.amount?.value ?? null, currency: resource.amount?.currency_code ?? null,
       custom_id: resource.custom_id ?? resource.purchase_units?.[0]?.custom_id ?? null, order_id: resource.supplementary_data?.related_ids?.order_id ?? null,
+      // Refund events: the capture this refund belongs to (from the refund's `up` link).
+      capture_id: (resource.links ?? []).find((l: any) => l?.rel === 'up')?.href?.match(/\/v2\/payments\/captures\/([A-Z0-9]+)$/)?.[1] ?? null,
       create_time: event.create_time ?? null, resource_create_time: resource.create_time ?? null,
     };
     const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, minimal.event_type, minimal.resource_id, JSON.stringify(minimal));
     if (ins.changes === 0) return res.status(200).json({ ok: true, duplicate: true });
-    const outcome = pay.reconcileFromWebhook(event);
+    const outcome = minimal.event_type === 'PAYMENT.CAPTURE.REFUNDED' ? refundFromWebhook(event) : pay.reconcileFromWebhook(event);
     res.json({ ok: true, outcome });
   });
 
@@ -330,11 +334,21 @@ export function createApp() {
     await sweepWithin(hh); // lazy, rate-limited reconcile of this household's stale pending payments
     res.json(pay.listRequests(hh));
   }));
-  app.get('/api/payments/:id', requireRole('elder'), (req, res) => {
+  app.get('/api/payments/:id', requireRole('elder'), wrap(async (req, res) => {
     const s = sessionOf(req);
-    const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(String(req.params.id), s.householdId);
-    if (!r) return res.status(404).json({ error: 'not_found' });
+    const q = () => db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(String(req.params.id), s.householdId) as any;
+    const first = q();
+    if (!first) return res.status(404).json({ error: 'not_found' });
+    await ensureCaptureVerified(first); // receipt timeline: Payments v2 capture read-back (bounded, at most once a minute)
+    const r = q();
     res.json({ ...pay.publicView(r), timeline: buildTimeline(r) });
+  }));
+  // Buyer "Request a refund": records a REQUEST only (REFUND_REQUESTED). It never refunds and never calls PayPal.
+  app.post('/api/payments/:id/refund-request', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const view = requestRefund(s.householdId, s.userId, String(req.params.id), req.body?.reason);
+    const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(view.id, s.householdId);
+    res.json({ ...view, timeline: buildTimeline(r) });
   });
   // "Check with PayPal": read-only reconcile of one of this household's payments. Never captures.
   app.post('/api/payments/:id/reconcile', requireRole('elder'), recoverLimiter, wrap(async (req, res) => {
@@ -389,9 +403,38 @@ export function createApp() {
     const approvalId = z.string().min(5).max(40).parse(req.body?.approvalId);
     res.json(pay.decide(s.householdId, s.userId, String(req.params.id), approvalId, decision, req.body?.reason));
   });
-  app.post('/api/family/requests/:id/refund', requireRole('family'), wrap(async (req, res) => {
-    const s = sessionOf(req);
-    res.json(await pay.merchantRefund(s.householdId, `demo-merchant:${s.userId}`, String(req.params.id)));
+  // Family members have no refund authority (the old /api/family/requests/:id/refund route was removed on purpose).
+
+  // ---------- Merchant admin (Demo Shop). Only with ADMIN_TOKEN set; header X-Admin-Token, constant-time compare. ----------
+  const adminLimiter = rateLimit({ windowMs: 60_000, limit: Number(process.env.ADMIN_LIMIT_PER_MIN ?? 10), standardHeaders: true, legacyHeaders: false });
+  const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+    const v = checkAdminToken(req.get(ADMIN_HEADER));
+    if (v === 'disabled') return res.status(503).json({ error: 'refunds_disabled', message: REFUNDS_DISABLED_MESSAGE });
+    if (v === 'missing') return res.status(401).json({ error: 'admin_required', message: 'Merchant admin token required.' });
+    if (v === 'wrong') { audit(null, 'admin?', 'admin.denied', String(req.params.id ?? '')); return res.status(403).json({ error: 'forbidden', message: 'Wrong merchant admin token.' }); }
+    next();
+  };
+  const adminView = (id: string) => {
+    const r = db.prepare('SELECT * FROM payment_requests WHERE id=?').get(id) as any;
+    if (!r) throw new pay.PaymentError('not_found', 'Payment not found.', 404);
+    const ref = db.prepare('SELECT capture_id, paypal_request_id, attempt, status, refund_id, paypal_status, last_error, updated_at FROM refunds WHERE request_id=?').get(id) ?? null;
+    return { ...pay.publicView(r), refundExecution: ref, timeline: buildTimeline(r) };
+  };
+  const paymentId = (req: Request) => z.string().regex(/^pay_[A-Za-z0-9_-]{6,40}$/).parse(req.params.id);
+  app.get('/api/admin/payments/:id', adminLimiter, requireAdmin, (req, res) => { res.json(adminView(paymentId(req))); });
+  app.post('/api/admin/payments/:id/refund', adminLimiter, requireAdmin, wrap(async (req, res) => {
+    const id = paymentId(req);
+    const body = z.object({
+      householdId: z.string().max(60).optional(), captureId: z.string().max(40).optional(),
+      amount: z.union([z.string().max(20), z.number()]).optional(), currency: z.string().length(3).optional(),
+    }).parse(req.body ?? {});
+    const out = await adminRefund(id, 'merchant-admin', body);
+    res.status(out.status === 'REFUNDED' ? 200 : 202).json({ ...out, request: adminView(id) });
+  }));
+  app.post('/api/admin/payments/:id/reconcile', adminLimiter, requireAdmin, wrap(async (req, res) => {
+    const id = paymentId(req);
+    const out = await reconcilePayment(id);
+    res.json({ ...out, request: adminView(id) });
   }));
 
   // ---------- Family Safety Insights (read-only; one endpoint for both dashboards) ----------

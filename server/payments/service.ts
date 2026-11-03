@@ -101,9 +101,33 @@ export function publicView(r: any) {
     currency: r.currency,
     risk: r.risk_json ? JSON.parse(r.risk_json) : null,
     approval: approval ? { id: approval.id, status: effectiveApprovalStatus(approval), expiresAt: approval.expires_at, decidedAt: approval.decided_at, reason: approval.reason } : null,
-    receipt: r.state === 'CAPTURED' || r.state === 'REFUNDED' ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id, webhookConfirmed: Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id)) } : null,
+    receipt: r.state === 'CAPTURED' || r.state === 'REFUND_PENDING' || r.state === 'REFUNDED' ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id, webhookConfirmed: Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id)) } : null,
+    refund: refundView(r),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+  };
+}
+
+export const REFUND_REQUEST_LABEL = 'Request sent — not refunded yet';
+
+/**
+ * What the buyer sees about refunds. A buyer request (REFUND_REQUESTED) is only a request: it is labelled as such
+ * and never shown as a refund. Only the payment state REFUNDED (set from PayPal's own answer) means money went back.
+ */
+export function refundView(r: any) {
+  const req = db.prepare('SELECT status, created_at FROM refund_requests WHERE request_id=?').get(r.id) as { status: string; created_at: string } | undefined;
+  const ex = db.prepare('SELECT status, refund_id FROM refunds WHERE request_id=?').get(r.id) as { status: string; refund_id: string | null } | undefined;
+  const status = r.state === 'REFUNDED' ? 'REFUNDED' : r.state === 'REFUND_PENDING' ? 'REFUND_PENDING' : req ? 'REFUND_REQUESTED' : null;
+  if (!status && r.state !== 'CAPTURED') return null;
+  return {
+    status,
+    label: status === 'REFUNDED' ? 'Refunded by the Demo Shop (PayPal Sandbox — no real money)'
+      : status === 'REFUND_PENDING' ? 'Refund sent to PayPal — waiting for PayPal to confirm'
+      : status === 'REFUND_REQUESTED' ? REFUND_REQUEST_LABEL : null,
+    requestedAt: req?.created_at ?? null,
+    canRequest: r.state === 'CAPTURED' && !req,
+    refundId: r.state === 'REFUNDED' ? ex?.refund_id ?? null : null,
+    lastAttemptFailed: r.state === 'CAPTURED' && ex?.status === 'FAILED',
   };
 }
 
@@ -296,10 +320,7 @@ export function reconcileFromWebhook(event: any) {
     transition(r, 'FAILED', 'paypal-webhook');
     return 'failed';
   }
-  if (type === 'PAYMENT.CAPTURE.REFUNDED' && r.state === 'CAPTURED') {
-    transition(r, 'REFUNDED', 'paypal-webhook');
-    return 'refunded';
-  }
+  // PAYMENT.CAPTURE.REFUNDED is handled by refund.ts (refundFromWebhook), which correlates by refund id / capture id.
   return 'no_change';
 }
 
@@ -308,15 +329,6 @@ export function cancelRequest(householdId: string, actor: string, requestId: str
   transition(r, 'CANCELLED', actor);
   db.prepare("UPDATE approvals SET status='invalidated' WHERE request_id=? AND status='pending'").run(requestId);
   return publicView(load(requestId, householdId));
-}
-
-/** Merchant-side refund of our OWN demo shop sale. Not a dispute, not a PayPal buyer claim. */
-export async function merchantRefund(householdId: string, actor: string, requestId: string) {
-  const r = load(requestId, householdId);
-  if (r.state !== 'CAPTURED' || !r.paypal_capture_id) throw new PaymentError('bad_state', 'Only completed payments can be refunded.', 409);
-  const ref = await paypal.refundCapture(r.paypal_capture_id, r.id);
-  if (ref?.status === 'COMPLETED') transition(r, 'REFUNDED', actor);
-  return { request: publicView(load(requestId, householdId)), refundStatus: ref?.status ?? 'UNKNOWN' };
 }
 
 export function listRequests(householdId: string, limit = 20) {

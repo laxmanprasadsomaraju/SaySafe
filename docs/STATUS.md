@@ -19,7 +19,7 @@ _Last updated: 2026-11-02 (Irish time). "Verified" means we ran it; anything els
 - Screenshot analysis with `qwen/qwen3.8-27b` (model is listed as Groq preview; not yet called live).
 - Groq Whisper transcription from a real browser microphone.
 - Webhook signature verification (needs deployed URL + `PAYPAL_WEBHOOK_ID`).
-- Demo-merchant refund (Payments API).
+- Demo-merchant refund (Payments API): merchant admin only (`ADMIN_TOKEN`), full refunds, durable PayPal-Request-Id, GET refund/capture read-back, refund webhook. Buyers can only *request* a refund.
 - Spoken receipt in a real browser (text-to-speech uses the browser's voice).
 
 ## Simulated / demo-only
