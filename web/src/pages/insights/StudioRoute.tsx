@@ -18,7 +18,9 @@ class FallbackBoundary extends Component<{ fallback: ReactNode; children: ReactN
   render() { return this.state.failed ? this.props.fallback : this.props.children; }
 }
 
-export const importStudio = () => import('./StudioDashboard');
+// Without a licence at build time the AG Studio chunk is not in the build at all (the branch is a constant false).
+const AG_STUDIO_BUILD = typeof __AG_STUDIO_BUILD__ !== 'undefined' && __AG_STUDIO_BUILD__;
+export const importStudio = (): Promise<{ default: ComponentType }> => (AG_STUDIO_BUILD ? import('./StudioDashboard') : Promise.reject(new Error('AG Studio is not part of this build')));
 
 export default function StudioRoute({ importer = importStudio, timeoutMs = 15000 }: { importer?: () => Promise<{ default: ComponentType }>; timeoutMs?: number }) {
   const cfg = useConfig();
