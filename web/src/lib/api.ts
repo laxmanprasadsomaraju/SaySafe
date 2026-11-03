@@ -33,7 +33,15 @@ export interface PaymentRequest {
   approval: { id: string; status: string; expiresAt: number; decidedAt: string | null; reason: string | null } | null;
   receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string; webhookConfirmed?: boolean } | null;
   createdAt: string; updatedAt: string;
+  timeline?: PaymentTimeline;
 }
+
+export interface PaymentTimeline {
+  label: string;
+  events: { kind: 'order_created' | 'buyer_approved' | 'capture_completed' | 'webhook_received'; label: string; at: string; paypalTime: string | null; source: string; verification: string; verified: boolean }[];
+  pending: string[];
+}
+export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled';
 
 export interface ScanResult {
   scanId: string;
@@ -45,6 +53,7 @@ export interface ScanResult {
   phonePolicy: string | null;
   extractedText?: string; ocrUncertain?: boolean;
   ai: { used: boolean; model?: string };
+  aiNotice?: string | null;
 }
 
 export const newKey = () => (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now()).replace(/[^A-Za-z0-9_-]/g, '');

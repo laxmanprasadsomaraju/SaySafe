@@ -47,12 +47,38 @@ export const FALLBACK: Endpoint | null = env.AI_FALLBACK_BASE_URL
 
 export class AIUnavailableError extends Error {}
 
+// ---------- Reliability limits (all free: in-memory, per process) ----------
+/** Bounded timeouts for every model call. */
+export const AI_TIMEOUTS = { text: Number(env.AI_TEXT_TIMEOUT_MS ?? 15000), vision: Number(env.AI_VISION_TIMEOUT_MS ?? 30000), stt: Number(env.AI_STT_TIMEOUT_MS ?? 30000) };
+/** Longest Retry-After we are willing to wait before the single retry; longer means give up and use the rule-based fallback. */
+export const MAX_RETRY_WAIT_MS = 5000;
+/** Simple daily cap on model calls (AI_DAILY_LIMIT, default 1500). Over the cap the app uses its rule-based fallbacks. */
+const usage = { day: '', calls: 0 };
+export function aiDailyLimit() { const n = Number(env.AI_DAILY_LIMIT ?? 1500); return Number.isFinite(n) && n >= 0 ? n : 1500; }
+export function takeAiBudget(now = new Date()) {
+  const day = now.toISOString().slice(0, 10);
+  if (usage.day !== day) { usage.day = day; usage.calls = 0; }
+  if (usage.calls >= aiDailyLimit()) throw new AIUnavailableError('Daily AI usage cap reached');
+  usage.calls++;
+}
+export function aiUsage() { return { ...usage, limit: aiDailyLimit() }; }
+export function __resetAiUsage() { usage.day = ''; usage.calls = 0; }
+
+function retryAfterMs(h: string | null): number | null {
+  if (!h) return null;
+  const secs = Number(h);
+  if (Number.isFinite(secs)) return Math.max(0, secs * 1000);
+  const at = Date.parse(h);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
+
 export function aiConfigured() {
   return Boolean(PRIMARY.apiKey || FALLBACK?.apiKey);
 }
 
-async function postJSON(ep: Endpoint, path: string, body: unknown, timeoutMs = 20000) {
+async function postJSON(ep: Endpoint, path: string, body: unknown, timeoutMs = AI_TIMEOUTS.text) {
   if (!ep.apiKey) throw new AIUnavailableError(`${ep.name} key missing`);
+  takeAiBudget();
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
@@ -64,8 +90,9 @@ async function postJSON(ep: Endpoint, path: string, body: unknown, timeoutMs = 2
     });
     if (!res.ok) {
       const txt = await res.text();
-      const err = new Error(`${ep.name} ${res.status}: ${txt.slice(0, 300)}`) as Error & { status?: number };
+      const err = new Error(`${ep.name} ${res.status}: ${txt.slice(0, 300)}`) as Error & { status?: number; retryAfterMs?: number | null };
       err.status = res.status;
+      err.retryAfterMs = retryAfterMs(res.headers.get('retry-after'));
       throw err;
     }
     return res.json() as Promise<any>;
@@ -74,16 +101,20 @@ async function postJSON(ep: Endpoint, path: string, body: unknown, timeoutMs = 2
   }
 }
 
-async function withRetry<T>(fn: () => Promise<T>, tries = 2): Promise<T> {
+/** At most ONE retry, and only on 429 or 5xx (honouring Retry-After up to MAX_RETRY_WAIT_MS). Timeouts and network errors are not retried. */
+export async function withRetry<T>(fn: () => Promise<T>, tries = 2): Promise<T> {
   let last: unknown;
-  for (let i = 0; i < tries; i++) {
+  for (let i = 0; i < Math.min(tries, 2); i++) {
     try {
       return await fn();
     } catch (e: any) {
       last = e;
       if (e instanceof AIUnavailableError) throw e;
-      if (e?.status && e.status < 500 && e.status !== 429) throw e; // don't retry client errors
-      await new Promise((r) => setTimeout(r, 400 * 2 ** i));
+      const retryable = e?.status === 429 || (e?.status >= 500 && e?.status < 600);
+      if (!retryable || i === 1) throw e;
+      const wait = e.retryAfterMs ?? 400;
+      if (wait > MAX_RETRY_WAIT_MS) throw e;
+      await new Promise((r) => setTimeout(r, wait));
     }
   }
   throw last;
@@ -113,7 +144,7 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
       };
       if (opts.json) body.response_format = { type: 'json_object' };
       if (model.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low';
-      const data = await withRetry(() => postJSON(ep, '/chat/completions', body));
+      const data = await withRetry(() => postJSON(ep, '/chat/completions', body, opts.vision ? AI_TIMEOUTS.vision : AI_TIMEOUTS.text));
       const text = data?.choices?.[0]?.message?.content ?? '';
       return { text, provider: ep.name, model };
     } catch (e) {
@@ -149,16 +180,18 @@ export async function transcribe(audio: Buffer, mime: string, filename = 'speech
   form.append('model', ep.sttModel);
   form.append('language', 'en');
   form.append('response_format', 'json');
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 30000);
-  try {
-    const res = await fetch(`${ep.baseUrl}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${ep.apiKey}` }, body: form, signal: ctrl.signal });
-    if (!res.ok) throw new Error(`STT ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const data = (await res.json()) as any;
-    return String(data.text ?? '').trim();
-  } finally {
-    clearTimeout(t);
-  }
+  const data = await withRetry(async () => {
+    takeAiBudget();
+    const res = await fetch(`${ep.baseUrl}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${ep.apiKey}` }, body: form, signal: AbortSignal.timeout(AI_TIMEOUTS.stt) });
+    if (!res.ok) {
+      const err = new Error(`STT ${res.status}: ${(await res.text()).slice(0, 200)}`) as Error & { status?: number; retryAfterMs?: number | null };
+      err.status = res.status;
+      err.retryAfterMs = retryAfterMs(res.headers.get('retry-after'));
+      throw err;
+    }
+    return (await res.json()) as any;
+  });
+  return String(data.text ?? '').trim();
 }
 
 export async function health() {
@@ -167,7 +200,7 @@ export async function health() {
     out[ep.name] = { configured: Boolean(ep.apiKey) };
     if (!ep.apiKey) continue;
     try {
-      const res = await fetch(`${ep.baseUrl}/models`, { headers: { Authorization: `Bearer ${ep.apiKey}` } });
+      const res = await fetch(`${ep.baseUrl}/models`, { headers: { Authorization: `Bearer ${ep.apiKey}` }, signal: AbortSignal.timeout(5000) });
       out[ep.name].ok = res.ok;
       if (!res.ok) out[ep.name].error = `HTTP ${res.status}`;
     } catch (e: any) {

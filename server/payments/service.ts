@@ -8,6 +8,7 @@ import { newId } from '../auth.js';
 import { getProduct, DEMO_MERCHANT } from '../catalogue/products.js';
 import { assertTransition, type PaymentState } from './stateMachine.js';
 import * as paypal from '../paypal/client.js';
+import { recordEvidence } from './evidence.js';
 
 export const HARD_LIMIT_CENTS = 50000; // demo safety cap: €500
 export const APPROVAL_TTL_MS = 1000 * 60 * 30;
@@ -50,14 +51,14 @@ export function setThreshold(householdId: string, cents: number, actor: string) 
   audit(householdId, actor, 'policy.threshold_changed', undefined, { cents });
 }
 
-function load(id: string, householdId: string) {
+export function load(id: string, householdId: string) {
   const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(id, householdId) as any;
   if (!r) throw new PaymentError('not_found', 'Payment request not found.', 404);
   return r;
 }
 
 /** Optimistic-locked transition. Fails if someone else changed the row first (replay / double-click safe). */
-function transition(r: any, to: PaymentState, actor: string, extra: Record<string, unknown> = {}) {
+export function transition(r: any, to: PaymentState, actor: string, extra: Record<string, unknown> = {}) {
   assertTransition(r.state, to);
   const sets = ['state=?', 'version=version+1', "updated_at=datetime('now')", ...Object.keys(extra).map((k) => `${k}=?`)];
   const info = db.prepare(`UPDATE payment_requests SET ${sets.join(', ')} WHERE id=? AND version=? AND state=?`).run(to, ...Object.values(extra), r.id, r.version, r.state);
@@ -243,8 +244,15 @@ function applyCaptureResult(r: any, orderOrCapture: any) {
   if (amt !== r.amount_cents || capture.amount?.currency_code !== r.currency) throw new PaymentError('amount_mismatch', 'Captured amount differs from approved amount.', 500);
   // Name the merchant as PayPal reports it; the sandbox business account has no display name, so fall back to our shop name.
   const payee = orderOrCapture?.purchase_units?.[0]?.payee?.display_name ?? r.merchant;
+  recordEvidence(r, 'capture', { source: 'capture_response', captureId: capture.id, amount: capture.amount.value, currency: capture.amount.currency_code, paypalTime: capture.create_time ?? capture.update_time ?? null });
   if (r.state === 'CAPTURE_PENDING') {
-    transition(r, 'CAPTURED', 'paypal', { paypal_capture_id: capture.id, captured_amount: capture.amount.value, captured_currency: capture.amount.currency_code, payee_name: payee });
+    try {
+      transition(r, 'CAPTURED', 'paypal', { paypal_capture_id: capture.id, captured_amount: capture.amount.value, captured_currency: capture.amount.currency_code, payee_name: payee });
+    } catch (e) {
+      // Out of order: the signed webhook (or a reconcile) recorded this same capture first. Never regress; accept it.
+      const now = load(r.id, r.household_id);
+      if (!(e instanceof PaymentError && e.code === 'conflict' && now.state === 'CAPTURED' && now.paypal_capture_id === capture.id)) throw e;
+    }
   }
   return publicView(load(r.id, r.household_id));
 }

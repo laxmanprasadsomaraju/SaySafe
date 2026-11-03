@@ -1,7 +1,7 @@
 import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import cookieParser from 'cookie-parser';
 import multer from 'multer';
 import path from 'node:path';
@@ -18,9 +18,14 @@ import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from
 import * as pay from './payments/service.js';
 import { paypalConfigured, verifyWebhook, getOrder as getPayPalOrder } from './paypal/client.js';
 import { SAMPLE_MESSAGES } from './scam/samples.js';
+import { reconcileForUser, sweepWithin, finishApproved } from './payments/reconcile.js';
+import { buildTimeline } from './payments/timeline.js';
+import { guardModelText } from './ai/outputGuard.js';
 import { buildInsights } from './insights/model.js';
 import { answerInsightsQuestion } from './insights/agent.js';
 import { insightsConfig } from './insights/config.js';
+
+export const AI_RULES_ONLY = 'AI unavailable — rule checks only';
 
 export function createApp() {
   const app = express();
@@ -54,7 +59,15 @@ export function createApp() {
     const id = String(event?.id ?? '');
     if (!id) return res.status(400).end();
     if (!verified) return res.status(400).json({ error: 'unverified' }); // never act on (or store) unverified events
-    const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, String(event.event_type ?? ''), String(event?.resource?.id ?? ''), raw.slice(0, 100000));
+    // Store only what reconciliation and the receipt timeline need: no payer name, email or address.
+    const resource = event?.resource ?? {};
+    const minimal = {
+      id, event_type: String(event.event_type ?? ''), resource_type: event.resource_type ?? null, resource_id: String(resource.id ?? ''),
+      status: resource.status ?? null, amount: resource.amount?.value ?? null, currency: resource.amount?.currency_code ?? null,
+      custom_id: resource.custom_id ?? resource.purchase_units?.[0]?.custom_id ?? null, order_id: resource.supplementary_data?.related_ids?.order_id ?? null,
+      create_time: event.create_time ?? null, resource_create_time: resource.create_time ?? null,
+    };
+    const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, minimal.event_type, minimal.resource_id, JSON.stringify(minimal));
     if (ins.changes === 0) return res.status(200).json({ ok: true, duplicate: true });
     const outcome = pay.reconcileFromWebhook(event);
     res.json({ ok: true, outcome });
@@ -63,7 +76,17 @@ export function createApp() {
   app.use(express.json({ limit: '100kb' }));
 
   const apiLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
+  const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
   const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
+  // Per-session limit on AI routes on top of the per-IP one (several people can share an IP; one session cannot bypass by rotating IPs).
+  const aiSessionKey = (req: Request) => String(req.cookies?.ss_elder ?? req.cookies?.ss_family ?? '');
+  const aiSessionLimiter = rateLimit({
+    windowMs: 60_000, limit: Number(process.env.AI_SESSION_LIMIT_PER_MIN ?? 15), standardHeaders: true, legacyHeaders: false,
+    keyGenerator: (req) => (aiSessionKey(req) ? `s:${crypto.createHash('sha256').update(aiSessionKey(req)).digest('hex').slice(0, 32)}` : `ip:${ipKeyGenerator(req.ip ?? '')}`),
+    message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' },
+  });
+  const AI_PATHS = new Set(['/api/scan', '/api/scan/image', '/api/scan/explain', '/api/voice/transcribe', '/api/assistant', '/api/discover', '/api/family/insights/agent']);
+  app.use((req, res, next) => (req.method === 'POST' && AI_PATHS.has(req.path) ? aiSessionLimiter(req, res, next) : next()));
   app.use('/api', apiLimiter);
 
   // CSRF: state-changing API calls must come from our own origin (cookies are SameSite=Lax too).
@@ -125,7 +148,7 @@ export function createApp() {
     const result = await scanMessage(text, { userName: s?.name ?? 'Mary' });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
-    res.json({ scanId, ...result });
+    res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY });
   }));
 
   app.post('/api/scan/image', aiLimiter, upload.single('image'), wrap(async (req, res) => {
@@ -136,12 +159,14 @@ export function createApp() {
     const mime = sig.startsWith('89504e47') ? 'image/png' : sig.startsWith('ffd8ff') ? 'image/jpeg' : sig.startsWith('52494646') && f.buffer.subarray(8, 12).toString() === 'WEBP' ? 'image/webp' : null;
     if (!mime) return res.status(400).json({ error: 'bad_image', message: 'Please upload a PNG, JPEG or WebP screenshot.' });
     if (!aiConfigured()) return res.status(503).json({ error: 'ai_unavailable', message: 'Screenshot reading is not available right now. You can paste the text instead.' });
-    const extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`);
+    let extracted: Awaited<ReturnType<typeof extractFromImage>>;
+    try { extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`); }
+    catch { return res.status(503).json({ error: 'ai_unavailable', aiNotice: AI_RULES_ONLY, message: 'Screenshot reading is not available right now. You can paste the text instead, and I will run the rule checks.' }); }
     // The image is processed in memory and never stored.
     const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
-    res.json({ scanId, ...result, extractedText: extracted.text });
+    res.json({ scanId, ...result, aiNotice: result.ai.used ? null : AI_RULES_ONLY, extractedText: extracted.text });
   }));
 
   app.post('/api/scan/:id/share', requireRole('elder'), (req, res) => {
@@ -155,8 +180,10 @@ export function createApp() {
   app.post('/api/scan/explain', aiLimiter, wrap(async (req, res) => {
     const q = z.string().trim().min(1).max(300).parse(req.body?.question);
     const scan = req.body?.scan;
-    if (!aiConfigured() || !scan?.verdict) return res.json({ answer: 'Please do not use links or numbers from that message. Open the PayPal app yourself, or ask your family member.' });
-    res.json({ answer: await explainMore(q, scan, readSession(req, 'elder')?.name) });
+    const safe = 'Please do not use links or numbers from that message. Open the PayPal app yourself, or ask your family member.';
+    if (!aiConfigured() || !scan?.verdict) return res.json({ answer: safe, aiNotice: AI_RULES_ONLY });
+    try { res.json({ answer: guardModelText(await explainMore(q, scan, readSession(req, 'elder')?.name), safe) }); }
+    catch { res.json({ answer: safe, aiNotice: AI_RULES_ONLY }); }
   }));
 
   // ---------- Voice + assistant ----------
@@ -190,7 +217,6 @@ export function createApp() {
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
   // Read-only: asks PayPal what actually happened to an order this app created. Never captures, never creates.
-  const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
   app.get('/api/paypal/orders/:orderId/status', recoverLimiter, wrap(async (req, res) => {
     const orderId = z.string().regex(/^[A-Z0-9]{10,30}$/).parse(req.params.orderId);
     let order: any;
@@ -223,7 +249,7 @@ export function createApp() {
       if (!(e instanceof Channel3Error)) throw e;
       const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
       if (e.retryAfter) res.setHeader('Retry-After', String(e.retryAfter));
-      res.status(status).json({ error: `channel3_${e.code}`, message: `${e.message} The SaySafe Demo Shop still works.` });
+      res.status(status).json({ error: `channel3_${e.code}`, products: [], message: `I couldn't get recommendations right now. ${e.message} The SaySafe Demo Shop still works.` });
     }
   }));
 
@@ -246,13 +272,29 @@ export function createApp() {
   });
 
   // ---------- Payments (elder) ----------
-  app.get('/api/payments', requireRole('elder'), (req, res) => res.json(pay.listRequests(sessionOf(req).householdId)));
+  app.get('/api/payments', requireRole('elder'), wrap(async (req, res) => {
+    const hh = sessionOf(req).householdId;
+    await sweepWithin(hh); // lazy, rate-limited reconcile of this household's stale pending payments
+    res.json(pay.listRequests(hh));
+  }));
   app.get('/api/payments/:id', requireRole('elder'), (req, res) => {
     const s = sessionOf(req);
     const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(String(req.params.id), s.householdId);
     if (!r) return res.status(404).json({ error: 'not_found' });
-    res.json(pay.publicView(r));
+    res.json({ ...pay.publicView(r), timeline: buildTimeline(r) });
   });
+  // "Check with PayPal": read-only reconcile of one of this household's payments. Never captures.
+  app.post('/api/payments/:id/reconcile', requireRole('elder'), recoverLimiter, wrap(async (req, res) => {
+    const s = sessionOf(req);
+    const out = await reconcileForUser(s.householdId, String(req.params.id));
+    const r = db.prepare('SELECT * FROM payment_requests WHERE id=? AND household_id=?').get(out.request.id, s.householdId);
+    res.json({ outcome: out.outcome, request: { ...out.request, timeline: buildTimeline(r) } });
+  }));
+  // Explicit user confirm for a buyer-approved payment whose redirect was lost. Repeats every check (PayPal order, amount, currency, family approval).
+  app.post('/api/payments/:id/finish', requireRole('elder'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    res.json(await finishApproved(s.householdId, s.userId, String(req.params.id)));
+  }));
   app.post('/api/payments', requireRole('elder'), wrap(async (req, res) => {
     const s = sessionOf(req);
     if (!paypalConfigured()) return res.status(503).json({ error: 'paypal_not_configured', message: 'PayPal sandbox is not connected yet.' });
@@ -275,12 +317,13 @@ export function createApp() {
   });
 
   // ---------- Family ----------
-  app.get('/api/family/overview', requireRole('family'), (req, res) => {
+  app.get('/api/family/overview', requireRole('family'), wrap(async (req, res) => {
     const s = sessionOf(req);
+    await sweepWithin(s.householdId);
     const elder = db.prepare('SELECT u.name FROM households h JOIN users u ON u.id=h.elder_id WHERE h.id=?').get(s.householdId) as any;
     const scans = db.prepare('SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id=? AND shared_with_family=1 ORDER BY created_at DESC LIMIT 10').all(s.householdId);
     res.json({ me: { name: s.name }, elder: { name: elder?.name }, policy: pay.getPolicy(s.householdId), requests: pay.listRequests(s.householdId), alerts: scans });
-  });
+  }));
   app.post('/api/family/policy', requireRole('family'), (req, res) => {
     const s = sessionOf(req);
     const eurVal = z.number().min(0).max(500).parse(req.body?.thresholdEur);
