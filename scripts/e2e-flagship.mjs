@@ -84,6 +84,8 @@ try {
   await m.goto(BASE + '/'); await m.locator('button:visible', { hasText: 'Try as Mary' }).first().click();
   await m.waitForURL(/\/assistant/, { timeout: 60000 }); await m.waitForSelector('#assistant-input');
   ok('Try as Mary creates a fresh household and opens the Assistant', true);
+  await lastCard(m, 'shop_catalogue').waitFor({ timeout: 15000 });
+  ok('welcome lists what the Demo Shop sells (server catalogue chips)', /Simple Dial Microwave 20L/.test(await lastCard(m, 'shop_catalogue').innerText()));
 
   // ---------- 2. "I owe €120 — did I already pay?" ----------
   await ask(m, 'I received a message saying I owe €120. Can you check whether I already paid?');
@@ -244,6 +246,14 @@ try {
   ok('Assistant insights card with an Open Insights button (rules, no AI)', await lastCard(m, 'insights_summary').getByTestId('view-full-insights').isVisible());
   await shot(m, '10-assistant-insights-card', '[data-card="insights_summary"]');
 
+  // ---------- 10b. Fresh visitor: voice playback On (not Muted) ----------
+  const vc = await b.newContext({ viewport: { width: 390, height: 844 } }); const v = await vc.newPage(); // no saved prefs
+  await v.goto(BASE + '/'); await v.locator('button:visible', { hasText: 'Try as Mary' }).first().click(); await v.waitForURL(/\/assistant/);
+  await v.goto(BASE + '/profile'); const vp = v.getByTestId('voice-playback').first(); await vp.waitFor({ timeout: 15000 });
+  const vpText = (await vp.innerText()).trim();
+  ok('fresh profile: Voice playback is On (never shown as Muted by default)', vpText === 'On' && (await vp.getAttribute('aria-checked')) === 'true', vpText);
+  await vc.close();
+
   // ---------- 11. Desktop 1440 ----------
   const dc = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce', storageState: await m.context().storageState() });
   const d = await dc.newPage();
@@ -253,6 +263,16 @@ try {
   await axe(d, 'home-1440');
   await d.locator('nav[aria-label="Main"]').getByRole('link', { name: 'Insights' }).click(); await d.locator('#spending').waitFor({ timeout: 20000 });
   await shot(d, '11-insights-desktop');
+  for (const [w, h] of [[1280, 720], [1440, 900]]) {
+    await d.setViewportSize({ width: w, height: h });
+    for (const path of ['/activity', '/profile']) {
+      await d.goto(BASE + path); await d.waitForTimeout(1200); await d.mouse.wheel(0, 2000); await d.waitForTimeout(500);
+      const top = await d.evaluate(() => [Math.round(document.querySelector('header').getBoundingClientRect().top), Math.round(scrollY)]);
+      ok(`desktop header stays visible after scrolling ${path} at ${w}×${h}`, top[0] === 0 && top[1] > 100, `header top ${top[0]}, scrollY ${top[1]}`);
+      if (path === '/activity') await shot(d, `15-header-after-scroll-${w}x${h}`);
+    }
+  }
+  await d.setViewportSize({ width: 1440, height: 900 });
   await d.goto(BASE + '/assistant'); await d.waitForSelector('#assistant-input'); await d.waitForTimeout(1500);
   await shot(d, '12-assistant-desktop');
   // Error state: the summary fails → error with Retry, never "nothing".

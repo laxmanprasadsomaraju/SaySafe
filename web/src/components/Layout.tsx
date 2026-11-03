@@ -129,7 +129,7 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
             {/* Top tabs from 1024 px: at 768 the four tabs + website link overflowed the header. Tablets keep the bottom bar. */}
             {showNav && <nav aria-label="Main" className="hidden lg:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
             {/* Back to the public website (the landing page) without signing out. */}
-            {app && <Link to="/" className="inline-flex items-center gap-1.5 min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="website-link"><Globe className="size-5" aria-hidden /><span className="max-[359px]:sr-only">SaySafe website</span></Link>}
+            {app && <Link to="/" className="inline-flex items-center gap-1.5 min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="website-link"><Globe className="size-5" aria-hidden />{/* With the desktop Insights item, the full label wrapped at 1024–1535 px: "Website" there. */}<span className="max-[359px]:sr-only whitespace-nowrap lg:max-2xl:hidden">SaySafe website</span><span className="hidden lg:max-2xl:inline whitespace-nowrap">Website</span></Link>}
           </div>
         </div>
       </header>
