@@ -76,19 +76,37 @@ const PaymentPrep = z.object({
   requestId: Str(60).nullable(),
   error: Str(300).nullable(),
 });
+const PayId = z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/);
+/** Mary's view of a purchase waiting for (or past) family review. Status always re-read from the server. */
 const FamilyStatus = z.object({
   kind: z.literal('family_status'),
-  requestId: z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/),
+  requestId: PayId,
   state: Str(40),
   item: Str(300),
   amountCents: Cents,
   currency: Currency,
   approvalStatus: Str(20).nullable(),
   reasons: z.array(Str(200)).max(5).optional(),
+  checkedAt: Str(40).optional(),
+});
+/** Alex's review card: exact items and amount from the server. Approve/Decline go to the existing decide endpoint. */
+const FamilyReview = z.object({
+  kind: z.literal('family_review'),
+  requestId: PayId,
+  approvalId: Str(40),
+  elderName: Str(40).nullable(),
+  lines: z.array(z.object({ name: Str(200), quantity: z.number().int().min(1).max(5), lineCents: Cents, image: Str(100) })).min(1).max(10),
+  merchant: Str(120),
+  amountCents: Cents,
+  currency: Currency,
+  state: Str(40),
+  approvalStatus: Str(20),
+  expiresAt: z.number().int().min(0),
+  error: Str(300).nullable().optional(),
 });
 const Receipt = z.object({
   kind: z.literal('receipt'),
-  requestId: z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/),
+  requestId: PayId,
   state: Str(40),
   item: Str(300),
   merchant: Str(120),
@@ -98,11 +116,31 @@ const Receipt = z.object({
   evidenceLabel: Str(120).nullable(),
   verifiedSteps: z.number().int().min(0).max(10),
   at: Str(40),
+  /** From the server timeline: PayPal shows the buyer approved / Payments v2 read-back of the capture. */
+  buyerApproved: z.boolean().optional(),
+  captureVerified: z.boolean().optional(),
+  refundStatus: z.enum(['REFUND_REQUESTED', 'REFUND_PENDING', 'REFUNDED']).nullable().optional(),
+  familyApproval: Str(20).nullable().optional(),
 });
+const HistoryItem = z.object({ id: z.string().regex(/^(pay|scan)_[A-Za-z0-9_-]{4,60}$/), type: z.enum(['payment', 'scan']).default('payment'), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), webhookConfirmed: z.boolean().optional() });
 const PaymentHistory = z.object({
   kind: z.literal('payment_history'),
-  items: z.array(z.object({ id: z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/), title: Str(300), amountCents: Cents, currency: Currency, status: Str(40), at: Str(40) })).max(10),
+  items: z.array(HistoryItem).max(10),
   total: z.number().int().min(0),
+  query: Str(100).optional(),
+  /** Family members see the household list but cannot open the elder's receipt page. */
+  as: z.enum(['elder', 'family']).optional(),
+});
+/** Refund REQUEST card. A request is never a refund: only REFUNDED (from PayPal) means money went back. */
+const Refund = z.object({
+  kind: z.literal('refund'),
+  requestId: PayId,
+  item: Str(300),
+  amountCents: Cents,
+  currency: Currency,
+  status: z.enum(['can_request', 'REFUND_REQUESTED', 'REFUND_PENDING', 'REFUNDED', 'not_eligible']),
+  requestedAt: Str(40).nullable(),
+  error: Str(300).nullable().optional(),
 });
 /** Official help links: internal routes, or https links the server lists as verified PayPal pages. */
 const TrustedLinks = z.object({
@@ -110,10 +148,10 @@ const TrustedLinks = z.object({
   items: z.array(z.union([z.object({ label: Str(120), to: InternalRoute }), z.object({ label: Str(120), href: HttpsUrl })])).min(1).max(6),
 });
 
-export const Block = z.discriminatedUnion('kind', [ScamResult, ProductCards, Compare, PaymentPrep, FamilyStatus, Receipt, PaymentHistory, TrustedLinks]);
+export const Block = z.discriminatedUnion('kind', [ScamResult, ProductCards, Compare, PaymentPrep, FamilyStatus, FamilyReview, Receipt, PaymentHistory, Refund, TrustedLinks]);
 export type Block = z.infer<typeof Block>;
 export type BlockOf<K extends Block['kind']> = Extract<Block, { kind: K }>;
-export const BLOCK_KINDS = ['scam_result', 'product_cards', 'compare', 'payment_prep', 'family_status', 'receipt', 'payment_history', 'trusted_links'] as const;
+export const BLOCK_KINDS = ['scam_result', 'product_cards', 'compare', 'payment_prep', 'family_status', 'family_review', 'receipt', 'payment_history', 'refund', 'trusted_links'] as const;
 
 /** Validate one block. Returns null (and the block is not shown) if anything is off. */
 export function parseBlock(raw: unknown): Block | null {
@@ -146,4 +184,63 @@ export function restoreThread(raw: string | null): Thread | null {
     if (!t.success) return null;
     return { ...t.data, messages: t.data.messages.map((m) => ({ ...m, blocks: m.blocks.map(parseBlock).filter((b): b is Block => b !== null) })) };
   } catch { return null; }
+}
+
+// ---------- Server responses (validated before any card is built from them) ----------
+const ServerTimelineEvent = z.object({ kind: Str(40), label: Str(200), verified: z.boolean() }).passthrough();
+/** GET /api/payments/:id, GET /api/family/requests/:id and the decide/refund-request responses. */
+export const ServerPayment = z.object({
+  id: PayId,
+  state: Str(40),
+  items: z.array(z.object({ productId: Str(60), name: Str(200), quantity: z.number().int().min(1).max(5), lineCents: Cents, image: Str(100) }).passthrough()).min(1).max(10),
+  merchant: Str(120),
+  amountCents: Cents,
+  currency: Currency,
+  risk: z.object({ reasons: z.array(Str(300)).max(10) }).passthrough().nullable(),
+  approval: z.object({ id: Str(40), status: Str(20), expiresAt: z.number(), decidedAt: Str(40).nullable(), reason: Str(300).nullable() }).nullable(),
+  receipt: z.object({ captureId: Str(60), amount: Str(20), currency: Currency, payee: Str(160), orderId: Str(60), webhookConfirmed: z.boolean().optional() }).nullable(),
+  refund: z.object({ status: z.enum(['REFUND_REQUESTED', 'REFUND_PENDING', 'REFUNDED']).nullable(), requestedAt: Str(40).nullable(), canRequest: z.boolean() }).passthrough().nullable().optional(),
+  updatedAt: Str(40),
+  timeline: z.object({ label: Str(200), events: z.array(ServerTimelineEvent).max(20) }).passthrough().optional(),
+  elderName: Str(40).nullable().optional(),
+}).passthrough();
+export type ServerPayment = z.infer<typeof ServerPayment>;
+export const ServerActivity = z.object({
+  total: z.number().int().min(0),
+  items: z.array(z.object({ id: Str(80), type: z.enum(['payment', 'scan']), title: Str(300), amountCents: Cents.nullable(), currency: Currency.nullable(), status: Str(40), at: Str(40), statusGroup: Str(20), webhookConfirmed: z.boolean() }).passthrough()).max(50),
+}).passthrough();
+/** Throws if the server sent something unexpected: a card is never built from unvalidated data. */
+export function parseServer<T>(schema: z.ZodType<T>, raw: unknown): T {
+  const r = schema.safeParse(raw);
+  if (!r.success) throw new Error('SaySafe got an unexpected answer from the server, so nothing is shown. Nothing was paid.');
+  return r.data;
+}
+const isoAt = (s: string) => (s.includes('T') ? s : `${s.replace(' ', 'T')}Z`);
+const itemText = (p: ServerPayment) => p.items.map((i) => `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`).join(', ').slice(0, 300);
+
+/** Card builders: server data -> block data (validated again by parseBlock when added). */
+export function familyStatusFrom(p: ServerPayment): BlockOf<'family_status'> {
+  return { kind: 'family_status', requestId: p.id, state: p.state, item: itemText(p), amountCents: p.amountCents, currency: p.currency, approvalStatus: p.approval?.status ?? null, reasons: (p.risk?.reasons ?? []).slice(0, 5).map((r) => r.slice(0, 200)), checkedAt: new Date().toISOString() };
+}
+export function familyReviewFrom(p: ServerPayment): BlockOf<'family_review'> | null {
+  if (!p.approval) return null;
+  return { kind: 'family_review', requestId: p.id, approvalId: p.approval.id, elderName: p.elderName ?? null, lines: p.items.map((i) => ({ name: i.name, quantity: i.quantity, lineCents: i.lineCents, image: i.image })), merchant: p.merchant, amountCents: p.amountCents, currency: p.currency, state: p.state, approvalStatus: p.approval.status, expiresAt: p.approval.expiresAt, error: null };
+}
+export function receiptFrom(p: ServerPayment): BlockOf<'receipt'> | null {
+  const rc = p.receipt;
+  if (!rc) return null;
+  const ev = p.timeline?.events ?? [];
+  const has = (k: string) => ev.some((e) => e.kind === k && e.verified);
+  return { kind: 'receipt', requestId: p.id, state: p.state, item: itemText(p), merchant: p.merchant, amountCents: p.amountCents, currency: p.currency,
+    receipt: { captureId: rc.captureId, amount: rc.amount, currency: rc.currency, payee: rc.payee, orderId: rc.orderId, webhookConfirmed: Boolean(rc.webhookConfirmed) },
+    evidenceLabel: p.timeline?.label?.slice(0, 120) ?? null, verifiedSteps: Math.min(10, ev.filter((e) => e.verified).length), at: isoAt(p.updatedAt),
+    buyerApproved: has('buyer_approved'), captureVerified: has('capture_verified') || has('capture_completed'), refundStatus: p.refund?.status ?? null, familyApproval: p.approval?.status ?? null };
+}
+export function refundFrom(p: ServerPayment): BlockOf<'refund'> {
+  const st = p.state === 'REFUNDED' ? 'REFUNDED' : p.refund?.status ?? (p.refund?.canRequest ? 'can_request' : 'not_eligible');
+  return { kind: 'refund', requestId: p.id, item: itemText(p), amountCents: p.amountCents, currency: p.currency, status: st, requestedAt: p.refund?.requestedAt ?? null, error: null };
+}
+export function historyFrom(a: z.infer<typeof ServerActivity>, query?: string, as?: 'elder' | 'family'): BlockOf<'payment_history'> {
+  return { kind: 'payment_history', total: a.total, query: query?.slice(0, 100) || undefined, ...(as === 'family' ? { as } : {}),
+    items: a.items.filter((i) => /^(pay|scan)_/.test(i.id)).slice(0, 10).map((i) => ({ id: i.id, type: i.type, title: i.title, amountCents: i.amountCents, currency: i.currency, status: i.status, at: i.at, webhookConfirmed: i.webhookConfirmed })) };
 }

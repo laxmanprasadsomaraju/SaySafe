@@ -5,21 +5,24 @@ import { Search, ChevronRight, ShieldAlert, Receipt, SlidersHorizontal, Users, B
 import { Layout } from '../components/Layout';
 import { Card, Notice } from '../components/ui';
 import { useShellRole } from '../lib/role';
-import { fetchActivity, paymentLabel, verdictLabel, money, when, type ActivityItem, type ActivityFilters } from '../lib/activity';
+import { fetchActivity, verdictLabel, money, when, shortStatus, TONE_CLS, type Tone, type ActivityItem, type ActivityFilters } from '../lib/activity';
 
 const CHIPS: { id: string; label: string; filter: Partial<ActivityFilters> }[] = [
   { id: 'all', label: 'All', filter: {} },
   { id: 'pending', label: 'Waiting', filter: { status: 'pending' } },
-  { id: 'paid', label: 'Paid', filter: { status: 'paid' } },
-  { id: 'cancelled', label: 'Cancelled', filter: { status: 'cancelled' } },
-  { id: 'refunded', label: 'Refunds', filter: { status: 'refunded' } },
-  { id: 'scan', label: 'Scam checks', filter: { type: 'scan' } },
+  { id: 'purchases', label: 'Purchases & payments', filter: { section: 'purchases' } },
+  { id: 'scans', label: 'Scam checks', filter: { section: 'scans' } },
+  { id: 'family', label: 'Family reviews', filter: { section: 'family' } },
+  { id: 'refunds', label: 'Refunds', filter: { section: 'refunds' } },
 ];
-const TONE: Record<string, string> = { pending: 'bg-amber-soft text-amber border-amber/40', paid: 'bg-teal-soft text-teal-deep border-teal/40', refunded: 'bg-teal-soft text-teal-deep border-teal/40', cancelled: 'bg-line text-navy border-line', failed: 'bg-danger-soft text-danger border-danger/40', scan: 'bg-paper text-navy border-line', other: 'bg-line text-navy border-line' };
+/** Sections, in this order, when everything is shown. Each item belongs to exactly one (the server decides). */
+const SECTIONS: { id: NonNullable<ActivityItem['section']>; label: string }[] = [
+  { id: 'purchases', label: 'Purchases & payments' }, { id: 'family', label: 'Family reviews' }, { id: 'refunds', label: 'Refunds' }, { id: 'scans', label: 'Scam checks' },
+];
 
 function Row({ it, family }: { it: ActivityItem; family: boolean }) {
   const nav = useNavigate();
-  const status = it.type === 'scan' ? verdictLabel(it.status) : paymentLabel(it.status);
+  const st = it.type === 'scan' ? { label: verdictLabel(it.status), tone: (it.status === 'suspicious' ? 'danger' : 'muted') as Tone } : shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed, approval: it.approval?.status });
   const Icon = it.type === 'scan' ? ShieldAlert : Receipt;
   const body = (
     <>
@@ -28,12 +31,15 @@ function Row({ it, family }: { it: ActivityItem; family: boolean }) {
         <span className="block font-bold break-words">{it.type === 'scan' ? 'Scam check: ' : ''}{it.title}</span>
         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
           {it.amountCents !== null && <span className="font-bold">{money(it.amountCents, it.currency)}</span>}
-          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE[it.statusGroup] ?? TONE.other}`}>{status}</span>
+          <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE_CLS[st.tone]}`}>{st.label}</span>
+          {'extra' in st && st.extra && <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE_CLS[it.webhookConfirmed ? 'ok' : 'pending']}`}>{st.extra}</span>}
           <span className="text-ink-soft">{when(it.at)}</span>
         </span>
         <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-soft">
+          {'detail' in st && st.detail && <span className="font-bold text-navy">{st.detail}</span>}
+          {it.example && <span className="inline-flex rounded-full bg-amber-soft text-amber border border-amber/30 px-2 font-bold">Example data</span>}
           {it.sandbox && <span>PayPal Sandbox · no real money</span>}
-          {it.captured && <span className="inline-flex items-center gap-1"><BadgeCheck className="size-4 text-teal" aria-hidden />Captured at PayPal{it.webhookConfirmed ? ', signed notice received' : ''}</span>}
+          {it.captured && <span className="inline-flex items-center gap-1"><BadgeCheck className="size-4 text-teal" aria-hidden />Captured at PayPal</span>}
           {it.approval && it.approval.status !== 'pending' && <span className="inline-flex items-center gap-1"><Users className="size-4" aria-hidden />Family {it.approval.status}</span>}
           {it.approval?.status === 'pending' && <span className="inline-flex items-center gap-1"><Users className="size-4" aria-hidden />Waiting for family</span>}
           {it.type === 'scan' && !family && it.sharedWithFamily && <span>Shared with family</span>}
@@ -91,10 +97,11 @@ export default function Activity() {
         <button type="submit" className="min-h-12 min-w-12 px-4 rounded-full bg-teal text-white font-bold inline-flex items-center gap-2"><Search className="size-5" aria-hidden /><span className="max-[399px]:sr-only">Search</span></button>
       </form>
 
-      <div role="group" aria-label="Show" className="mt-3 flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+      {/* Chips wrap onto more lines: nothing is ever cut off or hidden in a scroller. */}
+      <div role="group" aria-label="Show" className="mt-3 flex flex-wrap gap-2">
         {CHIPS.map((c) => (
           <button key={c.id} type="button" aria-pressed={chip === c.id} onClick={() => setChip(c.id)}
-            className={`shrink-0 min-h-12 px-4 rounded-full border-2 font-bold ${chip === c.id ? 'bg-navy text-white border-navy' : 'bg-paper border-line hover:border-teal'}`}>{c.label}</button>
+            className={`min-h-12 px-4 rounded-full border-2 font-bold text-base leading-tight text-left ${chip === c.id ? 'bg-navy text-white border-navy' : 'bg-paper border-line hover:border-teal'}`}>{c.label}</button>
         ))}
       </div>
       <button type="button" aria-expanded={more} aria-controls="more-filters" onClick={() => setMore(!more)} className="mt-2 inline-flex items-center gap-2 min-h-12 font-bold text-teal underline underline-offset-4"><SlidersHorizontal className="size-5" aria-hidden />{more ? 'Hide amount and date' : 'Amount and date'}</button>
@@ -124,7 +131,17 @@ export default function Activity() {
           )}
         </Card>
       )}
-      {items.length > 0 && (
+      {items.length > 0 && chip === 'all' && SECTIONS.map((sec) => {
+        const list = items.filter((it) => (it.section ?? (it.type === 'scan' ? 'scans' : 'purchases')) === sec.id);
+        if (!list.length) return null;
+        return (
+          <section key={sec.id} aria-labelledby={`sec-${sec.id}`} className="mt-5">
+            <h2 id={`sec-${sec.id}`} className="text-xl">{sec.label} <span className="text-ink-soft font-sans text-base font-normal">({list.length})</span></h2>
+            <Card className="mt-2 p-1 sm:p-2"><ul className="divide-y divide-line">{list.map((it) => <li key={`${it.type}-${it.id}`}><Row it={it} family={family} /></li>)}</ul></Card>
+          </section>
+        );
+      })}
+      {items.length > 0 && chip !== 'all' && (
         <Card className="mt-3 p-1 sm:p-2">
           <ul className="divide-y divide-line">{items.map((it) => <li key={`${it.type}-${it.id}`}><Row it={it} family={family} /></li>)}</ul>
         </Card>

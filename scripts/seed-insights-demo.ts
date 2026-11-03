@@ -7,13 +7,10 @@
  *   DATABASE_FILE=data/e2e.db npx tsx scripts/seed-insights-demo.ts            # newest paired household
  *   DATABASE_FILE=data/e2e.db SEED_HOUSEHOLD=hh_xxx npx tsx scripts/seed-insights-demo.ts
  */
+import './seed-guard.js'; // must stay first: refuses production / Render / remote Turso before the db opens
 import crypto from 'node:crypto';
 import { db, audit } from '../server/db/index.js';
 
-if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW !== 'yes') {
-  console.error('Refusing to seed example rows with NODE_ENV=production (set SEED_ALLOW=yes for a local production build).');
-  process.exit(1);
-}
 
 const hh = process.env.SEED_HOUSEHOLD
   ?? (db.prepare("SELECT household_id h FROM family_links WHERE status='active' ORDER BY created_at DESC, rowid DESC LIMIT 1").get() as { h: string } | undefined)?.h;

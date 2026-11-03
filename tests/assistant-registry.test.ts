@@ -7,7 +7,7 @@ const item = (over: Record<string, unknown> = {}): any => ({ id: 'p1', title: 'W
 
 describe('assistant component registry', () => {
   it('has exactly the approved components', () => {
-    expect([...BLOCK_KINDS].sort()).toEqual(['compare', 'family_status', 'payment_history', 'payment_prep', 'product_cards', 'receipt', 'scam_result', 'trusted_links']);
+    expect([...BLOCK_KINDS].sort()).toEqual(['compare', 'family_review', 'family_status', 'payment_history', 'payment_prep', 'product_cards', 'receipt', 'refund', 'scam_result', 'trusted_links']);
   });
   it('rejects unknown kinds and markup-shaped payloads', () => {
     expect(parseBlock({ kind: 'html', html: '<img src=x onerror=alert(1)>' })).toBeNull();

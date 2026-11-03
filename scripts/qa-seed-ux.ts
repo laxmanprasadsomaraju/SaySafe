@@ -3,12 +3,12 @@
  * household (PayPal is not configured locally, so POST /api/payments can't create one). Pair with
  * scripts/seed-insights-demo.ts for example captured/refunded/cancelled rows. Idempotency keys start with `seed_`.
  */
+import './seed-guard.js'; // must stay first: refuses production / Render / remote Turso before the db opens
 import crypto from 'node:crypto';
 import { db } from '../server/db/index.js';
 import { getProduct } from '../server/catalogue/products.js';
 import { priceCart, fingerprint, APPROVAL_TTL_MS } from '../server/payments/service.js';
 
-if (process.env.NODE_ENV === 'production') { console.error('Refusing to seed with NODE_ENV=production.'); process.exit(1); }
 const hh = process.env.SEED_HOUSEHOLD ?? (db.prepare("SELECT household_id h FROM family_links WHERE status='active' ORDER BY created_at DESC, rowid DESC LIMIT 1").get() as { h: string } | undefined)?.h;
 if (!hh) { console.error('No paired household found.'); process.exit(1); }
 const p = getProduct('microwave')!;

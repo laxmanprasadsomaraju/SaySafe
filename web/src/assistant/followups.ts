@@ -11,6 +11,8 @@ export type Followup =
   | { kind: 'seller' }
   | { kind: 'last_payment' }
   | { kind: 'payments' }
+  | { kind: 'refund' }
+  | { kind: 'search'; q: string }
   | { kind: 'compare' }
   | { kind: 'more' }
   | { kind: 'none' };
@@ -28,6 +30,9 @@ export function askedAge(text: string): number | null {
 
 export function parseFollowup(text: string, hasProducts: boolean): Followup {
   const s = text.toLowerCase().trim();
+  if (/\brefunds?\b|\bmoney back\b/.test(s)) return { kind: 'refund' };
+  const sm = s.match(/^(?:search|find|look for)\s+(?:my\s+)?(?:payments?|purchases?|orders?|history|activity)\s+(?:for\s+)?(.{2,60})$/) ?? s.match(/^(?:search|find)\s+(?:my\s+)?(.{2,40}?)\s+(?:payment|purchase|order|receipt)s?$/);
+  if (sm) return { kind: 'search', q: sm[1].replace(/[?.!]+$/, '').trim() };
   if (/\b(last|latest|most recent|previous)\b.{0,20}\b(payment|purchase|order|receipt)\b/.test(s) || /^(show )?(my )?receipt\b/.test(s)) return { kind: 'last_payment' };
   if (/\b(my|all|show) (payments|purchases|orders)\b|\bpayment history\b|\bwhat (have i|did i) (bought|buy|paid|pay)\b/.test(s)) return { kind: 'payments' };
   if (!hasProducts) return { kind: 'none' };

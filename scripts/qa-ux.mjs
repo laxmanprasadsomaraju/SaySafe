@@ -105,6 +105,11 @@ if (PART === 'audit' || PART === 'all') {
       if (wantShot) await shot(p, `${tag}-${name}`);
     }
     await p.goto(BASE + '/assistant'); await p.waitForLoadState('networkidle');
+    // Assistant header menu open (New conversation / Voice settings / Display), then closed again.
+    await p.getByRole('button', { name: /^Menu/ }).click(); await p.getByRole('button', { name: 'Display' }).click();
+    summary.push(await audit(p, `${tag} assistant-menu`));
+    if (wantShot) await shot(p, `${tag}-assistant-menu`, false);
+    await p.getByRole('button', { name: /^Menu/ }).click();
     await p.fill('#assistant-input', 'show my last payment'); await p.keyboard.press('Enter');
     await p.getByRole('link', { name: /Open full receipt/ }).waitFor({ timeout: 20000 });
     await p.waitForTimeout(400);
@@ -120,6 +125,8 @@ if (PART === 'audit' || PART === 'all') {
     summary.push(await audit(p, `${width}-default family-home`)); await shot(p, `${width}-default-family-home`);
     await p.goto(BASE + '/activity?as=family'); await p.waitForLoadState('networkidle');
     summary.push(await audit(p, `${width}-default family-activity`)); await shot(p, `${width}-default-family-activity`, false);
+    await p.goto(BASE + '/family/assistant'); await p.waitForLoadState('networkidle'); await p.waitForTimeout(1500);
+    summary.push(await audit(p, `${width}-default family-assistant`)); await shot(p, `${width}-default-family-assistant`);
     await ctx.close();
   }
   const total = summary.reduce((n, s) => n + s.axe.length + (s.overflow ? 1 : 0) + s.hidden.length, 0);
@@ -150,12 +157,32 @@ if (PART === 'flows' || PART === 'all') {
   // Back button (history) and browser back.
   await p.goto(BASE + '/home'); await p.waitForLoadState('networkidle');
   await p.locator('nav[aria-label="Main"]').getByRole('link', { name: 'Activity' }).click(); await p.waitForURL('**/activity');
-  await p.getByRole('button', { name: 'Paid', exact: true }).click(); await p.waitForTimeout(800); // a paid one: pending ones ask before leaving
+  await p.getByRole('button', { name: 'Purchases & payments', exact: true }).click(); await p.waitForTimeout(800); // captured ones: pending ones ask before leaving
   await p.getByRole('button', { name: /Open details/ }).first().click(); await p.waitForURL('**/order/**');
   await p.getByRole('button', { name: 'Back', exact: true }).click(); await p.waitForURL('**/activity'); ok('Back button returns to Activity', p.url().endsWith('/activity'));
   await p.goBack(); await p.waitForURL('**/home'); ok('browser back returns to Home', p.url().endsWith('/home'));
   await p.goto(`${BASE}/order/${st.receiptId}`); await p.waitForLoadState('networkidle');
   await p.getByRole('button', { name: 'Back', exact: true }).click(); await p.waitForURL('**/activity'); ok('Back button with no history falls back to Activity', p.url().endsWith('/activity'));
+  // Shell: no display toggles in the header, no voice bar while idle, no Back on primary tabs, Back on secondary.
+  for (const path of ['/home', '/assistant', '/activity', '/profile']) {
+    await p.goto(BASE + path); await p.waitForLoadState('networkidle');
+    const headerButtons = await p.locator('header button').count();
+    const voiceBar = await p.getByTestId('voice-bar').count();
+    const back = await p.getByRole('button', { name: 'Back', exact: true }).count();
+    ok(`${path}: no header T/contrast buttons, no idle voice bar, no Back`, headerButtons === 0 && voiceBar === 0 && back === 0, `header=${headerButtons} voice=${voiceBar} back=${back}`);
+  }
+  // Scroll restore: scroll Activity, open a receipt, Back -> same scroll position.
+  await p.goto(BASE + '/activity'); await p.waitForLoadState('networkidle'); await p.waitForTimeout(500);
+  await p.evaluate(() => window.scrollTo(0, 420)); await p.waitForTimeout(300);
+  const y0 = await p.evaluate(() => window.scrollY);
+  await p.locator('main button:has-text("Open details")').filter({ hasText: /Captured/ }).first().click(); await p.waitForURL('**/order/**');
+  ok('secondary screen opens at the top', (await p.evaluate(() => window.scrollY)) < 5);
+  await p.getByRole('button', { name: 'Back', exact: true }).click(); await p.waitForURL('**/activity'); await p.waitForTimeout(900);
+  const y1 = await p.evaluate(() => window.scrollY);
+  ok('Back restores the scroll position', Math.abs(y1 - y0) < 60, `${y0} -> ${y1}`);
+  // Activity chips are never clipped: each chip is fully inside the viewport width.
+  const clipped = await p.locator('[role=group][aria-label="Show"] button').evaluateAll((bs) => bs.filter((b) => { const r = b.getBoundingClientRect(); return r.left < 0 || r.right > innerWidth || b.scrollWidth > b.clientWidth + 1; }).map((b) => b.textContent));
+  ok('Activity chips are not clipped', clipped.length === 0, clipped.join(','));
   // aria-current on tabs.
   const cur = await p.locator('nav[aria-label="Main"] a[aria-current="page"]').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent)); ok('aria-current marks the Activity tab', cur.join() === 'Activity', cur.join());
   // Leave guard on a purchase waiting for family: asks, Stay keeps you, Leave never cancels.
@@ -245,10 +272,10 @@ if (PART === 'walk' || PART === 'all') {
   await p.getByRole('navigation', { name: 'Shortcuts' }).waitFor();
   await clickBest(['payments', 'receipt', 'activity'], 'locate receipt');
   await p.getByRole('link', { name: /See all in Activity|See all activity/ }).last().waitFor({ timeout: 15000 }).catch(() => {});
-  const paidRow = p.getByRole('button', { name: /Paid/ }).first();
+  const paidRow = p.getByRole('button', { name: /Captured/ }).first();
   if (await paidRow.count()) { await paidRow.click(); steps.push({ task: 'locate receipt', action: 'tap', target: 'a Paid payment' }); }
-  else friction.push('locate receipt: no "Paid" row visible in the payments card');
-  const found = await p.getByText(/Receipt confirmed by PayPal/).first().waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
+  else friction.push('locate receipt: no "Captured" row visible in the payments card');
+  const found = await p.getByText('Payment successful', { exact: true }).first().waitFor({ timeout: 15000 }).then(() => true).catch(() => false);
   const ms = Date.now() - t0;
   const byTask = (t) => steps.filter((s) => s.task === t);
   const report = { label: 'scripted walkthrough, not real users', viewport: '390x760', tasks: ['scam check', 'find product', 'locate receipt'].map((t) => ({ task: t, taps: byTask(t).filter((s) => s.action === 'tap').length, typing: byTask(t).filter((s) => s.action.startsWith('type')).length, scrolls: byTask(t).filter((s) => s.action === 'scroll').length, steps: byTask(t) })), receiptFound: found, friction, seconds: Math.round(ms / 1000) };

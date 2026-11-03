@@ -6,9 +6,8 @@
  */
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { House, MessageCircle, ListChecks, UserRound, Type, Contrast, ArrowLeft, BarChart3 } from 'lucide-react';
+import { House, MessageCircle, ListChecks, UserRound, ArrowLeft } from 'lucide-react';
 import { VoiceBar } from './VoiceBar';
-import { useDisplay, setDisplay } from '../lib/display';
 import { useHandoff } from '../lib/handoff';
 import { rememberRole } from '../lib/role';
 
@@ -16,7 +15,7 @@ export function Logo() {
   return (
     <span className="inline-flex items-center gap-2.5">
       <svg viewBox="0 0 64 64" className="size-9 sm:size-10" aria-hidden><rect width="64" height="64" rx="16" fill="var(--color-teal)" /><path d="M32 13l15 6v11c0 10-6.4 17.6-15 21-8.6-3.4-15-11-15-21V19l15-6z" fill="#F7F8F4" /><path d="M25 32l5 5 10-11" stroke="var(--color-teal)" strokeWidth="4.5" fill="none" strokeLinecap="round" strokeLinejoin="round" /></svg>
-      <span className="font-display text-xl sm:text-2xl font-semibold tracking-tight max-[409px]:sr-only">SaySafe</span>
+      <span className="font-display text-xl sm:text-2xl font-semibold tracking-tight">SaySafe</span>
     </span>
   );
 }
@@ -26,8 +25,8 @@ interface Dest { to: string; label: string; icon: typeof House; match: (p: strin
 
 export function destinations(mode: 'elder' | 'family'): Dest[] {
   if (mode === 'family') return [
-    { to: '/family', label: 'Home', icon: House, match: (p) => p === '/family' },
-    { to: '/family/insights', label: 'Insights', icon: BarChart3, match: (p) => p.startsWith('/family/insights') },
+    { to: '/family', label: 'Home', icon: House, match: (p) => p === '/family' || p.startsWith('/family/insights') },
+    { to: '/family/assistant', label: 'Assistant', icon: MessageCircle, match: (p) => p === '/family/assistant' },
     { to: '/activity?as=family', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' },
     { to: '/profile?as=family', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' },
   ];
@@ -38,7 +37,8 @@ export function destinations(mode: 'elder' | 'family'): Dest[] {
     { to: '/profile', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' || ['/preferences', '/help', '/guide'].includes(p) },
   ];
 }
-const PRIMARY = new Set(['/home', '/assistant', '/activity', '/profile', '/family', '/family/insights']);
+/** Primary tabs never show Back or Home. Everything else is a secondary screen with Back. */
+export const PRIMARY = new Set(['/home', '/assistant', '/activity', '/profile', '/family', '/family/assistant']);
 
 /** Where Back goes when there is no in-app history (opened from a link, or after a reload). */
 export function fallbackFor(path: string, mode: Mode): string {
@@ -60,17 +60,6 @@ export function BackButton({ fallback, historyAware = true }: { fallback: string
     <button type="button" onClick={go} className="inline-flex items-center gap-2 min-h-12 min-w-12 pl-2 pr-4 -ml-2 rounded-full font-bold text-teal hover:bg-teal-soft">
       <ArrowLeft className="size-6" aria-hidden />Back
     </button>
-  );
-}
-
-function DisplayToggles() {
-  const d = useDisplay();
-  const toggle = 'inline-flex items-center justify-center gap-2 rounded-full border-2 min-w-12 px-3 min-h-12 font-bold text-base';
-  return (
-    <div role="group" aria-label="Display settings" className="flex gap-1.5">
-      <button type="button" className={`${toggle} ${d.large ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={d.large} onClick={() => setDisplay('large', !d.large)}><Type className="size-5" aria-hidden /><span className="sr-only lg:not-sr-only">Bigger text</span></button>
-      <button type="button" className={`${toggle} ${d.contrast ? 'bg-navy text-white border-navy' : 'border-line'}`} aria-pressed={d.contrast} onClick={() => setDisplay('contrast', !d.contrast)}><Contrast className="size-5" aria-hidden /><span className="sr-only lg:not-sr-only">Contrast</span></button>
-    </div>
   );
 }
 
@@ -106,7 +95,8 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
   const loc = useLocation();
   const handoff = useHandoff();
   const stack = useRef<HTMLDivElement>(null);
-  useEffect(() => { window.scrollTo(0, 0); document.getElementById('main')?.focus({ preventScroll: true }); }, [loc.pathname]);
+  // Scroll position is handled by <ScrollRestoration /> (top on a new screen, restored on Back); focus moves to the page.
+  useEffect(() => { document.getElementById('main')?.focus({ preventScroll: true }); }, [loc.pathname]);
   useEffect(() => { if (mode !== 'public') rememberRole(mode); }, [mode]);
   // Keep the page's bottom padding equal to the fixed bottom stack, so nothing is ever hidden behind it.
   useLayoutEffect(() => {
@@ -131,7 +121,6 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
         <div className={`mx-auto ${width} px-4 sm:px-5 py-2.5 flex items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home" className="min-h-12 inline-flex items-center"><Logo /></Link>
           {showNav && <nav aria-label="Main" className="hidden md:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
-          <DisplayToggles />
         </div>
       </header>
       {showBack && (
@@ -151,7 +140,7 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
       {app && (
         <div ref={stack} data-testid="bottom-stack" className="fixed inset-x-0 bottom-0 z-30 bg-paper/95 backdrop-blur border-t border-line pb-[env(safe-area-inset-bottom)]">
           {dock && !handoff && <div className="border-b border-line">{dock}</div>}
-          {mode === 'elder' && <VoiceBar />}
+          {mode === 'elder' && <VoiceBar scope={p === '/assistant' ? 'assistant' : 'other'} />}
           {showNav && <nav aria-label="Main" className="md:hidden border-t border-line"><NavItems mode={mode as 'elder' | 'family'} variant="bottom" /></nav>}
         </div>
       )}

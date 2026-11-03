@@ -8,6 +8,8 @@ import { db } from './db/index.js';
 import { refundView } from './payments/service.js';
 
 export type StatusGroup = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'failed' | 'scan' | 'other';
+/** Activity sections: Purchases & payments, Scam checks, Family reviews, Refunds. Each item is in exactly one. */
+export type ActivitySection = 'purchases' | 'scans' | 'family' | 'refunds';
 
 export interface ActivityItem {
   id: string;
@@ -19,12 +21,15 @@ export interface ActivityItem {
   state?: string; // raw payment state
   refundLabel?: string | null;
   statusGroup: StatusGroup;
+  section: ActivitySection;
   amountCents: number | null;
   currency: string | null;
   merchant: string | null;
   captured: boolean;
   webhookConfirmed: boolean;
   sandbox: boolean;
+  /** Local QA/example row (idempotency key seed_… or capture SEED…). Seed scripts refuse hosted databases. */
+  example: boolean;
   approval: { status: string; decidedAt: string | null; reason: string | null } | null;
   verdict: string | null;
   sharedWithFamily?: boolean;
@@ -49,6 +54,7 @@ export const ActivityQuery = z.object({
   item: z.string().trim().max(100).optional(),
   status: z.enum(['all', 'pending', 'paid', 'cancelled', 'refunded', 'failed', 'scan', 'other']).optional(),
   type: z.enum(['all', 'payment', 'scan']).optional(),
+  section: z.enum(['all', 'purchases', 'scans', 'family', 'refunds']).optional(),
   min: z.coerce.number().min(0).max(100000).optional(),
   max: z.coerce.number().min(0).max(100000).optional(),
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -71,8 +77,10 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
       id: r.id, type: 'payment', at: iso(r.created_at), updatedAt: iso(r.updated_at),
       title: lines.map((l) => `${l.name}${l.quantity > 1 ? ` × ${l.quantity}` : ''}`).join(', ') || 'Purchase',
       status: shown, state: String(r.state), refundLabel: rv?.label ?? null, statusGroup: groupOf(shown),
+      section: groupOf(shown) === 'refunded' ? 'refunds' : a ? 'family' : 'purchases',
       amountCents: r.amount_cents, currency: r.currency, merchant: r.merchant,
       captured: Boolean(r.paypal_capture_id), webhookConfirmed: webhook, sandbox: true,
+      example: Boolean(String(r.idempotency_key ?? '').startsWith('seed_') || String(r.paypal_capture_id ?? '').startsWith('SEED')),
       approval: a ? { status: a.status === 'pending' && a.expires_at < Date.now() ? 'expired' : a.status, decidedAt: a.decided_at ? iso(a.decided_at) : null, reason: a.reason ?? null } : null,
       verdict: null, href: `/order/${r.id}`,
     };
@@ -81,8 +89,8 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
   const scans = db.prepare(`SELECT id, verdict, summary, shared_with_family, created_at FROM security_scans WHERE household_id=? ${role === 'family' ? 'AND shared_with_family=1' : ''} ORDER BY created_at DESC LIMIT 500`).all(householdId) as any[];
   for (const s of scans) {
     items.push({
-      id: s.id, type: 'scan', at: iso(s.created_at), updatedAt: iso(s.created_at), title: String(s.summary), status: String(s.verdict), statusGroup: 'scan',
-      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, approval: null,
+      id: s.id, type: 'scan', at: iso(s.created_at), updatedAt: iso(s.created_at), title: String(s.summary), status: String(s.verdict), statusGroup: 'scan', section: 'scans',
+      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, approval: null,
       verdict: String(s.verdict), sharedWithFamily: Boolean(s.shared_with_family), href: null,
     });
   }
@@ -93,6 +101,7 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
   const filtered = items.filter((it) => {
     if (query.type && query.type !== 'all' && it.type !== query.type) return false;
     if (query.status && query.status !== 'all' && it.statusGroup !== query.status) return false;
+    if (query.section && query.section !== 'all' && it.section !== query.section) return false;
     if (text && !`${it.title} ${it.merchant ?? ''}`.toLowerCase().includes(text)) return false;
     if (query.min !== undefined && (it.amountCents === null || it.amountCents < Math.round(query.min * 100))) return false;
     if (query.max !== undefined && (it.amountCents === null || it.amountCents > Math.round(query.max * 100))) return false;

@@ -5,24 +5,27 @@
  * family review -> PayPal approval -> server capture flow; nothing here can approve or capture by itself.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Mic, Square, Loader2, SendHorizontal, MessageSquareWarning, ShoppingBag, LifeBuoy, Wallet, ImageUp, ShieldCheck, RotateCcw } from 'lucide-react';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { Plus, Mic, Square, Loader2, SendHorizontal, MessageSquareWarning, ShoppingBag, LifeBuoy, Wallet, ImageUp, ShieldCheck } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { LeaveGuard } from '../components/LeaveGuard';
-import { api, newKey, type PaymentRequest, type ScanResult } from '../lib/api';
+import { api, newKey, type ScanResult } from '../lib/api';
 import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
 import { spokenScam, spokenFamily } from '../lib/spoken';
+import { AssistantHeader } from '../assistant/AssistantHeader';
+import { THREAD_KEY, markPayPalReturn, pendingPayPalReturn, clearPayPalReturn, hasBlockFor } from '../assistant/thread';
+import { fetchPayment } from '../assistant/blocks';
 import { localProfileForRequest } from '../lib/prefs';
-import { fetchActivity } from '../lib/activity';
+import { fetchActivity, paymentLabel } from '../lib/activity';
 import { goToPayPal } from '../lib/handoff';
 import { normaliseLang } from '../../../shared/lang';
 import { compareRows, shortTitle, type ShopItem, type Recommendation } from '../../../shared/shopping';
-import { parseBlock, productItems, restoreThread, Mode as ModeSchema, type Block, type BlockOf, type Message, type Mode, type ProductItem, type Thread } from '../assistant/schemas';
+import { parseBlock, productItems, restoreThread, Mode as ModeSchema, ServerPayment, ServerActivity, parseServer, familyStatusFrom, receiptFrom, refundFrom, historyFrom, type Block, type BlockOf, type Message, type Mode, type ProductItem, type Thread } from '../assistant/schemas';
 import { parseFollowup, ageAnswer, sellerAnswer, sellerFacts, toShopItem } from '../assistant/followups';
 import { RenderBlock, ProductSheet, type BlockActions } from '../assistant/blocks';
 
-const KEY = 'ss-assistant-thread';
+const KEY = THREAD_KEY;
 const MODES: { mode: Exclude<Mode, 'chat'>; label: string; icon: typeof Mic; placeholder: string }[] = [
   { mode: 'check', label: 'Check a message', icon: MessageSquareWarning, placeholder: 'Paste message' },
   { mode: 'find', label: 'Find a product', icon: ShoppingBag, placeholder: 'e.g. a kettle' },
@@ -39,6 +42,7 @@ const PROMPT: Record<Mode, string> = {
 const SUGGEST: Partial<Record<Block['kind'], string[]>> = {
   product_cards: ['Show cheaper ones', 'Is it suitable for a four-year-old?', 'Is this seller trustworthy?'],
   payment_history: ['Show my last payment'],
+  receipt: ['Refund options', 'Show my payments'],
 };
 const mid = () => Math.random().toString(36).slice(2, 10);
 const fresh = (mode: Mode = 'chat'): Thread => ({ v: 1, mode, focusId: null, messages: [{ id: mid(), role: 'assistant', text: PROMPT[mode], blocks: [] }] });
@@ -57,6 +61,7 @@ function fromChannel3(p: ShopItem, rec?: Recommendation): unknown {
 export default function Assistant() {
   const me = useMe('elder');
   const nav = useNavigate();
+  const loc = useLocation();
   const [sp] = useSearchParams();
   const [thread, setThread] = useState<Thread>(load);
   const [input, setInput] = useState('');
@@ -156,12 +161,12 @@ export default function Assistant() {
     const same = (x: Block) => x.kind === 'payment_prep' && x.idempotencyKey === b.idempotencyKey;
     updateBlock(same, { ...b, status: 'sending', error: null });
     try {
-      const r = await api<{ request: PaymentRequest; approveUrl: string | null }>('/api/payments', { body: { items: b.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: b.idempotencyKey }, idempotent: true });
-      updateBlock(same, { ...b, status: 'sent', requestId: r.request.id, error: null });
-      if (r.approveUrl) { goToPayPal(r.approveUrl); return; }
-      const req = r.request;
-      const text = req.state === 'BLOCKED' ? 'I stopped this purchase for your safety. Nothing was paid.' : spokenFamily(req.state, req.approval?.status) || 'Saved. You can follow it in Activity.';
-      add('assistant', text, [{ kind: 'family_status', requestId: req.id, state: req.state, item: req.items.map((i) => i.name).join(', '), amountCents: req.amountCents, currency: req.currency, approvalStatus: req.approval?.status ?? null, reasons: req.risk?.reasons?.slice(0, 5) ?? [] }]);
+      const r = await api<{ request: unknown; approveUrl: string | null }>('/api/payments', { body: { items: b.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: b.idempotencyKey }, idempotent: true });
+      const req = parseServer(ServerPayment, r.request);
+      updateBlock(same, { ...b, status: 'sent', requestId: req.id, error: null });
+      if (typeof r.approveUrl === 'string' && /^https:\/\//.test(r.approveUrl)) { markPayPalReturn(req.id); goToPayPal(r.approveUrl); return; }
+      const text = req.state === 'BLOCKED' ? 'I stopped this purchase for your safety. Nothing was paid.' : spokenFamily(req.state as any, req.approval?.status) || 'Saved. You can follow it in Activity.';
+      add('assistant', text, [familyStatusFrom(req)]);
       say(text);
     } catch (e: any) { updateBlock(same, { ...b, status: 'error', error: String(e.message).slice(0, 300) }); }
   };
@@ -176,29 +181,53 @@ export default function Assistant() {
     add('assistant', 'Here they are side by side. I only show what each listing states.', [{ kind: 'compare', source: b.source, names: top.map((p) => shortTitle(p.title)), rows }]);
   };
 
-  const showHistory = async (turn: number) => {
-    const r = await fetchActivity({ type: 'payment', limit: 5 });
+  const showHistory = async (turn: number, q?: string) => {
+    const a = parseServer(ServerActivity, await fetchActivity(q ? { q, limit: 5 } : { type: 'payment', limit: 5 }));
     if (!speech.isCurrent(turn)) return;
-    const waiting = r.items.filter((i) => i.statusGroup === 'pending').length;
-    const text = r.total === 0 ? 'You have no payments yet.' : `You have ${r.total} payment${r.total === 1 ? '' : 's'}${waiting ? `, ${waiting} waiting` : ''}. Tap one to see it.`;
-    add('assistant', text, [{ kind: 'payment_history', total: r.total, items: r.items.map((i) => ({ id: i.id, title: i.title, amountCents: i.amountCents ?? 0, currency: i.currency ?? 'EUR', status: i.status, at: i.at })) }]);
+    const waiting = a.items.filter((i) => i.statusGroup === 'pending').length;
+    const text = q ? (a.total ? `I found ${a.total} for “${q}”.` : `Nothing matches “${q}”. Try another word.`)
+      : a.total === 0 ? 'You have no payments yet.' : `You have ${a.total} payment${a.total === 1 ? '' : 's'}${waiting ? `, ${waiting} waiting` : ''}. Tap one to see it, or search.`;
+    add('assistant', text, [historyFrom(a, q)]);
     say(text, turn);
+  };
+  /** The newest captured purchase (or the one a card is about), re-read from the server. */
+  const latestPaid = async (): Promise<ServerPayment | null> => {
+    const r = lastBlock('receipt');
+    if (r) return fetchPayment(r.requestId);
+    const list = await api<unknown[]>('/api/payments');
+    const paid = (Array.isArray(list) ? list : []).map((x) => ServerPayment.safeParse(x)).find((x) => x.success && x.data.receipt);
+    return paid?.success ? fetchPayment(paid.data.id) : null;
+  };
+  const appendReceipt = async (id: string, text?: string, turn?: number) => {
+    const p = await fetchPayment(id);
+    if (turn !== undefined && !speech.isCurrent(turn)) return;
+    const block = receiptFrom(p);
+    if (!block) { const t = `${paymentLabel(p.state)}. There is no PayPal receipt for this purchase yet.`; add('assistant', t, [familyStatusFrom(p)]); return say(t, turn); }
+    const rc = block.receipt;
+    const t = text ?? `Your payment: ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: rc.currency }).format(Number(rc.amount))} to ${rc.payee.replace(' (sandbox)', '')}, confirmed by PayPal. It was a sandbox payment, so no real money moved.`;
+    add('assistant', t, [block]);
+    say(t, turn);
   };
   const showLastPayment = async (turn: number) => {
-    const list = await api<PaymentRequest[]>('/api/payments');
+    const list = await api<unknown[]>('/api/payments');
     if (!speech.isCurrent(turn)) return;
-    const paid = list.find((p) => p.receipt);
-    if (!paid) { const text = list.length ? 'None of your payments has finished yet. Here is what is waiting.' : 'You haven’t made a payment yet.'; if (list.length) await showHistoryText(text, turn); else { add('assistant', text); say(text, turn); } return; }
-    const r = await api<PaymentRequest>(`/api/payments/${paid.id}`);
+    const rows = (Array.isArray(list) ? list : []).map((x) => ServerPayment.safeParse(x)).filter((x) => x.success).map((x) => x.data!);
+    const paid = rows.find((p) => p.receipt);
+    if (!paid) { const text = rows.length ? 'None of your payments has finished yet. Here is what is waiting.' : 'You haven’t made a payment yet.'; if (rows.length) await showHistoryText(text, turn); else { add('assistant', text); say(text, turn); } return; }
+    await appendReceipt(paid.id, `Your last payment: ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: paid.receipt!.currency }).format(Number(paid.receipt!.amount))} to ${paid.receipt!.payee.replace(' (sandbox)', '')}, confirmed by PayPal. It was a sandbox payment, so no real money moved.`, turn);
+  };
+  const showRefund = async (turn: number, id?: string) => {
+    const p = id ? await fetchPayment(id) : await latestPaid();
     if (!speech.isCurrent(turn)) return;
-    const rc = r.receipt!;
-    const text = `Your last payment: ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: rc.currency }).format(Number(rc.amount))} to ${rc.payee.replace(' (sandbox)', '')}, confirmed by PayPal. It was a sandbox payment, so no real money moved.`;
-    add('assistant', text, [{ kind: 'receipt', requestId: r.id, state: r.state, item: r.items.map((i) => `${i.name}${i.quantity > 1 ? ` × ${i.quantity}` : ''}`).join(', '), merchant: r.merchant, amountCents: r.amountCents, currency: r.currency, receipt: { captureId: rc.captureId, amount: rc.amount, currency: rc.currency, payee: rc.payee, orderId: rc.orderId, webhookConfirmed: Boolean(rc.webhookConfirmed) }, evidenceLabel: r.timeline?.label ?? null, verifiedSteps: r.timeline?.events.filter((e) => e.verified).length ?? 0, at: r.updatedAt.includes('T') ? r.updatedAt : `${r.updatedAt.replace(' ', 'T')}Z` }]);
-    say(text, turn);
+    if (!p) { const t = 'You have no finished payment to ask a refund for.'; add('assistant', t); return say(t, turn); }
+    const block = refundFrom(p);
+    const t = block.status === 'can_request' ? 'You can ask the shop for a refund. It is only a request: the shop decides.' : block.status === 'REFUND_REQUESTED' ? 'Your refund request was sent. It is not refunded yet.' : block.status === 'REFUNDED' ? 'This payment was refunded.' : block.status === 'REFUND_PENDING' ? 'The refund was sent to PayPal and is not confirmed yet.' : 'This purchase has no refund option.';
+    add('assistant', t, [block]);
+    say(t, turn);
   };
   const showHistoryText = async (text: string, turn: number) => {
-    const r = await fetchActivity({ type: 'payment', limit: 5 });
-    add('assistant', text, [{ kind: 'payment_history', total: r.total, items: r.items.map((i) => ({ id: i.id, title: i.title, amountCents: i.amountCents ?? 0, currency: i.currency ?? 'EUR', status: i.status, at: i.at })) }]);
+    const a = parseServer(ServerActivity, await fetchActivity({ type: 'payment', limit: 5 }));
+    add('assistant', text, [historyFrom(a)]);
     say(text, turn);
   };
   const showHelp = async (reply: string, turn: number, lang?: string) => {
@@ -221,6 +250,8 @@ export default function Assistant() {
     const ctx = lastBlock('product_cards');
     try {
       const f = parseFollowup(text, Boolean(ctx));
+      if (f.kind === 'refund') return await showRefund(turn);
+      if (f.kind === 'search') return await showHistory(turn, f.q);
       if (f.kind === 'last_payment') return await showLastPayment(turn);
       if (f.kind === 'payments') return await showHistory(turn);
       if (ctx) {
@@ -288,7 +319,29 @@ export default function Assistant() {
     else setTimeout(() => inputRef.current?.focus(), 50);
   }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const act: BlockActions = { openItem: (item, source) => { setThread((t) => ({ ...t, focusId: item.id })); setSheet({ item, source }); }, compare, allow, deny, share, update: (next) => updateBlock((b) => b.kind === next.kind && 'requestId' in b && 'requestId' in next && b.requestId === next.requestId, next) };
+  const run = (fn: (turn: number) => Promise<unknown>) => { const turn = speech.beginTurn(); fn(turn).catch((e: any) => add('assistant', e.message || 'Something went wrong. Nothing was charged.')).finally(() => speech.endThinking()); };
+  const act: BlockActions = {
+    openItem: (item, source) => { setThread((t) => ({ ...t, focusId: item.id })); setSheet({ item, source }); }, compare, allow, deny, share,
+    replace: (old, next) => updateBlock((b) => b === old || (b.kind === next.kind && b.kind !== 'payment_history' && 'requestId' in b && 'requestId' in next && b.requestId === next.requestId && 'requestId' in old && old.requestId === b.requestId), next),
+    receipt: (id) => run((turn) => appendReceipt(id, undefined, turn)),
+    refund: (id) => run((turn) => showRefund(turn, id)),
+    synced: (p) => { const rc = receiptFrom(p); if (rc) updateBlock((b) => b.kind === 'receipt' && b.requestId === p.id, rc); },
+  };
+
+  // Back from PayPal (or opened from a receipt): re-read the purchase from the server and add its card. Never trusts the URL.
+  useEffect(() => {
+    if (!me) return;
+    const fromReceipt = (loc.state as { receiptId?: string } | null)?.receiptId;
+    const id = pendingPayPalReturn() ?? (fromReceipt && /^pay_[A-Za-z0-9_-]{4,60}$/.test(fromReceipt) ? fromReceipt : null);
+    if (!id) return;
+    const viaPayPal = pendingPayPalReturn() === id;
+    fetchPayment(id).then((p) => {
+      const t = threadRef.current;
+      if (p.receipt) { clearPayPalReturn(); if (!hasBlockFor(t, 'receipt', p.id)) { const b = receiptFrom(p)!; add('assistant', viaPayPal ? 'Back from PayPal. Here is your receipt, checked with PayPal.' : 'Here is that receipt, checked with PayPal.', [b]); } return; }
+      if (['CANCELLED', 'FAILED', 'BLOCKED'].includes(p.state)) clearPayPalReturn();
+      if (!hasBlockFor(t, 'family_status', p.id, 1)) add('assistant', p.state === 'PAYER_APPROVAL_PENDING' ? 'You haven’t approved this at PayPal yet. Nothing was paid.' : `${paymentLabel(p.state)}.`, [familyStatusFrom(p)]);
+    }).catch(() => {});
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pending purchase in this conversation: ask before leaving (never cancels).
   const prepReady = thread.messages.flatMap((m) => m.blocks).filter((b): b is BlockOf<'payment_prep'> => b.kind === 'payment_prep' && (b.status === 'ready' || b.status === 'sending'));
@@ -314,11 +367,12 @@ export default function Assistant() {
         <label htmlFor="assistant-input" className="sr-only">{modeInfo ? `${modeInfo.label}: type here` : 'Message SaySafe'}</label>
         <textarea id="assistant-input" ref={inputRef} rows={1} value={input} maxLength={4000} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handle(input); } }}
-          placeholder={modeInfo?.placeholder ?? 'Message SaySafe'} className="flex-1 min-w-0 min-h-12 max-h-32 resize-none rounded-3xl border-2 border-line bg-paper px-4 py-2.5 leading-snug focus:border-teal outline-none" />
+          placeholder={modeInfo?.placeholder ?? 'Message'} className="flex-1 min-w-0 min-h-12 max-h-32 resize-none rounded-3xl border-2 border-line bg-paper px-4 py-2.5 leading-snug focus:border-teal outline-none" />
         {voice.state !== 'unsupported' && (!input.trim() || voice.state !== 'idle') && (
           <button type="button" onClick={voice.toggle} aria-pressed={voice.state === 'listening'} aria-label={micLabel}
-            className={`size-12 shrink-0 rounded-full grid place-items-center text-white ${voice.state === 'listening' ? 'bg-danger ring-4 ring-danger/25' : 'bg-teal hover:bg-teal-deep'}`}>
+            className={`min-h-12 min-w-12 shrink-0 rounded-full inline-flex items-center justify-center gap-1.5 px-3 min-[360px]:px-4 font-bold text-white ${voice.state === 'listening' ? 'bg-danger ring-4 ring-danger/25' : 'bg-teal hover:bg-teal-deep'}`}>
             {voice.state === 'processing' ? <Loader2 className="size-6 motion-safe:animate-spin" aria-hidden /> : voice.state === 'listening' ? <Square className="size-5" fill="currentColor" aria-hidden /> : <Mic className="size-6" aria-hidden />}
+            <span aria-hidden className="max-[359px]:hidden">{voice.state === 'listening' ? 'Stop' : voice.state === 'processing' ? 'Cancel' : 'Speak'}</span>
           </button>
         )}
         {(input.trim() || voice.state === 'unsupported') && <button type="submit" disabled={busy || !input.trim()} aria-label="Send" className="size-12 shrink-0 rounded-full bg-navy text-white grid place-items-center disabled:opacity-40"><SendHorizontal className="size-6" aria-hidden /></button>}
@@ -337,11 +391,8 @@ export default function Assistant() {
       <LeaveGuard when={prepReady.length > 0 || famWaiting.length > 0} id={guardId}
         title={prepReady.length ? 'You haven’t answered the payment card yet' : 'Still waiting for your family member'}
         detail={prepReady.length ? 'Nothing has been paid.' : 'Your purchase is waiting for their answer.'} />
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-[length:var(--text-title)]">Assistant</h1>
-        <button type="button" onClick={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} className="inline-flex items-center gap-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal"><RotateCcw className="size-5" aria-hidden />Start over</button>
-      </div>
-      <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />Payments use the PayPal Sandbox (no real money) and always need your own approval at PayPal.</p>
+      <AssistantHeader onNew={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} />
+      <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />PayPal Sandbox only: no real money. You always approve at PayPal.</p>
       <div role="log" aria-live="polite" aria-label="Conversation" className="mt-4 flex flex-col gap-3">
         {thread.messages.map((m) => (
           <div key={m.id} data-role={m.role} className={`scroll-mt-24 ${m.role === 'user' ? 'self-end max-w-[85%]' : 'self-start w-full max-w-2xl'}`}>
@@ -357,7 +408,7 @@ export default function Assistant() {
       </div>
       {suggestions.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Suggestions" role="group">
-          {suggestions.map((s) => <button key={s} type="button" onClick={() => void handle(s)} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold">{s}</button>)}
+          {suggestions.map((s) => <button key={s} type="button" onClick={() => { if (s === 'Refund options') { const r = lastBlock('receipt'); if (r) return act.refund(r.requestId); } void handle(s); }} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold">{s}</button>)}
         </div>
       )}
       <div ref={endRef} />

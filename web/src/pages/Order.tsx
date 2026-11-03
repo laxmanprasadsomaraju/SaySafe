@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX, RefreshCw, ShieldCheck, CircleDashed, RotateCcw } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Volume2, PackageX, RefreshCw, ShieldCheck, CircleDashed, RotateCcw, MessageCircle, ListChecks } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, type PaymentRequest, type PaymentState, type PaymentTimeline, type ReconcileOutcome } from '../lib/api';
@@ -9,6 +9,9 @@ import { spokenReceipt, spokenFamily } from '../lib/spoken';
 import { useMe } from '../lib/session';
 import { goToPayPal } from '../lib/handoff';
 import { LeaveGuard } from '../components/LeaveGuard';
+import { shortStatus, truncateRef, TONE_CLS } from '../lib/activity';
+import { pendingPayPalReturn, clearPayPalReturn, appendToSavedThread } from '../assistant/thread';
+import { ServerPayment, receiptFrom, familyStatusFrom } from '../assistant/schemas';
 
 export function stateLabel(s: PaymentState) {
   return ({
@@ -78,7 +81,17 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   const spoke = useRef(false);
   const [checking, setChecking] = useState(false);
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
+  const [addedToChat, setAddedToChat] = useState(false);
 
+  /** If this payment was started from the Assistant, add its receipt (re-read from the server) to that conversation. */
+  const noteInConversation = (fresh: PaymentRequest | null) => {
+    if (!fresh || pendingPayPalReturn() !== id) return;
+    const p = ServerPayment.safeParse(fresh);
+    if (!p.success) return;
+    const rc = receiptFrom(p.data);
+    if (rc) { appendToSavedThread('Back from PayPal. Here is your receipt, checked with PayPal.', [rc]); clearPayPalReturn(); setAddedToChat(true); }
+    else if (['CANCELLED', 'FAILED'].includes(p.data.state)) { appendToSavedThread('This purchase did not go through. Nothing was paid.', [familyStatusFrom(p.data)]); clearPayPalReturn(); }
+  };
   const load = () => api<PaymentRequest>(`/api/payments/${id}`).then((x) => { setR(x); return x; }).catch((e) => { setErr(e.message); return null; });
   /** Read-only check with PayPal (never captures). Runs on load for unfinished payments and from the button. */
   const checkWithPayPal = async (manual = false) => {
@@ -104,12 +117,12 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
       if (!token) { setErr('PayPal did not send back an order reference. Nothing was charged.'); load().then((x) => { if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); }); return; }
       setBusy(true);
       api<PaymentRequest>(`/api/payments/${id}/confirm`, { body: { orderId: token }, idempotent: true })
-        .then((x) => { setR(x); nav(`/order/${id}`, { replace: true }); load(); })
+        .then((x) => { setR(x); nav(`/order/${id}`, { replace: true }); })
         .catch((e) => { setErr(e.message); load(); })
         .finally(() => setBusy(false));
     } else {
       // Also the path for a lost redirect: opening /order/:id directly asks PayPal what really happened.
-      load().then((x) => { if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); });
+      load().then((x) => { noteInConversation(x); if (x && RECONCILABLE.includes(x.state)) checkWithPayPal(); });
     }
   }, [me, id]); // eslint-disable-line
 
@@ -148,41 +161,52 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   if (!r) return <Layout>{err ? <Notice tone="danger" title={err} /> : <p>Loading…</p>}</Layout>;
 
   const paid = r.state === 'CAPTURED';
-  const Icon = paid ? CheckCircle2 : ['BLOCKED', 'FAILED', 'CANCELLED'].includes(r.state) ? XCircle : Clock;
+  const Icon = paid || r.state === 'REFUNDED' ? CheckCircle2 : ['BLOCKED', 'FAILED', 'CANCELLED'].includes(r.state) ? XCircle : Clock;
+  const st = shortStatus(r.refund?.status && r.state === 'CAPTURED' ? r.refund.status : r.state, { webhookConfirmed: r.receipt?.webhookConfirmed, approval: r.approval?.status });
+  const ev = r.timeline?.events ?? [];
+  const verified = (k: string) => ev.some((e) => e.kind === k && e.verified);
+  const money = (cents: number, cur: string) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: cur }).format(cents / 100);
+  const row = (k: string, v: React.ReactNode) => <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 py-2"><dt className="text-ink-soft">{k}</dt><dd className="font-bold text-right min-w-0 break-words">{v}</dd></div>;
+  const ref = r.receipt?.orderId ?? null;
   return (
     <Layout>
-      <PageTitle eyebrow="Your purchase" title={paid ? 'Payment successful' : stateLabel(r.state)} />
+      <h1 className="sr-only">{paid ? 'Payment successful' : stateLabel(r.state)}</h1>
       <LeaveGuard when={r.state === 'FAMILY_APPROVAL_PENDING' || r.state === 'PAYER_APPROVAL_PENDING'} id={r.id} title={r.state === 'FAMILY_APPROVAL_PENDING' ? 'Still waiting for your family member' : 'Still waiting for your PayPal approval'} detail="This purchase isn’t finished." />
       {err && <div className="mb-6"><Notice tone="danger" title={err} /></div>}
+      {addedToChat && <div className="mb-4"><Notice tone="ok" title="Added to your Assistant conversation." /></div>}
       <div className="grid lg:grid-cols-[1.2fr_1fr] gap-6 items-start">
-        <Card className="p-6 md:p-8">
-          <div className="flex flex-wrap items-center gap-3 justify-between">
-            <p className={`flex items-center gap-2 font-bold text-xl ${paid ? 'text-teal' : 'text-navy'}`}><Icon className="size-8" aria-hidden />{stateLabel(r.state)}</p>
+        <Card className="p-5 md:p-8">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-teal font-bold uppercase tracking-[0.14em] text-sm">{r.receipt ? 'Receipt' : 'Your purchase'}</p>
             <SandboxBadge />
           </div>
-          <ul className="mt-5 divide-y divide-line">
+          <p className="mt-3 font-display text-5xl md:text-6xl font-semibold leading-none" aria-label={`Amount ${money(r.amountCents, r.currency)}`}>{money(r.amountCents, r.currency)}</p>
+          <p className="mt-3 flex flex-wrap items-center gap-2" aria-label="Status">
+            <Icon className={`size-7 ${paid || r.state === 'REFUNDED' ? 'text-teal' : 'text-ink-soft'}`} aria-hidden />
+            <span className={`inline-flex rounded-full border px-3 py-0.5 font-bold ${TONE_CLS[st.tone]}`}>{st.label}</span>
+            {st.extra && <span className={`inline-flex rounded-full border px-3 py-0.5 font-bold ${TONE_CLS[r.receipt?.webhookConfirmed ? 'ok' : 'pending']}`}>{st.extra}</span>}
+          </p>
+          <p className="mt-2 text-lg font-bold" data-testid="order-state">{paid ? 'Payment successful' : stateLabel(r.state)}</p>
+          <ul className="mt-4 divide-y divide-line border-y border-line">
             {r.items.map((l) => (
-              <li key={l.productId} className="py-4 flex gap-3 sm:gap-4 items-center">
-                <img src={`/products/${l.image}`} alt="" className="size-12 sm:size-16 rounded-xl object-cover bg-teal-soft" />
+              <li key={l.productId} className="py-3 flex gap-3 sm:gap-4 items-center">
+                <img src={`/products/${l.image}`} alt="" className="size-12 sm:size-14 rounded-xl object-cover bg-teal-soft" />
                 <p className="flex-1 min-w-0 font-bold break-words hyphens-auto" lang="en">{l.name} <span className="font-normal text-ink-soft">× {l.quantity}</span></p>
                 <p className="font-bold">{eur(l.lineCents)}</p>
               </li>
             ))}
           </ul>
-          <p className="mt-3 flex justify-between text-[1.4rem]"><span className="font-bold">Total</span><span className="font-display font-semibold">{eur(r.amountCents)} {r.currency}</span></p>
-          <p className="mt-1 text-ink-soft text-lg">Shop: {r.merchant}</p>
-          {r.receipt && (
-            <div className="mt-6 rounded-2xl bg-teal-soft p-5">
-              <p className="font-bold flex items-center gap-2"><Receipt className="size-6 text-teal" aria-hidden />Receipt confirmed by PayPal</p>
-              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-lg">
-                <dt className="text-ink-soft">Amount</dt><dd className="font-bold">€{r.receipt.amount} {r.receipt.currency}</dd>
-                <dt className="text-ink-soft">Paid to</dt><dd className="font-bold">{r.receipt.payee}</dd>
-                <dt className="text-ink-soft">PayPal order</dt><dd className="font-bold break-all">{r.receipt.orderId}</dd>
-                <dt className="text-ink-soft">Transaction</dt><dd className="font-bold break-all">{r.receipt.captureId}</dd>
-              </dl>
-              <p className="mt-3 text-base text-ink-soft">{r.receipt.webhookConfirmed ? 'PayPal also sent a signed notice confirming this capture.' : 'Checked directly with PayPal. Signed PayPal notice not received yet.'}</p>
-            </div>
-          )}
+          <dl className="mt-2 divide-y divide-line text-base sm:text-lg">
+            {row('Shop', r.receipt?.payee ?? r.merchant)}
+            {row('Amount', `${money(r.amountCents, r.currency)} ${r.currency}`)}
+            {row('Mode', 'PayPal Sandbox — no real money')}
+            {r.approval && row('Family approval', r.approval.status === 'approved' ? 'Approved' : r.approval.status === 'declined' ? 'Declined' : r.approval.status === 'expired' ? 'Expired' : r.approval.status === 'pending' ? 'Waiting' : r.approval.status)}
+            {row('Your approval at PayPal', verified('buyer_approved') ? 'Approved' : r.receipt ? 'Approved (order captured)' : 'Not yet')}
+            {row('Capture', r.receipt ? <>{verified('capture_verified') ? 'Captured · checked with PayPal' : 'Captured'}<span className="block font-normal text-ink-soft text-base" title={r.receipt.captureId}>{truncateRef(r.receipt.captureId)}<span className="sr-only"> (full transaction id {r.receipt.captureId})</span></span></> : 'Not captured')}
+            {row('Webhook verification', r.receipt ? (r.receipt.webhookConfirmed ? 'Verified — signed PayPal notice' : 'Verification pending') : '—')}
+            {ref && row('Reference', <span title={ref}>{truncateRef(ref)}<span className="sr-only"> (full PayPal order {ref})</span></span>)}
+            {row('Refund', r.state === 'REFUNDED' ? 'Refunded' : r.refund?.status === 'REFUND_PENDING' ? 'Pending — not confirmed yet' : r.refund?.status === 'REFUND_REQUESTED' ? 'Request sent — not refunded yet' : 'None')}
+          </dl>
           {r.timeline && <Timeline t={r.timeline} />}
         </Card>
         <div className="space-y-4">
@@ -202,7 +226,8 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
           {r.state === 'REFUNDED' && <Notice tone="ok" title="Refunded">The Demo Shop refunded this payment through PayPal (Sandbox — no real money).</Notice>}
           {paid && r.refund?.canRequest && <Button className="w-full" variant="secondary" icon={<RotateCcw className="size-6" aria-hidden />} onClick={askRefund} busy={busy}>Request a refund</Button>}
           {paid && <Button className="w-full" variant="ghost" icon={<PackageX className="size-6" aria-hidden />} onClick={() => nav('/help', { state: { problem: true, requestId: r.id } })}>Problem with this order?</Button>}
-          <Button className="w-full" variant="ghost" onClick={() => nav('/home')}>Back to home</Button>
+          <Button className="w-full" variant="secondary" icon={<ListChecks className="size-6" aria-hidden />} onClick={() => nav('/activity')}>Back to Activity</Button>
+          <Button className="w-full" variant="ghost" icon={<MessageCircle className="size-6" aria-hidden />} onClick={() => nav('/assistant', { state: { back: `/order/${r.id}`, receiptId: r.id } })}>Ask the Assistant</Button>
         </div>
       </div>
     </Layout>

@@ -4,7 +4,7 @@ import { MessageSquareWarning, ShoppingBag, LifeBuoy, Wallet, ChevronRight, Cloc
 import { Layout } from '../components/Layout';
 import { Card } from '../components/ui';
 import { useMe } from '../lib/session';
-import { fetchActivity, paymentLabel, verdictLabel, money, when, type ActivityItem } from '../lib/activity';
+import { fetchActivity, verdictLabel, money, when, shortStatus, type ActivityItem } from '../lib/activity';
 
 function greeting() {
   const h = new Date().getHours();
@@ -20,7 +20,8 @@ export const SHORTCUTS = [
 
 export function ActivityRow({ it }: { it: ActivityItem }) {
   const nav = useNavigate();
-  const label = it.type === 'scan' ? `Scam check · ${verdictLabel(it.status)}` : `${money(it.amountCents, it.currency)} · ${paymentLabel(it.status)}`;
+  const st = shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed, approval: it.approval?.status });
+  const label = it.type === 'scan' ? `Scam check · ${verdictLabel(it.status)}` : `${money(it.amountCents, it.currency)} · ${st.detail && st.label === 'Pending' ? st.detail : st.label}`;
   const inner = (
     <>
       <span className="min-w-0 flex-1">
@@ -35,32 +36,32 @@ export function ActivityRow({ it }: { it: ActivityItem }) {
     : <div className="flex items-center gap-3 py-3 min-h-14">{inner}</div>;
 }
 
+/** The one thing that most needs Mary: her own next step first (PayPal), then what waits for family, then the rest. */
+const PRIORITY = ['FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'FAMILY_APPROVAL_PENDING'];
+export function mostRelevant(items: ActivityItem[]): ActivityItem | null {
+  const rank = (i: ActivityItem) => { const k = PRIORITY.indexOf(i.state ?? i.status); return k < 0 ? PRIORITY.length : k; };
+  return [...items].filter((i) => i.type === 'payment' && !(i.approval?.status === 'expired')).sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
 export default function Home() {
   const me = useMe('elder');
   const nav = useNavigate();
   const [pending, setPending] = useState<ActivityItem[]>([]);
-  const [recent, setRecent] = useState<ActivityItem[]>([]);
+  const [count, setCount] = useState(0);
   useEffect(() => {
     if (!me) return;
-    fetchActivity({ status: 'pending', limit: 3 }).then((r) => setPending(r.items)).catch(() => {});
-    fetchActivity({ limit: 4 }).then((r) => setRecent(r.items)).catch(() => {});
+    fetchActivity({ status: 'pending', limit: 10 }).then((r) => { setPending(r.items); setCount(r.total); }).catch(() => {});
   }, [me]);
 
   if (!me) return <Layout><p>Loading…</p></Layout>;
-  const recentOnly = recent.filter((r) => !pending.some((p) => p.id === r.id)).slice(0, 3);
+  const top = mostRelevant(pending);
+  const yours = top && ['FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING', 'PAYER_APPROVED'].includes(top.state ?? '');
   return (
     <Layout>
       <header className="fade-up">
         <h1 className="text-[length:var(--text-title)] md:text-[length:var(--text-hero)]">{greeting()}, {me.name}.</h1>
         <p className="mt-1 text-[length:var(--text-lead)] text-ink-soft">What would you like to do?</p>
       </header>
-
-      {pending.length > 0 && (
-        <Card className="mt-6 p-5 border-2 border-amber" aria-labelledby="pending-h">
-          <h2 id="pending-h" className="text-xl flex items-center gap-2"><Clock className="size-6 text-amber" aria-hidden />Waiting ({pending.length})</h2>
-          <ul className="mt-1 divide-y divide-line">{pending.map((it) => <li key={it.id}><ActivityRow it={it} /></li>)}</ul>
-        </Card>
-      )}
 
       <nav aria-label="Shortcuts" className="mt-6 grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 md:gap-5">
         {SHORTCUTS.map(({ mode, icon: Icon, title, text }) => (
@@ -75,22 +76,18 @@ export default function Home() {
         ))}
       </nav>
 
-      <Link to="/assistant" className="mt-4 flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-6 hover:bg-teal-deep shadow-[var(--shadow-lift)]">
-        <Mic className="size-6" aria-hidden />Talk or type to SaySafe
-      </Link>
-
-      {recentOnly.length > 0 && (
-        <Card className="mt-8 p-5" aria-labelledby="recent-h">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 id="recent-h" className="text-xl">Recent</h2>
-            <Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">See all activity</Link>
-          </div>
-          <ul className="divide-y divide-line">{recentOnly.map((it) => <li key={it.id}><ActivityRow it={it} /></li>)}</ul>
+      {top && (
+        <Card className={`mt-6 p-5 border-2 ${yours ? 'border-teal' : 'border-amber'}`} aria-labelledby="next-h">
+          <h2 id="next-h" className="text-xl flex items-center gap-2"><Clock className={`size-6 ${yours ? 'text-teal' : 'text-amber'}`} aria-hidden />{yours ? 'Needs you' : 'Waiting'}</h2>
+          <ActivityRow it={top} />
+          {count > 1 && <Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">{count - 1} more in Activity</Link>}
         </Card>
       )}
-      {recent.length === 0 && (
-        <p className="mt-8 text-ink-soft flex items-start gap-2"><ShieldAlert className="size-6 text-teal shrink-0" aria-hidden />Your checks and purchases will show here. PayPal Sandbox only: no real money moves.</p>
-      )}
+
+      <Link to="/assistant" className="mt-6 flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-6 hover:bg-teal-deep shadow-[var(--shadow-lift)]">
+        <Mic className="size-6" aria-hidden />Talk or type to SaySafe
+      </Link>
+      <p className="mt-6 text-ink-soft flex items-start gap-2"><ShieldAlert className="size-6 text-teal shrink-0" aria-hidden /><span>PayPal Sandbox only: no real money moves. <Link to="/activity" className="font-bold text-teal underline underline-offset-4">See all activity</Link></span></p>
     </Layout>
   );
 }

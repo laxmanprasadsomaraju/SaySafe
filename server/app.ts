@@ -428,6 +428,14 @@ export function createApp() {
     pay.setThreshold(s.householdId, Math.round(eurVal * 100), s.userId);
     res.json(pay.getPolicy(s.householdId));
   });
+  // Read-only: one request of the family member's own household (the Assistant's review card re-fetches it by id).
+  app.get('/api/family/requests/:id', requireRole('family'), (req, res) => {
+    const s = sessionOf(req);
+    const id = z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/).parse(req.params.id);
+    const elder = db.prepare('SELECT u.name FROM households h JOIN users u ON u.id=h.elder_id WHERE h.id=?').get(s.householdId) as any;
+    res.set('Cache-Control', 'no-store');
+    res.json({ ...pay.publicView(pay.load(id, s.householdId)), elderName: elder?.name ?? null });
+  });
   app.post('/api/family/requests/:id/decision', requireRole('family'), (req, res) => {
     const s = sessionOf(req);
     const decision = z.enum(['approve', 'decline']).parse(req.body?.decision);

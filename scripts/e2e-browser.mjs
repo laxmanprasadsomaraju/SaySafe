@@ -36,6 +36,8 @@ try {
   ok('home has 4 shortcuts', tiles === 4, `found ${tiles}`);
   const tabs = await m.locator('nav[aria-label="Main"] a').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent));
   ok('one bottom nav: Home, Assistant, Activity, Profile', tabs.join() === 'Home,Assistant,Activity,Profile', tabs.join());
+  ok('no display buttons in the header, no idle voice bar', (await m.locator('header button').count()) === 0 && (await m.getByTestId('voice-bar').count()) === 0);
+  ok('home shows at most one outstanding action', (await m.locator('#next-h').count()) <= 1);
   await m.getByRole('button', { name: /Check a message/ }).click(); await m.waitForURL('**/assistant');
   ok('Check a message opens the Assistant in check mode', await m.locator('#assistant-input').isVisible());
 
@@ -66,10 +68,14 @@ try {
   await m.goto(`${BASE}/order/${big.body.request.id}`); await m.waitForLoadState('networkidle');
   await m.screenshot({ path: `${OUT}/order-awaiting-mobile.png`, fullPage: true }); await axe(m, 'order awaiting mobile');
 
-  // Family declines in their dashboard
+  // Family member declines in HIS Assistant (review card with the exact item and amount)
   await f.goto(BASE + '/family'); await f.waitForLoadState('networkidle');
   await f.screenshot({ path: `${OUT}/family-dashboard.png`, fullPage: true }); await axe(f, 'family dashboard');
-  await f.getByRole('button', { name: /Decline/ }).first().click();
+  await f.goto(BASE + '/family/assistant'); await f.waitForLoadState('networkidle');
+  const review = f.locator('[data-card="family_review"]').last(); await review.waitFor({ timeout: 20000 });
+  ok('family review card in the family Assistant shows the server amount', /€120\.00/.test(await review.innerText()));
+  await f.screenshot({ path: `${OUT}/family-assistant.png`, fullPage: true }); await axe(f, 'family assistant');
+  await review.getByRole('button', { name: 'Decline' }).click();
   await f.waitForTimeout(1500);
   const co = await post(m, `/api/payments/${big.body.request.id}/checkout`, {});
   ok('family decline prevents payment', co.status === 409, `checkout -> ${co.status}`);

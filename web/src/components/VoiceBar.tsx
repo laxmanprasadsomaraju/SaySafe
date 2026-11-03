@@ -1,31 +1,23 @@
-import { useEffect, useId, useState } from 'react';
-import { Square, Pause, Play, RotateCcw, Volume2, VolumeX, SlidersHorizontal, ListMusic } from 'lucide-react';
+import { useEffect } from 'react';
+import { Square, Pause, Play, Volume2, ListMusic } from 'lucide-react';
 import { speech, type SpeechStatus } from '../lib/speech';
 import { LANGS, LANG_CODES, normaliseLang } from '../../../shared/lang';
 import { useSpeech } from '../lib/voice';
 
-const CHIP: Record<SpeechStatus, { label: string; cls: string; dot: string }> = {
-  ready: { label: 'Ready', cls: 'bg-teal-soft text-teal-deep', dot: 'bg-teal' },
-  listening: { label: 'Listening…', cls: 'bg-danger-soft text-danger', dot: 'bg-danger' },
-  processing: { label: 'Thinking…', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
-  thinking: { label: 'Thinking…', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
-  speaking: { label: 'Speaking…', cls: 'bg-navy text-white', dot: 'bg-white' },
-  cancelled: { label: 'Cancelled', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
-  paused: { label: 'Paused', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
-  muted: { label: 'Muted', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
-  unavailable: { label: 'Voice unavailable', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
-  error: { label: 'Voice error', cls: 'bg-danger-soft text-danger', dot: 'bg-danger' },
-};
+const LABEL: Partial<Record<SpeechStatus, string>> = { listening: 'Listening…', processing: 'Thinking…', thinking: 'Thinking…', speaking: 'Speaking…', paused: 'Paused' };
+const btn = 'inline-flex items-center justify-center gap-2 rounded-full min-h-11 min-w-11 px-4 font-bold text-base border-2 transition-colors';
 
-const btn = 'inline-flex items-center justify-center gap-2 rounded-full min-h-11 min-w-11 px-3 font-bold text-base border-2 transition-colors disabled:opacity-40 disabled:cursor-not-allowed';
-
-/** Compact, always-available voice controls. Stop is prominent whenever SaySafe is talking. */
-export function VoiceBar() {
+/**
+ * Voice controls appear only while SaySafe is listening or speaking: nothing stays on screen while idle.
+ * In the Assistant: a compact labelled bar while listening, thinking or speaking. On other screens: only while
+ * SaySafe is speaking. Stop (with the word "Stop") is always visible then; Pause/Resume only while speaking.
+ * Escape stops from anywhere. Mute, replay and settings live in the Assistant menu and in Profile.
+ */
+export function VoiceBar({ scope = 'other' }: { scope?: 'assistant' | 'other' }) {
   const s = useSpeech();
-  const [open, setOpen] = useState(false);
-  const panelId = useId();
   const speakingNow = s.status === 'speaking' || s.status === 'paused';
-  const active = speakingNow || s.status === 'listening' || s.status === 'processing' || s.status === 'thinking';
+  const busy = s.status === 'listening' || s.status === 'processing' || s.status === 'thinking';
+  const show = speakingNow || (scope === 'assistant' && busy);
 
   // Escape stops speech from anywhere (it does not steal Escape from open dialogs: those stop propagation).
   useEffect(() => {
@@ -34,48 +26,26 @@ export function VoiceBar() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  const chip = CHIP[s.status];
-  const hasText = Boolean(s.caption || s.segment || s.error || s.notice || s.micMessage || s.prefs.readAll);
+  if (!show) return null;
+  const label = LABEL[s.status] ?? '';
+  const dot = s.status === 'listening' ? 'bg-danger' : speakingNow ? 'bg-teal' : 'bg-amber';
   return (
-    <div role="region" aria-label="Voice controls">
-      {open && (
-        <div id={panelId} className="mx-auto max-w-5xl px-4 sm:px-5 pt-3 max-h-[50dvh] overflow-y-auto">
-          <VoiceSettings />
-        </div>
-      )}
-      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <div className={`flex items-center gap-2 sm:gap-3 min-w-0 flex-1 ${hasText ? 'basis-full sm:basis-0' : ''}`}>
-          <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap shrink-0 ${chip.cls}`}>
-            <span className={`size-2.5 rounded-full ${chip.dot}`} aria-hidden />
-            <span><span className="sr-only">Voice status: </span>{chip.label}</span>
-          </span>
-          {hasText && <p className="min-w-0 flex-1 text-base text-ink-soft line-clamp-2 break-words" title={s.caption || undefined}>
-            {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
-            {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
-            {s.error && <span className="text-danger font-bold"> {s.error}</span>}
-            {!s.caption && s.notice && <span className="text-ink-soft"> {s.notice}</span>}
-            {!s.caption && !s.notice && s.micMessage && <span className="text-navy font-bold"> {s.micMessage}</span>}
-          </p>}
-        </div>
-        <div className="flex flex-wrap gap-1.5 justify-end ml-auto">
-          {active && <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
-            className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
-            <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
-          </button>}
-          {speakingNow && <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
-            {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}
-          </button>}
-          {s.canReplay && !active && <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>
-            <RotateCcw className="size-5" aria-hidden />
-          </button>}
-          <button type="button" onClick={() => speech.toggleMute()} disabled={!s.supported} aria-pressed={s.prefs.muted} aria-label={s.prefs.muted ? 'Unmute voice' : 'Mute voice'}
-            className={`${btn} ${s.prefs.muted ? 'bg-navy border-navy text-white' : 'border-line text-navy hover:border-teal'}`}>
-            {s.prefs.muted ? <VolumeX className="size-5" aria-hidden /> : <Volume2 className="size-5" aria-hidden />}
+    <div role="region" aria-label="Voice controls" data-testid="voice-bar">
+      <div className="mx-auto max-w-5xl px-4 sm:px-5 py-1.5 flex items-center gap-2">
+        <p className="min-w-0 flex-1 flex items-center gap-2 text-base" aria-live="polite">
+          <span className={`size-2.5 rounded-full shrink-0 ${dot}`} aria-hidden />
+          <span className="font-bold whitespace-nowrap">{label}</span>
+          {s.segment && <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />{s.segment.index} of {s.segment.total}</span>}
+          {s.caption && <span className="min-w-0 truncate text-ink-soft hidden min-[400px]:inline" title={s.caption}>“{s.caption}”</span>}
+        </p>
+        {speakingNow && (
+          <button type="button" onClick={() => speech.togglePause()} className={`${btn} border-line text-navy hover:border-teal`}>
+            {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}{s.status === 'paused' ? 'Resume' : 'Pause'}
           </button>
-          <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-controls={panelId} aria-label="Voice settings" className={`${btn} ${open ? 'border-teal text-teal' : 'border-line text-navy hover:border-teal'}`}>
-            <SlidersHorizontal className="size-5" aria-hidden />
-          </button>
-        </div>
+        )}
+        <button type="button" onClick={() => speech.stopAll()} className={`${btn} bg-danger border-danger text-white hover:bg-[#7f1724]`}>
+          <Square className="size-4" aria-hidden fill="currentColor" />Stop<span className="sr-only">{speakingNow ? ' speaking' : s.status === 'listening' ? ' listening' : ''}</span>
+        </button>
       </div>
     </div>
   );
@@ -83,8 +53,9 @@ export function VoiceBar() {
 
 
 /** Voice settings, shared by the voice bar's settings panel and the Profile page. */
-export function VoiceSettings({ className = '' }: { className?: string }) {
+export function VoiceSettings({ className = '', parts = 'all' }: { className?: string; parts?: 'all' | 'voice' | 'language' }) {
   const s = useSpeech();
+  if (parts === 'language') return <LanguageSetting className={className} />;
   return (
           <fieldset className={`rounded-2xl border border-line bg-ivory p-4 flex flex-wrap gap-x-6 gap-y-3 items-center ${className}`}>
             <legend className="sr-only">Voice settings</legend>
@@ -96,13 +67,7 @@ export function VoiceSettings({ className = '' }: { className?: string }) {
               <input type="checkbox" className="size-6 accent-[var(--color-teal)]" checked={s.prefs.readAll} onChange={(e) => speech.setPrefs({ readAll: e.target.checked })} />
               Read everything (whole results lists)
             </label>
-            <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
-              Reply language (beta)
-              <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
-                {LANG_CODES.map((c) => <option key={c} value={c} lang={LANGS[c].bcp47}>{LANGS[c].label}</option>)}
-              </select>
-            </label>
-            {s.prefs.lang !== 'en' && <p className="w-full text-base text-ink-soft">SaySafe will answer and listen in {LANGS[s.prefs.lang].name} where it can. Screens stay in English. Anything not in {LANGS[s.prefs.lang].name} is shown as text, not spoken{speech.hasVoice(s.prefs.lang) ? '' : `. This device has no ${LANGS[s.prefs.lang].name} voice, so replies are shown on screen`}.</p>}
+            {parts === 'all' && <LanguageSetting bare />}
             <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
               Speed
               <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={String(s.prefs.rate)} onChange={(e) => speech.setPrefs({ rate: Number(e.target.value) })}>
@@ -121,5 +86,33 @@ export function ReadAloud({ text, label = 'Read aloud', className = '', lang }: 
     <button type="button" onClick={() => speech.speak(text, { priority: 'user', lang: normaliseLang(lang) })} className={`inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-11 ${className}`}>
       <Volume2 className="size-5" aria-hidden />{label}
     </button>
+  );
+}
+
+/** Reply language (beta). Stored with the voice settings on this device. */
+export function LanguageSetting({ className = '', bare = false }: { className?: string; bare?: boolean }) {
+  const s = useSpeech();
+  const body = (
+    <>
+      <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
+        Reply language (beta)
+        <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
+          {LANG_CODES.map((c) => <option key={c} value={c} lang={LANGS[c].bcp47}>{LANGS[c].label}</option>)}
+        </select>
+      </label>
+      {s.prefs.lang !== 'en' && <p className="w-full text-base text-ink-soft">SaySafe answers and listens in {LANGS[s.prefs.lang].name} where it can. Screens stay in English{speech.hasVoice(s.prefs.lang) ? '' : `. No ${LANGS[s.prefs.lang].name} voice on this device, so replies are shown as text`}.</p>}
+    </>
+  );
+  return bare ? body : <div className={`flex flex-wrap gap-x-6 gap-y-2 items-center ${className}`}>{body}</div>;
+}
+/** Spoken replies on/off (the old mute button). */
+export function MuteSwitch() {
+  const s = useSpeech();
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <span className="font-bold" id="mute-l">Spoken replies</span>
+      <button type="button" role="switch" aria-checked={!s.prefs.muted} aria-labelledby="mute-l" disabled={!s.supported} onClick={() => speech.toggleMute()}
+        className={`shrink-0 min-h-12 min-w-20 px-4 rounded-full border-2 font-bold inline-flex items-center gap-2 ${!s.prefs.muted ? 'bg-navy text-white border-navy' : 'bg-paper border-line hover:border-teal'}`}><Volume2 className="size-5" aria-hidden />{s.prefs.muted ? 'Off' : 'On'}</button>
+    </div>
   );
 }
