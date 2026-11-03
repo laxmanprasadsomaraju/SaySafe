@@ -6,11 +6,15 @@ import { Button, Card, PageTitle, TextInput, MicButton, Notice } from '../compon
 import { api, type ScanResult } from '../lib/api';
 import { speak, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
+import { Shield } from 'lucide-react';
+import { ScanDetails } from '../components/ScanDetails';
+import { ShareWarning } from '../components/ShareWarning';
+import { takeSharedText } from '../lib/shareTarget';
 
 const VERDICT = {
   suspicious: { icon: ShieldAlert, cls: 'bg-danger-soft border-danger', ic: 'text-danger', label: 'Suspicious' },
-  needs_verification: { icon: ShieldQuestion, cls: 'bg-amber-soft border-amber', ic: 'text-amber', label: 'Needs checking' },
-  verified_official_contact: { icon: ShieldCheck, cls: 'bg-teal-soft border-teal', ic: 'text-teal', label: 'Official PayPal contact' },
+  needs_checking: { icon: ShieldQuestion, cls: 'bg-amber-soft border-amber', ic: 'text-amber', label: 'Needs checking' },
+  no_obvious_warning_signs: { icon: Shield, cls: 'bg-teal-soft border-teal', ic: 'text-teal', label: 'No obvious warning signs' },
 } as const;
 
 export default function Check() {
@@ -19,7 +23,8 @@ export default function Check() {
   const loc = useLocation() as { state?: { text?: string; scenario?: string } };
   const scenario = loc.state?.scenario === 'mary';
   const started = useRef(false);
-  const [text, setText] = useState(loc.state?.text ?? '');
+  const [sharedIn] = useState(takeSharedText); // Android share target: prefill only, never auto-check
+  const [text, setText] = useState(loc.state?.text ?? sharedIn ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -75,6 +80,7 @@ export default function Check() {
           {result && <Button variant="secondary" onClick={() => nav('/shop', { state: { scenario: 'mary' } })}>Next: buy a kettle</Button>}
         </div>
       )}
+      {sharedIn && !result && <div className="mb-6"><Notice tone="info" title="A message was shared to SaySafe.">It is in the box below. Read it, then choose "Check this message". Nothing has been checked or sent yet.</Notice></div>}
       <div className="grid lg:grid-cols-[1.1fr_1fr] gap-6 items-start">
         <Card className="p-6">
           <form onSubmit={(e) => { e.preventDefault(); scan(text); }} className="space-y-5">
@@ -116,36 +122,16 @@ export default function Check() {
                 <button onClick={() => speak(result.spokenSummary)} className="mt-3 inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-12"><Volume2 className="size-5" aria-hidden />Read it to me again</button>
               </div>
               {result.ocrUncertain && <Notice tone="warn" title="Some letters in the screenshot were hard to read.">Please check the address carefully, or paste the text instead.</Notice>}
-              {top.length > 0 && (
-                <Card className="p-6">
-                  <h3 className="text-2xl">Why</h3>
-                  <ul className="mt-3 space-y-4">
-                    {top.map((s, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span className={`mt-2 size-3 rounded-full shrink-0 ${s.severity === 'high' ? 'bg-danger' : 'bg-amber'}`} aria-hidden />
-                        <div><p className="font-bold">{s.title}<span className="sr-only"> ({s.severity === 'high' ? 'strong warning' : 'warning'})</span></p><p className="text-ink-soft text-lg">{s.detail}</p>{s.evidence && <p className="text-base text-ink-soft mt-1 break-all"><span className="font-bold">Seen:</span> {s.evidence}</p>}</div>
-                      </li>
-                    ))}
-                  </ul>
-                  {minor.length > 0 && <p className="mt-4 text-base text-ink-soft">Also noticed: {minor.map((s) => s.title.toLowerCase()).join('; ')}.</p>}
-                </Card>
-              )}
-              {result.verdict === 'verified_official_contact' && <Notice tone="info" title="An official address does not make a message safe.">Scammers can copy real addresses. Check any payment inside the PayPal app.</Notice>}
+              <ScanDetails result={result} />
               <Card className="p-6">
-                <h3 className="text-2xl">Safe next steps</h3>
+                <h3 className="text-2xl">Get help</h3>
                 <div className="mt-4 flex flex-col gap-3">
-                  <a href={result.safeActions[0]?.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-between gap-3 rounded-2xl bg-teal text-white font-bold px-6 min-h-16 hover:bg-teal-deep">
-                    {result.safeActions[0]?.label}<ExternalLink className="size-6" aria-hidden />
-                  </a>
-                  {result.safeActions.slice(1).map((a) => (
-                    <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-between gap-3 rounded-2xl border-2 border-line hover:border-teal font-bold px-6 min-h-14">{a.label}<ExternalLink className="size-5" aria-hidden /></a>
-                  ))}
                   <Button variant="secondary" icon={<Users className="size-6" aria-hidden />} onClick={share} disabled={shared}>{shared ? 'Sent to your family' : 'Ask a family member'}</Button>
                   <Button variant="ghost" icon={<HomeIcon className="size-6" aria-hidden />} onClick={() => nav('/home')}>Stop and go home</Button>
                 </div>
-                <p className="mt-4 text-base text-ink-soft">To report it, forward the message to <span className="font-bold">phishing@paypal.com</span> (from PayPal's official report page), then delete it.</p>
-                {result.phonePolicy && <p className="mt-2 text-base text-ink-soft">{result.phonePolicy}</p>}
+                {result.phonePolicy && <p className="mt-4 text-base text-ink-soft">{result.phonePolicy}</p>}
               </Card>
+              <ShareWarning result={result} />
             </div>
           )}
         </div>

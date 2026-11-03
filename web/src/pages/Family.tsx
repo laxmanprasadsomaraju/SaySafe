@@ -33,7 +33,7 @@ export function FamilyPair() {
   );
 }
 
-interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; summary: string; created_at: string }[] }
+interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; verdictLabel?: string; summary: string; created_at: string }[] }
 
 export default function Family() {
   const nav = useNavigate();
@@ -119,6 +119,7 @@ export default function Family() {
               <ul className="mt-3 space-y-3">
                 {o.alerts.map((a) => (
                   <li key={a.id} className={`rounded-2xl p-4 border-l-[6px] ${a.verdict === 'suspicious' ? 'bg-danger-soft border-danger' : 'bg-amber-soft border-amber'}`}>
+                    {a.verdictLabel && <p className="text-sm font-bold uppercase tracking-wider">{a.verdictLabel}</p>}
                     <p className="font-bold">{a.summary}</p><p className="text-base text-ink-soft">{new Date(a.created_at + 'Z').toLocaleString()}</p>
                   </li>
                 ))}

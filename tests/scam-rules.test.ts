@@ -36,18 +36,18 @@ describe('message verdicts', () => {
   it('samples: scams are suspicious', () => {
     for (const s of SAMPLE_MESSAGES.filter((m) => m.id !== 'official')) expect(analyseText(s.text).verdict, s.id).toBe('suspicious');
   });
-  it('a lone official help link is verified official contact', () => {
-    expect(analyseText('https://www.paypal.com/ie/security/report-suspicious-messages').verdict).toBe('verified_official_contact');
+  it('a lone official help link has no obvious warning signs', () => {
+    expect(analyseText('https://www.paypal.com/ie/security/report-suspicious-messages').verdict).toBe('no_obvious_warning_signs');
   });
-  it('phishing@paypal.com alone is verified official contact', () => {
-    expect(analyseText('phishing@paypal.com').verdict).toBe('verified_official_contact');
+  it('phishing@paypal.com alone has no obvious warning signs', () => {
+    expect(analyseText('phishing@paypal.com').verdict).toBe('no_obvious_warning_signs');
   });
   it('a real PayPal URL inside a scam message is still suspicious', () => {
     const t = 'URGENT: your account is suspended. Send your password and one-time code to restore it. https://www.paypal.com';
     expect(analyseText(t).verdict).toBe('suspicious');
   });
-  it('unknown link with no other signals is needs_verification, never safe', () => {
-    expect(analyseText('Hi, see the photos here https://example-photos.org/album').verdict).toBe('needs_verification');
+  it('unknown link with no other signals needs checking, never all-clear', () => {
+    expect(analyseText('Hi, see the photos here https://example-photos.org/album').verdict).toBe('needs_checking');
   });
   it('gift card and free-email support are high risk', () => {
     expect(codes('Pay with a gift card. Contact support at paypalhelp@gmail.com about your PayPal refund')).toEqual(expect.arrayContaining(['gift_card']));
@@ -69,21 +69,21 @@ describe('message verdicts', () => {
 
 describe('AI may only escalate', () => {
   it('never downgrades suspicious', () => expect(mergeVerdict('suspicious', 'needs_verification')).toBe('suspicious'));
-  it('can escalate', () => expect(mergeVerdict('needs_verification', 'suspicious')).toBe('suspicious'));
-  it('cannot grant verified', () => expect(mergeVerdict('needs_verification', 'verified_official_contact' as any)).toBe('needs_verification'));
+  it('can escalate', () => expect(mergeVerdict('needs_checking', 'suspicious')).toBe('suspicious'));
+  it('cannot grant the all-clear', () => expect(mergeVerdict('needs_checking', 'verified_official_contact')).toBe('needs_checking'));
 });
 
 describe('PayPal invoice and request scams', () => {
   it('a lone real PayPal invoice link is not verified', () => {
-    expect(analyseText('https://www.paypal.com/invoice/p/#INV2-ABCD').verdict).toBe('needs_verification');
+    expect(analyseText('https://www.paypal.com/invoice/p/#INV2-ABCD').verdict).toBe('needs_checking');
   });
   it('a paypal.me link is real PayPal but not verified', () => {
-    expect(analyseText('https://paypal.me/someone/50').verdict).toBe('needs_verification');
+    expect(analyseText('https://paypal.me/someone/50').verdict).toBe('needs_checking');
   });
   it('a fake "Geek Squad" invoice sent through real PayPal is suspicious', () => {
     expect(analyseText('Invoice from Geek Squad €399 for renewal. If you did not authorise this call +1 808 555 0199. https://www.paypal.com/invoice/p/#INV2-XYZ').verdict).toBe('suspicious');
   });
   it('the official contact page is recognised', () => {
-    expect(analyseText('https://www.paypal.com/ie/cshelp/contact-us').verdict).toBe('verified_official_contact');
+    expect(analyseText('https://www.paypal.com/ie/cshelp/contact-us').verdict).toBe('no_obvious_warning_signs');
   });
 });

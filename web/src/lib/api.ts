@@ -35,13 +35,20 @@ export interface PaymentRequest {
   createdAt: string; updatedAt: string;
 }
 
+export type ScanVerdict = 'suspicious' | 'needs_checking' | 'no_obvious_warning_signs';
+export type FindingBasis = 'deterministic_rule' | 'ai_judgement' | 'independently_verified';
 export interface ScanResult {
   scanId: string;
-  verdict: 'suspicious' | 'needs_verification' | 'verified_official_contact';
+  verdict: ScanVerdict;
+  verdictLabel: string;
+  legacyVerdict?: 'suspicious' | 'needs_verification' | 'verified_official_contact';
+  disclosure: string | null;
   headline: string; spokenSummary: string;
-  signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string }[];
+  signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string; basis?: FindingBasis }[];
   aiReasons: string[];
   safeActions: { label: string; url: string }[];
+  nextSteps: { id: string; text: string; url?: string; urlLabel?: string }[];
+  couldNotVerify: string[];
   phonePolicy: string | null;
   extractedText?: string; ocrUncertain?: boolean;
   ai: { used: boolean; model?: string };

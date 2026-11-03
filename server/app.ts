@@ -12,6 +12,7 @@ import { db, audit } from './db/index.js';
 import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId } from './auth.js';
 import { scanMessage, extractFromImage, explainMore } from './scam/guardian.js';
 import { TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES } from './scam/directory.js';
+import { normalizeVerdict, VERDICT_LABEL } from './scam/verdicts.js';
 import { PRODUCTS, searchProducts, getProduct } from './catalogue/products.js';
 import { interpret, describeOptions, eur } from './ai/agent.js';
 import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from './ai/provider.js';
@@ -275,7 +276,9 @@ export function createApp() {
   app.get('/api/family/overview', requireRole('family'), (req, res) => {
     const s = sessionOf(req);
     const elder = db.prepare('SELECT u.name FROM households h JOIN users u ON u.id=h.elder_id WHERE h.id=?').get(s.householdId) as any;
-    const scans = db.prepare('SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id=? AND shared_with_family=1 ORDER BY created_at DESC LIMIT 10').all(s.householdId);
+    const rows = db.prepare('SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id=? AND shared_with_family=1 ORDER BY created_at DESC LIMIT 10').all(s.householdId);
+    // Older rows hold legacy verdict codes; always send the three public verdicts.
+    const scans = (rows as { id: string; verdict: string; summary: string; created_at: string }[]).map((r) => ({ ...r, verdict: normalizeVerdict(r.verdict), verdictLabel: VERDICT_LABEL[normalizeVerdict(r.verdict)] }));
     res.json({ me: { name: s.name }, elder: { name: elder?.name }, policy: pay.getPolicy(s.householdId), requests: pay.listRequests(s.householdId), alerts: scans });
   });
   app.post('/api/family/policy', requireRole('family'), (req, res) => {
