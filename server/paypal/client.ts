@@ -3,6 +3,10 @@
  * Credentials come from env only and never reach the browser.
  */
 const BASE = process.env.PAYPAL_API_BASE ?? 'https://api-m.sandbox.paypal.com';
+// Sandbox-only by design: refuse to start against PayPal live unless someone deliberately opts in.
+if (!/^https:\/\/api-m\.sandbox\.paypal\.com\/?$/.test(BASE) && process.env.PAYPAL_ALLOW_LIVE !== 'yes') {
+  throw new Error(`Refusing non-sandbox PayPal base URL ${BASE}. SaySafe is a sandbox demo.`);
+}
 
 /** PAYPAL_CLIENT_ID + PAYPAL_CLIENT_SECRET, or a single PAYPAL_CREDENTIALS="id:secret". */
 function creds() {
@@ -33,7 +37,10 @@ async function token(): Promise<string> {
   return cached.token;
 }
 
-async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}) {
+/** Network failure or timeout: PayPal may or may not have acted. Callers must re-read, never assume failure. */
+export function isUnknownOutcome(e: any) { return !e?.status || e.status >= 500; }
+
+async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, retried = false): Promise<any> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
@@ -43,6 +50,8 @@ async function call(method: string, path: string, body?: unknown, extraHeaders: 
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
+  // A revoked or expired token: drop the cache and try once more with a fresh one (same PayPal-Request-Id, so safe).
+  if (res.status === 401 && !retried) { cached = null; return call(method, path, body, extraHeaders, true); }
   if (!res.ok) {
     const err = new Error(`PayPal ${method} ${path} -> ${res.status} ${data?.name ?? ''} ${data?.details?.[0]?.issue ?? data?.message ?? ''}`.trim()) as Error & { status: number; data: any };
     err.status = res.status;

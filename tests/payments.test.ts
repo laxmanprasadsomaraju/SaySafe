@@ -5,7 +5,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const orders = new Map<string, any>();
-let captureMode: 'ok' | 'fail' | 'already' = 'ok';
+let captureMode: 'ok' | 'fail' | 'already' | 'timeout' | 'netdown' = 'ok';
+let captureCalls = 0;
 vi.mock('../server/paypal/client', () => ({
   paypalConfigured: () => true,
   createOrder: vi.fn(async (a: any) => {
@@ -17,7 +18,11 @@ vi.mock('../server/paypal/client', () => ({
   getOrder: vi.fn(async (id: string) => orders.get(id)),
   captureOrder: vi.fn(async (id: string) => {
     const o = orders.get(id);
-    if (captureMode === 'fail') { const e: any = new Error('fail'); e.data = { details: [{ issue: 'X' }] }; throw e; }
+    if (captureMode === 'fail') { const e: any = new Error('fail'); e.status = 422; e.data = { details: [{ issue: 'X' }] }; throw e; }
+    if (captureMode === 'netdown') { const e: any = new Error('ECONNRESET'); throw e; }
+    if (captureMode === 'timeout') { captureMode = 'ok'; o.status = 'COMPLETED'; o.purchase_units[0].payments = { captures: [{ id: 'CAP' + id, status: 'COMPLETED', amount: o.purchase_units[0].amount }] }; captureCalls++; const e: any = new Error('timeout'); throw e; }
+    if (o.status === 'COMPLETED' && o.purchase_units[0].payments) return o; // PayPal-Request-Id replay returns the original capture
+    captureCalls++;
     if (captureMode === 'already' && o.status === 'COMPLETED') { const e: any = new Error('already'); e.data = { details: [{ issue: 'ORDER_ALREADY_CAPTURED' }] }; throw e; }
     o.status = 'COMPLETED';
     o.purchase_units[0].payments = { captures: [{ id: 'CAP' + id, status: 'COMPLETED', amount: o.purchase_units[0].amount }] };
@@ -25,6 +30,7 @@ vi.mock('../server/paypal/client', () => ({
   }),
   refundCapture: vi.fn(async () => ({ status: 'COMPLETED' })),
   verifyWebhook: vi.fn(async () => true),
+  isUnknownOutcome: (e: any) => !e?.status || e.status >= 500,
   approveLink: (o: any) => o.links[0].href,
 }));
 
@@ -113,6 +119,33 @@ describe('happy path under threshold', () => {
     orders.get(o).purchase_units[0].amount.currency_code = 'USD';
     approve(o);
     await expect(pay.confirmAndCapture(hh, u, request.id, o)).rejects.toThrow();
+  });
+
+  it('timeout during capture is UNKNOWN, not failed; a retry never captures twice', async () => {
+    const { hh, u } = household();
+    const { request } = await pay.createRequest(hh, u, [{ productId: 'toaster', quantity: 1 }], key(), ORIGIN);
+    const o = (db.prepare('SELECT paypal_order_id o FROM payment_requests WHERE id=?').get(request.id) as any).o;
+    approve(o);
+    captureMode = 'timeout'; captureCalls = 0;
+    // PayPal actually captured, but our call timed out. The re-read sees COMPLETED and settles it.
+    const r = await pay.confirmAndCapture(hh, u, request.id, o);
+    expect(r.state).toBe('CAPTURED');
+    const again = await pay.confirmAndCapture(hh, u, request.id, o);
+    expect(again.state).toBe('CAPTURED');
+    expect(captureCalls).toBe(1);
+  });
+
+  it('timeout with nothing captured stays CAPTURE_PENDING and says no double charge', async () => {
+    const { hh, u } = household();
+    const { request } = await pay.createRequest(hh, u, [{ productId: 'toaster', quantity: 1 }], key(), ORIGIN);
+    const o = (db.prepare('SELECT paypal_order_id o FROM payment_requests WHERE id=?').get(request.id) as any).o;
+    approve(o);
+    captureMode = 'netdown';
+    await expect(pay.confirmAndCapture(hh, u, request.id, o)).rejects.toThrow(/not be charged twice/);
+    expect((db.prepare('SELECT state FROM payment_requests WHERE id=?').get(request.id) as any).state).toBe('CAPTURE_PENDING');
+    captureMode = 'ok';
+    const r = await pay.confirmAndCapture(hh, u, request.id, o);
+    expect(r.state).toBe('CAPTURED');
   });
 
   it('capture failure ends FAILED and says no money taken', async () => {

@@ -225,6 +225,9 @@ export async function confirmAndCapture(householdId: string, actor: string, requ
     const latest = await paypal.getOrder(r.paypal_order_id).catch(() => null);
     if (latest?.status === 'COMPLETED') return applyCaptureResult(load(requestId, householdId), latest);
     if (e?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') throw new PaymentError('declined', 'PayPal declined this payment method. You can try again with another one.', 402);
+    // Timeout, dropped connection or PayPal 5xx: the outcome is unknown, not failed. Stay CAPTURE_PENDING;
+    // a later confirm re-sends the same PayPal-Request-Id, so PayPal can never capture twice.
+    if (paypal.isUnknownOutcome(e)) throw new PaymentError('outcome_unknown', 'PayPal has not answered yet. You will not be charged twice. Check again in a moment.', 503);
     transition(load(requestId, householdId), 'FAILED', 'system', {});
     throw new PaymentError('capture_failed', 'The payment did not go through. No money was taken.', 502);
   }
