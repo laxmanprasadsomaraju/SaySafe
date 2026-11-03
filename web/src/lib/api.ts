@@ -2,16 +2,55 @@ export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
 
-export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; form?: FormData } = {}): Promise<T> {
-  const res = await fetch(path, {
-    method: opts.method ?? (opts.body || opts.form ? 'POST' : 'GET'),
-    headers: opts.form ? undefined : opts.body ? { 'Content-Type': 'application/json' } : undefined,
-    body: opts.form ?? (opts.body ? JSON.stringify(opts.body) : undefined),
-    credentials: 'same-origin',
-  });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data.error ?? 'error', data.message ?? 'Something went wrong. Please try again.');
-  return data as T;
+/**
+ * Server reachability, for the "Waking up the server…" banner. The free Render instance sleeps when idle and
+ * takes ~50 s to start: during that time requests fail at the network level or get a 502/503/504 page from
+ * Render's proxy (not our JSON). Those are retried with backoff; our own JSON errors never are.
+ */
+export type ServerStatus = 'ok' | 'waking' | 'unreachable';
+let status: ServerStatus = 'ok';
+const listeners = new Set<(s: ServerStatus) => void>();
+function setStatus(s: ServerStatus) { if (s !== status) { status = s; listeners.forEach((l) => l(s)); } }
+export function onServerStatus(l: (s: ServerStatus) => void) { listeners.add(l); l(status); return () => { listeners.delete(l); }; }
+
+// ~90 s in total: enough for a cold start, short enough to then say so plainly.
+const BACKOFF_MS = [1000, 2000, 4000, 8000, 12000, 15000, 15000, 15000, 15000];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * GETs are retried automatically. POSTs only when `idempotent` is set (the server dedupes them, e.g. by
+ * idempotency key or PayPal-Request-Id), because a POST that timed out may still have reached the server.
+ */
+export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; form?: FormData; idempotent?: boolean } = {}): Promise<T> {
+  const method = opts.method ?? (opts.body || opts.form ? 'POST' : 'GET');
+  const retryable = method === 'GET' || opts.idempotent === true;
+  for (let attempt = 0; ; attempt++) {
+    let res: Response | null = null;
+    try {
+      res = await fetch(path, {
+        method,
+        headers: opts.form ? undefined : opts.body ? { 'Content-Type': 'application/json' } : undefined,
+        body: opts.form ?? (opts.body ? JSON.stringify(opts.body) : undefined),
+        credentials: 'same-origin',
+      });
+    } catch {
+      res = null; // network error: server asleep, restarting, or offline
+    }
+    const data = res ? await res.json().catch(() => null) : null;
+    const coldStart = !res || ([502, 503, 504].includes(res.status) && !(data && typeof data === 'object' && 'error' in data));
+    if (coldStart && retryable && attempt < BACKOFF_MS.length) {
+      setStatus('waking');
+      await sleep(BACKOFF_MS[attempt]);
+      continue;
+    }
+    if (coldStart) {
+      setStatus('unreachable');
+      throw new ApiError(0, 'unreachable', 'We could not reach SaySafe. Please check your connection and try again. Nothing was charged.');
+    }
+    setStatus('ok');
+    if (!res!.ok) throw new ApiError(res!.status, data?.error ?? 'error', data?.message ?? 'Something went wrong. Please try again.');
+    return (data ?? {}) as T;
+  }
 }
 
 export const eur = (cents: number) => `€${(cents / 100).toFixed(cents % 100 ? 2 : 0)}`;

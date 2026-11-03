@@ -21,3 +21,8 @@ services:
         value: native
       - key: VITE_AG_STUDIO_LICENSE   # leave unset in production until AG Grid grants written permission
         sync: false
+      # Persistent database: Turso free plan (see docs/DATABASE.md). Startup fails in production without it.
+      - key: TURSO_DATABASE_URL
+        value: libsql://saysafe-saysafe-lp.aws-eu-west-1.turso.io
+      - key: TURSO_AUTH_TOKEN
+        sync: false

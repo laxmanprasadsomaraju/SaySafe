@@ -12,6 +12,7 @@ import Guide from './pages/Guide';
 import Discover from './pages/Discover';
 import ReturnGate from './pages/ReturnGate';
 import Family, { FamilyPair } from './pages/Family';
+import { ServerStatusBanner } from './components/ServerStatus';
 
 // Insights pages are lazy so the main bundle does not grow. The native page never imports AG packages.
 const NativeInsights = lazy(() => import('./pages/insights/NativeInsights'));
@@ -25,6 +26,7 @@ if (localStorage.getItem('ss-contrast') === 'on') document.documentElement.class
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <ServerStatusBanner />
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/home" element={<Home />} />

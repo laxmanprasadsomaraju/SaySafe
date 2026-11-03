@@ -245,4 +245,14 @@ describe('webhooks', () => {
     const row = db.prepare('SELECT state, paypal_capture_id FROM payment_requests WHERE id=?').get(request.id) as any;
     expect(row).toEqual({ state: 'CAPTURED', paypal_capture_id: 'CAP-1' });
   });
+  it('a PayPal capture id already linked to another request is a 409 conflict, not a crash (UNIQUE mapping)', async () => {
+    const { hh, u } = household();
+    const one = (await pay.createRequest(hh, u, [{ productId: 'pill-organiser', quantity: 1 }], key(), ORIGIN)).request;
+    const two = (await pay.createRequest(hh, u, [{ productId: 'pill-organiser', quantity: 1 }], key(), ORIGIN)).request;
+    db.prepare("UPDATE payment_requests SET state='CAPTURED', paypal_capture_id='CAP-DUP' WHERE id=?").run(one.id);
+    db.prepare("UPDATE payment_requests SET state='CAPTURE_PENDING' WHERE id=?").run(two.id);
+    const ev = { event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'CAP-DUP', custom_id: two.id, amount: { value: '19.00', currency_code: 'EUR' } } };
+    expect(() => pay.reconcileFromWebhook(ev)).toThrow(expect.objectContaining({ code: 'conflict', status: 409 }));
+    expect((db.prepare('SELECT state, paypal_capture_id FROM payment_requests WHERE id=?').get(two.id) as any)).toEqual({ state: 'CAPTURE_PENDING', paypal_capture_id: null });
+  });
 });

@@ -2,7 +2,7 @@
   "name": "saysafe-ai",
   "version": "0.1.0",
   "private": true,
-  "description": "SaySafe — AI Payment Guardian for Everyone. Voice-first, accessible shopping with scam protection, family approvals and real PayPal sandbox checkout.",
+  "description": "SaySafe \u2014 AI Payment Guardian for Everyone. Voice-first, accessible shopping with scam protection, family approvals and real PayPal sandbox checkout.",
   "license": "MIT",
   "type": "module",
   "engines": {
@@ -14,14 +14,17 @@
     "start": "NODE_ENV=production tsx server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "seed": "tsx scripts/reset-demo.ts"
+    "seed": "tsx scripts/reset-demo.ts",
+    "db:backup": "node scripts/db-backup.mjs",
+    "db:migrate": "node scripts/db-migrate-to-turso.mjs"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3",
+    "@libsql/client": "^0.18.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.3.0",
     "express-rate-limit": "^8.7.3",
     "helmet": "^8.3.0",
+    "libsql": "^0.5.29",
     "multer": "^2.5.0",
     "tldts": "^7.4.19",
     "tsx": "^4.23.15",
@@ -32,7 +35,6 @@
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource/atkinson-hyperlegible-next": "^5.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.3.0",

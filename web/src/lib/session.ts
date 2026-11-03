@@ -7,11 +7,20 @@ export function useMe(role: 'elder' | 'family') {
   const [me, setMe] = useState<{ name: string } | null>(null);
   const nav = useNavigate();
   useEffect(() => {
-    api('/api/me').then((r) => {
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => api('/api/me').then((r) => {
+      if (cancelled) return;
       const who = r[role];
       if (who) setMe(who);
       else nav(role === 'elder' ? '/' : '/family/pair', { replace: true });
-    }).catch(() => nav('/', { replace: true }));
+    }).catch(() => {
+      // Server unreachable (cold start outlasted the retries, or offline): keep the session and try again,
+      // rather than sending the person back to the start page. The banner explains what is happening.
+      if (!cancelled) timer = setTimeout(check, 10_000);
+    });
+    check();
+    return () => { cancelled = true; if (timer) clearTimeout(timer); };
   }, [role, nav]);
   return me;
 }

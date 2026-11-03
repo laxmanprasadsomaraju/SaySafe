@@ -8,7 +8,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { z } from 'zod';
-import { db, audit } from './db/index.js';
+import { db, audit, dbConfig } from './db/index.js';
 import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId } from './auth.js';
 import { scanMessage, extractFromImage, explainMore } from './scam/guardian.js';
 import { TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES } from './scam/directory.js';
@@ -85,7 +85,7 @@ export function createApp() {
 
   // ---------- Status ----------
   app.get('/api/health', wrap(async (_req, res) => {
-    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, time: new Date().toISOString() });
+    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, db: { mode: dbConfig.mode, persistent: dbConfig.mode !== 'local' }, time: new Date().toISOString() });
   }));
   app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), channel3Configured: channel3Configured(), insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, demo: true }));
 
