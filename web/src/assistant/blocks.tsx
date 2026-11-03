@@ -113,8 +113,8 @@ export function ProductSheet({ item, source, onClose, onPrepare }: { item: Produ
   return (
     <dialog ref={ref} onCancel={(e) => { e.preventDefault(); onClose(); }} onClick={(e) => { if (e.target === ref.current) onClose(); }} aria-labelledby="sheet-title"
       className="mt-auto mb-0 mx-auto w-full max-w-xl max-h-[92dvh] rounded-t-[1.75rem] sm:rounded-[1.75rem] sm:mb-auto bg-paper text-navy p-0 border-0 overflow-y-auto">
-      <div className="relative bg-white grid place-items-center h-56 sm:h-72">
-        {item.image ? <img src={item.image} alt={item.imageAlt} className="max-h-full max-w-full object-contain p-4" referrerPolicy="no-referrer" /> : <Store className="size-16 text-ink-soft" aria-label="No photo available" />}
+      <div className="relative bg-white grid place-items-center h-56 sm:h-72 overflow-hidden">
+        {item.image ? <img src={item.image} alt={item.imageAlt} className="h-full w-full object-contain p-4" referrerPolicy="no-referrer" /> : <Store className="size-16 text-ink-soft" aria-label="No photo available" />}
         <button type="button" onClick={onClose} aria-label="Close" className="absolute top-3 right-3 size-12 rounded-full bg-paper border-2 border-line grid place-items-center hover:border-teal"><X className="size-6" aria-hidden /></button>
       </div>
       <div className="p-5 sm:p-6">
@@ -185,8 +185,8 @@ function PaymentPrepCard({ b, act }: { b: BlockOf<'payment_prep'>; act: BlockAct
         ))}
       </ul>
       <dl className="mt-2 space-y-1 text-base">
-        <div className="flex justify-between gap-3"><dt className="text-ink-soft">Pay with</dt><dd className="font-bold text-right flex items-center gap-1"><Lock className="size-4" aria-hidden />PayPal: you approve at PayPal</dd></div>
-        <div className="flex justify-between gap-3"><dt className="text-ink-soft">Family check</dt><dd className="font-bold text-right">{b.needsFamily ? `Yes, above your ${moneyCents(b.thresholdCents, b.currency)} limit` : 'Not needed'}</dd></div>
+        <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-ink-soft">Pay with</dt><dd className="font-bold text-right inline-flex items-center gap-1"><Lock className="size-4 shrink-0" aria-hidden />PayPal (you approve there)</dd></div>
+        <div className="flex flex-wrap justify-between gap-x-3"><dt className="text-ink-soft">Family check</dt><dd className="font-bold text-right">{b.needsFamily ? `Yes, above your ${moneyCents(b.thresholdCents, b.currency)} limit` : 'Not needed'}</dd></div>
         <div className="flex justify-between gap-3 border-t border-line pt-2 text-[1.2rem]"><dt className="font-bold">Total</dt><dd className="font-display font-semibold">{moneyCents(b.totalCents, b.currency)} {b.currency}</dd></div>
       </dl>
       {b.status === 'error' && b.error && <p role="alert" className="mt-3 text-danger font-bold">{b.error}</p>}

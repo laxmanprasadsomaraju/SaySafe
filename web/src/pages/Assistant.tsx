@@ -24,9 +24,9 @@ import { RenderBlock, ProductSheet, type BlockActions } from '../assistant/block
 
 const KEY = 'ss-assistant-thread';
 const MODES: { mode: Exclude<Mode, 'chat'>; label: string; icon: typeof Mic; placeholder: string }[] = [
-  { mode: 'check', label: 'Check a message', icon: MessageSquareWarning, placeholder: 'Paste the message' },
-  { mode: 'find', label: 'Find a product', icon: ShoppingBag, placeholder: 'e.g. kettle under €40' },
-  { mode: 'help', label: 'Get trusted help', icon: LifeBuoy, placeholder: 'What’s wrong?' },
+  { mode: 'check', label: 'Check a message', icon: MessageSquareWarning, placeholder: 'Paste message' },
+  { mode: 'find', label: 'Find a product', icon: ShoppingBag, placeholder: 'e.g. a kettle' },
+  { mode: 'help', label: 'Get trusted help', icon: LifeBuoy, placeholder: 'Type here' },
   { mode: 'payments', label: 'My payments', icon: Wallet, placeholder: 'e.g. last payment' },
 ];
 const PROMPT: Record<Mode, string> = {
