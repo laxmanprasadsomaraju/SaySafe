@@ -98,9 +98,10 @@ const RE = {
   ],
   paymentAsk: [
     new RegExp(String.raw`\b(?:please|kindly|can you|could you|you (?:must|need to|have to))\s+(?:refund|return|send back|pay back)\b[^.\n]{0,40}?${MONEY}`, 'i'),
-    new RegExp(String.raw`\b(?:pay|send|transfer|wire|lodge)\b(?!\s+(?:you|it) back)[^.\n]{0,40}?(?:${MONEY}|\bmoney\b|\bthe (?:amount|balance|fee|deposit|rest)\b|\ba (?:fee|deposit)\b|\b(?:it|that|this) (?:today|now|asap)\b)`, 'i'),
+    new RegExp(String.raw`\b(?:pay|send|transfer|wire|lodge|settle)\b(?!\s+(?:you|it) back)[^.\n]{0,40}?(?:${MONEY}|\bmoney\b|\bthe (?:amount|balance|fee|deposit|rest)\b|\ba (?:fee|deposit)\b|\b(?:it|that|this) (?:today|now|asap)\b)`, 'i'),
     /\b(?:amount|balance|payment) (?:due|required|outstanding|owed|overdue)\b/i,
     /\bdue (?:on receipt|now|today|immediately|by)\b/i,
+    /\b(?:invoice|bill|balance|amount|payment|fee)\b[^.\n]{0,40}?\b(?:is|are) (?:now )?(?:due|overdue|outstanding|payable)\b/i,
     /\b(?:has |have )?(?:requested|is requesting|sent you a (?:payment|money) request|money request|request(?:ed)? (?:a )?payment)\b/i,
     /\b(?:release|unlock|customs|delivery|redelivery|admin|processing|clearance|handling|activation) (?:fee|charge|payment)\b/i,
     /\b(?:can|could) you (?:send|lend|transfer|pay)\b/i,
@@ -129,8 +130,24 @@ const RE = {
   ],
   prize: [/\byou(?:['’]ve| have)? (?:won|been selected)\b|\b(?:lottery|prize draw|claim your (?:reward|gift|prize))\b/i],
   qr: [/\bscan (?:the|this) qr\b/i],
+  // Text aimed at the checker (or any AI) rather than at the reader. A genuine message has no reason to give orders to a scam checker.
+  injection: [
+    /\b(?:ignore|disregard|forget|override|bypass)\b[^.\n]{0,25}?\b(?:previous|prior|above|earlier|all|any|your|the)\b[^.\n]{0,20}?\b(?:instructions?|prompts?|rules?|guidelines|guardrails|checks?)\b/i,
+    /\b(?:mark|classify|label|flag|rate|treat|report|tag)\s+(?:this|it|the (?:message|email|invoice|text))?\s*(?:message |email |invoice )?(?:as\s+)?(?:safe|legit(?:imate)?|genuine|trusted|verified|harmless|not (?:a )?scam)\b/i,
+    /(?:^|\n|\[)\s*(?:system|assistant|developer)\s*(?:prompt|message|note|override)?\s*\]?\s*:\s*(?=[^\n]{0,80}\b(?:ignore|you are|you must|mark|classify|this message|respond|reply only)\b)/i,
+    /\b(?:you are|act as) (?:an? |the )?(?:ai|assistant|language model|chatbot|scam (?:checker|detector|filter)|security (?:scanner|filter))\b/i,
+  ],
+  // A payment with a deadline of today/now. Payment family (not "pressure"), so on its own a real bill
+  // due today is "Needs checking", not "Suspicious".
+  payDeadline: [
+    /\b(?:pay|settle|clear|transfer|send|lodge|wire)\b[^.\n]{0,30}?\b(?:today|tonight|now|immediately|asap|by (?:today|tonight|tomorrow|midnight|end of (?:the )?day|close of business|\d{1,2}(?::\d{2})?\s?(?:am|pm)))\b/i,
+    /\b(?:is |are |now )?(?:due|overdue|payable)\b[^.\n]{0,25}?\b(?:today|tonight|now|immediately)\b/i,
+  ],
   genericGreeting: [/\bdear (?:customer|user|client|member|account holder|sir\/madam|valued customer)\b/i],
 };
+
+/** "I'll transfer it tonight" is the sender promising to pay you, not a demand. */
+const FIRST_PERSON_BEFORE = /\b(?:i|we)(?:['’]ll| will| can| shall| could|['’]m going to| am going to| are going to)\s+(?:\w+\s+)?$/i;
 
 export interface IndicatorContext {
   phones: number;
@@ -265,6 +282,17 @@ export function detectIndicators(src: string, ctx: IndicatorContext): Signal[] {
     code: 'qr_code', family: 'link', severity: 'medium',
     title: 'It asks you to scan a QR code',
     detail: 'A QR code is a hidden link. You cannot see where it goes before you open it.',
+  });
+  push(find(src, RE.injection), {
+    code: 'prompt_injection', family: 'manipulation', severity: 'high',
+    title: 'It contains orders aimed at a scam checker',
+    detail: 'Words like "ignore previous instructions" or "mark this as safe" are written to fool automatic checkers. A genuine message has no reason to include them.',
+  });
+  const deadline = find(src, RE.payDeadline).filter((h) => !FIRST_PERSON_BEFORE.test(src.slice(Math.max(0, h.index - 24), h.index)));
+  if (payAsk.length || deadline.length) push(deadline, {
+    code: 'payment_deadline', family: 'payment', severity: 'medium',
+    title: 'It wants payment today or right now',
+    detail: 'A deadline of "today" is a reason to slow down. Check the bill in the official app or with the company, using a number you already have.',
   });
   push(find(src, RE.genericGreeting), {
     code: 'generic_greeting', family: 'identity', severity: 'info',

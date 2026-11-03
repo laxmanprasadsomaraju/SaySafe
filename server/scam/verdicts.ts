@@ -49,8 +49,8 @@ export function maxVerdict(a: Verdict, b: Verdict): Verdict {
  * different families AND at least one of them is a deception family (not just "it mentions a
  * payment" plus "it has a phone number", which an honest plumber's invoice also has).
  */
-export type Family = 'payment' | 'contact' | 'pressure' | 'link' | 'identity' | 'story' | 'charge' | 'secret' | 'intel';
-export const DECEPTION_FAMILIES: ReadonlySet<Family> = new Set(['pressure', 'link', 'identity', 'story', 'charge', 'secret', 'intel']);
+export type Family = 'payment' | 'contact' | 'pressure' | 'link' | 'identity' | 'story' | 'charge' | 'secret' | 'intel' | 'manipulation';
+export const DECEPTION_FAMILIES: ReadonlySet<Family> = new Set(['pressure', 'link', 'identity', 'story', 'charge', 'secret', 'intel', 'manipulation']);
 
 /** Where a finding comes from. Shown to the user next to each finding. */
 export type Basis = 'deterministic_rule' | 'ai_judgement' | 'independently_verified';

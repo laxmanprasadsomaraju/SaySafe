@@ -211,6 +211,9 @@ describe('injection through data the model reads', () => {
 describe('output guard', () => {
   it('flags text that vouches or instructs, allows protective wording', () => {
     for (const bad of ['This message is safe.', "It's genuine.", 'Go ahead and pay.', 'Click the link to verify.', 'I have approved the payment.', 'It is safe to pay.', 'Payment has been captured.']) expect(vouchesOrInstructs(bad)).toBe(true);
+    // Negated disclosures are allowed; the same words asserted, or a "but" that vouches after the disclosure, are not.
+    for (const ok of ["SaySafe can't confirm who sent this or whether a payment is real.", 'SaySafe cannot verify whether this invoice is genuine. Check in the PayPal app.', 'We are unable to confirm that the payment is real.', 'I could not verify if it is legitimate.', 'SaySafe is not able to confirm the sender is real.']) expect(vouchesOrInstructs(ok), ok).toBe(false);
+    for (const bad of ['This payment is real.', 'This payment is safe.', "I can't confirm who sent it, but this payment is real.", 'SaySafe cannot verify the sender; it is safe to pay.', "We can't check the link, so go ahead and pay."]) expect(vouchesOrInstructs(bad), bad).toBe(true);
     for (const ok of ['This message is not safe.', "Please don't click the link.", "Mary, I can't confirm this is really from PayPal. Please don't use its links.", 'Open the PayPal app yourself, or ask your family member.']) expect(vouchesOrInstructs(ok)).toBe(false);
   });
 });
