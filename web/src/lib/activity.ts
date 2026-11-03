@@ -5,7 +5,7 @@ import type { PaymentState } from './api';
 
 export type StatusGroup = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'failed' | 'scan' | 'other';
 export interface ActivityItem {
-  id: string; type: 'payment' | 'scan'; at: string; updatedAt: string; title: string; status: string; state?: string; refundLabel?: string | null; statusGroup: StatusGroup; section?: 'purchases' | 'scans' | 'family' | 'refunds'; example?: boolean;
+  id: string; type: 'payment' | 'scan' | 'record'; source?: 'sample' | 'paypal_sandbox' | 'user_entered' | 'scan'; sourceLabel?: string; evidence?: string | null; at: string; updatedAt: string; title: string; status: string; state?: string; refundLabel?: string | null; statusGroup: StatusGroup; section?: 'purchases' | 'scans' | 'family' | 'refunds'; example?: boolean;
   amountCents: number | null; currency: string | null; merchant: string | null; captured: boolean; webhookConfirmed: boolean; sandbox: boolean;
   approval: { status: string; decidedAt: string | null; reason: string | null } | null; verdict: string | null; sharedWithFamily?: boolean; href: string | null;
 }

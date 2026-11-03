@@ -12,7 +12,7 @@
 import { z } from 'zod';
 import {
   PaymentSearchResult, PaymentMatch, SubscriptionSummary, Subscription, CancelGuideCard, Contact, ManualPayment,
-  PAYPAL_AUTOPAY_URL, DEMO_MEMBERSHIP, PAY_METHODS, type SubscriptionT, type PaymentSearchResultT,
+  PAYPAL_AUTOPAY_URL, DEMO_MEMBERSHIP, PAY_METHODS, SUB_FOCUS, PAYPAL_SEND_MONEY_URL, SEND_MONEY_NOTICE, type SubscriptionT, type PaymentSearchResultT,
 } from '../../../shared/companion';
 
 const Str = (n: number) => z.string().max(n);
@@ -21,7 +21,9 @@ const Scope = z.object({ billingAuthorisation: Str(600), serviceContract: Str(60
 /** UI copy (the server's own labels are kept on the data; these are what the cards say). */
 export const UI_LABEL = {
   manual: 'Recorded by you — not verified',
-  sandbox: 'PayPal Sandbox capture',
+  sandbox: 'Real PayPal Sandbox transaction',
+  sample: 'Sample data',
+  sampleEvidence: 'Illustrative — no PayPal record',
   contact: 'Saved by you — not verified',
   userReported: 'You told SaySafe this is cancelled — not confirmed by the provider',
   dontPayAgain: "Don't pay again until you've checked",
@@ -68,8 +70,26 @@ const RecordsB = z.object({ kind: z.literal('companion_records'), section: z.enu
 /** Demo Membership status. Holds no PayPal status of its own: re-read from the server on every mount. */
 const DemoMembershipB = z.object({ kind: z.literal('demo_membership'), returned: Str(40).nullable().default(null) });
 
-export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB] as const;
-export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership'] as const;
+const SubscriptionsListB = z.object({
+  kind: z.literal('subscriptions_list'), focus: z.enum(SUB_FOCUS), subscriptions: z.array(Subscription).max(100), summary: SubscriptionSummary,
+  highlight: z.object({ mostMonthlyId: Str(60).nullable(), largestChargeId: Str(60).nullable(), nextId: Str(60).nullable() }), demoOffer: z.boolean(),
+});
+/** Send money to a saved contact: choose -> review -> PayPal's own Send money page. SaySafe never sends money. */
+export const SEND_PHASES = ['choose', 'review', 'handoff', 'cancelled'] as const;
+const SendMoneyB = z.object({
+  kind: z.literal('send_money'), query: Str(60).nullable(), contacts: z.array(Contact).max(10), amountCents: z.number().int().positive().max(100_000_000).nullable(), currency: z.string().regex(/^[A-Z]{3}$/),
+  paypalSendUrl: z.literal(PAYPAL_SEND_MONEY_URL), notice: z.literal(SEND_MONEY_NOTICE),
+  phase: z.enum(SEND_PHASES).default('choose'), selectedId: Str(60).nullable().default(null),
+});
+/** First "Try as Mary" visit: what can be tested, and six prompts that work with the sample data. */
+const DemoWelcomeB = z.object({ kind: z.literal('demo_welcome'), prompts: z.array(Str(80)).min(1).max(6) });
+/** Tap-to-try scam checks, labelled "Training example". */
+const TrainingExamplesB = z.object({ kind: z.literal('training_examples'), items: z.array(z.object({ id: Str(40), label: Str(120), howToTest: Str(300), text: Str(600) })).max(5) });
+/** A request failed (server or network): never shown as "no records". Retry sends the same message again. */
+const RetryErrorB = z.object({ kind: z.literal('retry_error'), message: Str(400), retryText: Str(4000), done: z.boolean().default(false) });
+
+export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB] as const;
+export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error'] as const;
 export type CompanionKind = (typeof COMPANION_KINDS)[number];
 export const isCompanionKind = (k: string): k is CompanionKind => (COMPANION_KINDS as readonly string[]).includes(k);
 
@@ -155,7 +175,12 @@ export function nextChargeText(s: SubscriptionT): string {
 }
 export const isDemo = (s: SubscriptionT) => s.source === 'paypal_sandbox_subscription';
 export function sourceText(s: SubscriptionT): string {
-  return isDemo(s) ? 'PayPal sandbox subscription (SaySafe Demo Shop)' : 'Entered by you — not verified';
+  return isDemo(s) ? 'PayPal sandbox subscription (SaySafe Demo Shop)' : s.sample ? 'Sample data — illustrative, not a real subscription' : 'Entered by you — not verified';
+}
+export function managedText(s: SubscriptionT): string {
+  return s.managementMethod === 'paypal_api' ? 'Managed here: SaySafe can cancel it through PayPal after you tap to confirm'
+    : s.managementMethod === 'official_link' ? `Cancel with ${s.guide?.name ?? s.merchant} on their official page (link checked)`
+      : `Cancel with ${s.merchant} directly (no checked link — general steps)`;
 }
 
 /** Short spoken version: the first one or two sentences. The screen carries the rest. */
@@ -170,5 +195,7 @@ export const COMPANION_CHIPS = ['Did I already pay someone?', 'What do I pay eve
 /** Text that should go to the companion instead of the Demo Shop "payments" shortcut. */
 export function looksCompanion(text: string): boolean {
   const s = text.toLowerCase();
-  return /\b(have i|did i)\b.{0,30}\bpa(id|y)\b/.test(s) || /\bsubscriptions?\b|\bevery month\b|\bmonthly\b|\bmembership\b|\btrusted contacts?\b|'s (phone |mobile )?(number|email)\b|\bcancel (my )?\w+/.test(s) || /\b(last|latest) payment (to|for)\s+\w/.test(s);
+  return /\b(have i|did i)\b.{0,30}\bpa(id|y)\b/.test(s) || /\bsubscriptions?\b|\bevery month\b|\bmonthly\b|\bmembership\b|\bcontacts?\b|'s (phone |mobile )?(number|email)\b|\bcancel (my )?\w+/.test(s)
+    || /\b(last|latest|most recent) (payment|purchase|transaction)\b/.test(s) || /\b(costs? the most|most expensive|coming out|due next)\b/.test(s)
+    || /\b(send|transfer)\b.{0,30}\b(money|€|\d)|\b(send|pay) (my )?[a-z]+ €?\d/.test(s) || /\bwho('s| is) my\b/.test(s) || /^find [A-Z]/.test(text);
 }

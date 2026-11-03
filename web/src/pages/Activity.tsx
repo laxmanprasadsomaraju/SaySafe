@@ -22,7 +22,7 @@ const SECTIONS: { id: NonNullable<ActivityItem['section']>; label: string }[] = 
 
 function Row({ it, family }: { it: ActivityItem; family: boolean }) {
   const nav = useNavigate();
-  const st = it.type === 'scan' ? { label: verdictLabel(it.status), tone: (it.status === 'suspicious' ? 'danger' : 'muted') as Tone } : shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed, approval: it.approval?.status });
+  const st = it.type === 'scan' ? { label: verdictLabel(it.status), tone: (it.status === 'suspicious' ? 'danger' : 'muted') as Tone } : it.type === 'record' ? { label: 'Payment record', tone: 'muted' as Tone } : shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed, approval: it.approval?.status });
   const Icon = it.type === 'scan' ? ShieldAlert : Receipt;
   const body = (
     <>
@@ -32,13 +32,15 @@ function Row({ it, family }: { it: ActivityItem; family: boolean }) {
         <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-base">
           {it.amountCents !== null && <span className="font-bold">{money(it.amountCents, it.currency)}</span>}
           <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE_CLS[st.tone]}`}>{st.label}</span>
-          {'extra' in st && st.extra && <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE_CLS[it.webhookConfirmed ? 'ok' : 'pending']}`}>{st.extra}</span>}
+          {'extra' in st && st.extra && !it.example && <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-sm font-bold ${TONE_CLS[it.webhookConfirmed ? 'ok' : 'pending']}`}>{st.extra}</span>}
           <span className="text-ink-soft">{when(it.at)}</span>
         </span>
         <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-soft">
           {'detail' in st && st.detail && <span className="font-bold text-navy">{st.detail}</span>}
-          {it.example && <span className="inline-flex rounded-full bg-amber-soft text-amber border border-amber/30 px-2 font-bold">Example data</span>}
-          {it.sandbox && <span>PayPal Sandbox · no real money</span>}
+          {it.example && <span className="inline-flex rounded-full bg-amber-soft text-amber border border-amber/30 px-2 font-bold" data-testid="sample-badge">Sample data</span>}
+          {!it.example && it.sourceLabel && it.type !== 'scan' && <span className="font-bold text-navy">{it.sourceLabel}</span>}
+          {it.evidence && <span>Evidence: {it.evidence}</span>}
+          {it.sandbox && !it.example && <span>PayPal Sandbox · no real money</span>}
           {it.captured && <span className="inline-flex items-center gap-1"><BadgeCheck className="size-4 text-teal" aria-hidden />Captured at PayPal</span>}
           {it.approval && it.approval.status !== 'pending' && <span className="inline-flex items-center gap-1"><Users className="size-4" aria-hidden />Family {it.approval.status}</span>}
           {it.approval?.status === 'pending' && <span className="inline-flex items-center gap-1"><Users className="size-4" aria-hidden />Waiting for family</span>}
@@ -89,7 +91,8 @@ export default function Activity() {
   return (
     <Layout mode={family ? 'family' : 'elder'}>
       <h1 className="text-[length:var(--text-title)] md:text-[length:var(--text-hero)]">Activity</h1>
-      <p className="mt-1 text-ink-soft">{family ? 'Purchases in the household you help with, and the scam checks they shared with you.' : 'Your purchases and scam checks. Tap a purchase to see its receipt and PayPal timeline.'}</p>
+      <p className="mt-1 text-ink-soft">{family ? 'Purchases in the household you help with, and the scam checks they shared with you.' : 'Your purchases, payment records and scam checks. Tap a purchase to see its receipt and PayPal timeline.'}</p>
+      <p className="mt-1 text-base text-ink-soft">Labels: <span className="font-bold text-amber">Sample data</span> = illustrative, no PayPal record · <span className="font-bold text-navy">Real PayPal Sandbox transaction</span> = made in this app (no real money){family ? '' : ' · Recorded by you = only what you typed'}.</p>
 
       <form role="search" className="mt-5 flex gap-2" onSubmit={(e) => { e.preventDefault(); setApplied(q.trim()); }}>
         <label htmlFor="act-q" className="sr-only">Search activity</label>
@@ -116,7 +119,7 @@ export default function Activity() {
       )}
 
       <p ref={live} role="status" className="mt-4 text-base text-ink-soft">{busy && page === 1 ? 'Loading…' : `${total} ${total === 1 ? 'item' : 'items'}${filtered ? ' match' : ''}`}{filtered && <> · <button type="button" onClick={clear} className="font-bold text-teal underline underline-offset-4 min-h-11">Clear filters</button></>}</p>
-      {err && <div className="mt-3"><Notice tone="danger" title={err} /></div>}
+      {err && <div className="mt-3" role="alert"><Notice tone="danger" title={`Couldn’t load your activity: ${err}`} /><p className="mt-1 text-base text-ink-soft">This is an error, not an empty history.</p><button type="button" onClick={() => run(1)} className="mt-2 min-h-12 px-5 rounded-full border-2 border-line bg-paper font-bold hover:border-teal">Retry</button></div>}
 
       {!busy && items.length === 0 && !err && (
         <Card className="mt-3 p-6">

@@ -4,7 +4,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Volume2, Accessibility, Languages, ShoppingBag, Users, Lock, LifeBuoy, BarChart3, ChevronRight, MessageCircle, Smartphone, Cloud } from 'lucide-react';
+import { Volume2, Accessibility, Languages, ShoppingBag, Users, Lock, LifeBuoy, BarChart3, ChevronRight, MessageCircle, Smartphone, Cloud, RotateCcw } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Card } from '../components/ui';
 import { VoiceSettings, LanguageSetting, MuteSwitch } from '../components/VoiceBar';
@@ -108,6 +108,63 @@ function CompanionData() {
   );
 }
 
+/** "Reset Mary's demo": puts the sample data back. Real PayPal Sandbox payments and records you typed are kept. */
+function DemoTools() {
+  const nav = useNavigate();
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const reset = async () => {
+    setBusy('reset'); setErr(null);
+    try {
+      const r = await api<{ seeded: { transactions: number; records: number; subscriptions: number; contacts: number } }>('/api/demo/reset', { body: {} });
+      try { sessionStorage.removeItem(THREAD_KEY); } catch { /* */ }
+      setMsg(`Sample data restored: ${r.seeded.transactions} purchases, ${r.seeded.records} payment records, ${r.seeded.subscriptions} subscriptions, ${r.seeded.contacts} contacts.`); setAsk(false);
+    } catch (e: any) { setErr(e.message); } finally { setBusy(null); }
+  };
+  return (
+    <Section id="demo-h" icon={RotateCcw} title="Mary’s demo" where={<Where account />}>
+      <p className="text-base text-ink-soft">This account has sample data, marked “Sample data” everywhere. It is yours alone: other visitors can’t see it.</p>
+      <ul className="mt-2 divide-y divide-line">
+        <li><Link className={linkRow} to="/assistant?welcome=1">Things to try (welcome)<ChevronRight className="size-5" aria-hidden /></Link></li>
+        <li><Link className={linkRow} to="/help#try-as-mary">Try as Mary: walkthrough<ChevronRight className="size-5" aria-hidden /></Link></li>
+      </ul>
+      {!ask ? <button type="button" onClick={() => { setAsk(true); setMsg(null); }} className="mt-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal" data-testid="reset-demo">Reset Mary’s demo</button> : (
+        <div className="mt-2 rounded-2xl border-2 border-teal/50 p-3" role="group" aria-label="Reset Mary’s demo?">
+          <p className="font-bold">Put the sample data back as it was?</p>
+          <p className="mt-1 text-base text-ink-soft">Sample purchases, records, subscriptions, contacts and family reviews are replaced. Your real PayPal Sandbox payments and anything you typed yourself are kept. The conversation is cleared.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => void reset()} disabled={busy !== null} className="min-h-12 px-4 rounded-full bg-teal text-white font-bold disabled:opacity-60">{busy === 'reset' ? 'Resetting…' : 'Yes, reset the sample data'}</button>
+            <button type="button" onClick={() => setAsk(false)} className="min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal">Keep it</button>
+          </div>
+        </div>
+      )}
+      {msg && <p role="status" className="mt-2 font-bold">{msg} <button type="button" onClick={() => nav('/assistant?welcome=1')} className="font-bold text-teal underline underline-offset-4 min-h-11">Open the Assistant</button></p>}
+      {err && <p role="alert" className="mt-2 text-danger font-bold">{err}</p>}
+    </Section>
+  );
+}
+
+/** "Try as Alex too": a family session for this household in this browser, so a judge can approve a REAL request. */
+export function TryAsAlex({ compact = false }: { compact?: boolean }) {
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const go = async () => {
+    setBusy(true); setErr(null);
+    try { await api('/api/demo/alex', { body: {} }); nav('/family/assistant'); }
+    catch (e: any) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <div className={compact ? '' : 'mt-3 border-t border-line pt-3'}>
+      <button type="button" onClick={() => void go()} disabled={busy} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep font-bold hover:bg-teal-soft disabled:opacity-60" data-testid="try-as-alex">{busy ? 'Opening Alex’s view…' : 'Try as Alex too'}</button>
+      <p className="mt-1 text-base text-ink-soft">Opens Alex’s family view for this same account in this browser, so you can approve or decline a real request. Mary can’t approve her own. Come back with Profile › Back to Mary, or open /home.</p>
+      {err && <p role="alert" className="mt-1 text-danger font-bold">{err}</p>}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { role, name, loading } = useShellRole();
   const nav = useNavigate();
@@ -145,6 +202,7 @@ export default function Profile() {
             <p className="mt-1 text-base text-ink-soft">Beta: replies only. Screens stay in English.</p>
           </Section>
         )}
+        {!family && <DemoTools />}
         {!family && <ShoppingSummary />}
         <Section id="family-h" icon={Users} title="Trusted family" where={<Where account />}>
           {family ? (
@@ -155,6 +213,7 @@ export default function Profile() {
                 <li><Link className={linkRow} to="/family/assistant"><span className="inline-flex items-center gap-2"><MessageCircle className="size-5 text-teal" aria-hidden />Assistant</span><ChevronRight className="size-5" aria-hidden /></Link></li>
                 {cfg?.insights !== false && <li><Link className={linkRow} to="/family/insights"><span className="inline-flex items-center gap-2"><BarChart3 className="size-5 text-teal" aria-hidden />Safety insights</span><ChevronRight className="size-5" aria-hidden /></Link></li>}
                 {cfg?.insightsDashboard && <li><Link className={linkRow} to="/family/insights/studio">Insights: AG Studio view<ChevronRight className="size-5" aria-hidden /></Link></li>}
+                <li><Link className={linkRow} to="/home">Back to Mary (if you’re trying the demo)<ChevronRight className="size-5" aria-hidden /></Link></li>
               </ul>
             </>
           ) : circle === null ? <p className="text-ink-soft">Loading…</p> : (
@@ -162,6 +221,7 @@ export default function Profile() {
               <p className="font-bold">{circle.active.length ? `Connected: ${circle.active.map((a) => a.name).join(', ')}` : 'No family member connected yet.'}</p>
               <p className="mt-1 text-base text-ink-soft">Above {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(circle.policy.thresholdCents / 100)} they review first.{circle.pendingInvites ? ` ${circle.pendingInvites} unused invite code${circle.pendingInvites > 1 ? 's' : ''}.` : ''}</p>
               <Link to="/help" className={linkRow}>{circle.active.length ? 'Family help and invite codes' : 'Invite a family member'}<ChevronRight className="size-5" aria-hidden /></Link>
+              <TryAsAlex />
             </>
           )}
         </Section>
@@ -181,6 +241,7 @@ export default function Profile() {
           <ul className="divide-y divide-line">
             {!family && <li><Link className={linkRow} to="/help">Get trusted help<ChevronRight className="size-5" aria-hidden /></Link></li>}
             <li><Link className={linkRow} to="/guide">How to use SaySafe<ChevronRight className="size-5" aria-hidden /></Link></li>
+            <li><Link className={linkRow} to="/" data-testid="profile-website-link">SaySafe website (you stay signed in)<ChevronRight className="size-5" aria-hidden /></Link></li>
             <li><a className={linkRow} href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Source code and docs<span className="sr-only"> (opens GitHub in a new tab)</span><ChevronRight className="size-5" aria-hidden /></a></li>
           </ul>
         </Section>

@@ -190,7 +190,7 @@ export default function Discover() {
                       {p.rating && <p className="mt-2 flex items-start gap-1.5 text-sm text-ink-soft"><Star className="size-4 shrink-0 mt-0.5 fill-amber text-amber" aria-hidden />Listed rating {p.rating.value.toFixed(1)} out of 5 from {p.rating.count} ratings (as provided by Channel3; no reviews checked)</p>}
                       <div className="mt-4 flex flex-col gap-2">
                         <a href={o.url} target="_blank" rel="noopener noreferrer nofollow" className="inline-flex items-center justify-center gap-2 min-h-12 rounded-full bg-navy text-white px-4 font-bold hover:bg-teal-deep"
-                          aria-label={`View ${p.title} at ${o.retailer}, ${money(o.price, o.currency)}. Opens the shop’s website in a new tab`}>
+                          aria-label={`View at ${o.retailer}: ${p.title}, ${money(o.price, o.currency)}. Opens the shop’s website in a new tab`}>
                           View at {o.retailer}<ExternalLink className="size-5" aria-hidden />
                         </a>
                         <div className="flex flex-wrap items-center justify-between gap-2">

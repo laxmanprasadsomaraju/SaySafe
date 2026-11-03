@@ -21,12 +21,13 @@ export const SHORTCUTS = [
 export function ActivityRow({ it }: { it: ActivityItem }) {
   const nav = useNavigate();
   const st = shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed, approval: it.approval?.status });
-  const label = it.type === 'scan' ? `Scam check · ${verdictLabel(it.status)}` : `${money(it.amountCents, it.currency)} · ${st.detail && st.label === 'Pending' ? st.detail : st.label}`;
+  const label = it.type === 'scan' ? `Scam check · ${verdictLabel(it.status)}` : it.type === 'record' ? `${money(it.amountCents, it.currency)} · ${it.example ? 'Sample record' : 'Recorded by you'}` : `${money(it.amountCents, it.currency)} · ${st.detail && st.label === 'Pending' ? st.detail : st.label}`;
   const inner = (
     <>
       <span className="min-w-0 flex-1">
         <span className="block font-bold break-words">{it.title}</span>
         <span className="block text-base text-ink-soft">{label} · {when(it.at)}</span>
+        {it.example && <span className="mt-1 inline-flex rounded-xl border border-amber/40 bg-amber-soft px-2 text-sm font-bold text-amber">Sample data</span>}
       </span>
       {it.href && <ChevronRight className="size-6 text-teal shrink-0" aria-hidden />}
     </>
@@ -40,7 +41,8 @@ export function ActivityRow({ it }: { it: ActivityItem }) {
 const PRIORITY = ['FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'FAMILY_APPROVAL_PENDING'];
 export function mostRelevant(items: ActivityItem[]): ActivityItem | null {
   const rank = (i: ActivityItem) => { const k = PRIORITY.indexOf(i.state ?? i.status); return k < 0 ? PRIORITY.length : k; };
-  return [...items].filter((i) => i.type === 'payment' && !(i.approval?.status === 'expired')).sort((a, b) => rank(a) - rank(b))[0] ?? null;
+  // Sample rows are never "Needs you": they can't be paid or approved.
+  return [...items].filter((i) => i.type === 'payment' && !i.example && !(i.approval?.status === 'expired')).sort((a, b) => rank(a) - rank(b))[0] ?? null;
 }
 
 export default function Home() {
@@ -48,10 +50,14 @@ export default function Home() {
   const nav = useNavigate();
   const [pending, setPending] = useState<ActivityItem[]>([]);
   const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (!me) return;
-    fetchActivity({ status: 'pending', limit: 10 }).then((r) => { setPending(r.items); setCount(r.total); }).catch(() => {});
-  }, [me]);
+  const [recent, setRecent] = useState<ActivityItem[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const loadAll = () => {
+    setErr(null);
+    fetchActivity({ status: 'pending', limit: 10 }).then((r) => { setPending(r.items.filter((i) => !i.example)); setCount(r.items.filter((i) => !i.example).length); }).catch(() => {});
+    fetchActivity({ limit: 4 }).then((r) => setRecent(r.items)).catch((e) => setErr(e.message));
+  };
+  useEffect(() => { if (me) loadAll(); }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!me) return <Layout><p>Loading…</p></Layout>;
   const top = mostRelevant(pending);
@@ -83,6 +89,17 @@ export default function Home() {
           {count > 1 && <Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">{count - 1} more in Activity</Link>}
         </Card>
       )}
+
+      <Card className="mt-6 p-5" aria-labelledby="recent-h">
+        <h2 id="recent-h" className="text-xl">Recent activity</h2>
+        {err ? (
+          <div role="alert" className="mt-2"><p className="font-bold text-danger">Couldn’t load your activity: {err}</p><button type="button" onClick={loadAll} className="mt-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal">Retry</button></div>
+        ) : recent === null ? <p className="mt-2 text-ink-soft">Loading…</p> : recent.length === 0 ? <p className="mt-2 text-ink-soft">Nothing yet. When you check a message or buy something, it shows up here.</p> : (
+          <ul className="divide-y divide-line">{recent.map((it) => <li key={`${it.type}-${it.id}`}><ActivityRow it={it} /></li>)}</ul>
+        )}
+        {recent && recent.some((i) => i.example) && <p className="mt-2 text-sm text-ink-soft">Items marked “Sample data” are illustrative examples for the demo: no PayPal record, nothing can be paid.</p>}
+        <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">See all activity</Link><Link to="/assistant?welcome=1" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">Things to try</Link></div>
+      </Card>
 
       <Link to="/assistant" className="mt-6 flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-6 hover:bg-teal-deep shadow-[var(--shadow-lift)]">
         <Mic className="size-6" aria-hidden />Talk or type to SaySafe

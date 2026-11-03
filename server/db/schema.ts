@@ -53,6 +53,8 @@ CREATE TABLE IF NOT EXISTS payment_requests (
   payee_name TEXT,
   idempotency_key TEXT UNIQUE,
   version INTEGER NOT NULL DEFAULT 0,
+  -- 1 = deterministic "Try as Mary" sample row (no PayPal ids, never actionable). See server/demo/seed.ts.
+  example INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -131,6 +133,7 @@ CREATE TABLE IF NOT EXISTS companion_payments (
   paid_on TEXT NOT NULL,
   pay_method TEXT NOT NULL,
   memo TEXT CHECK (memo IS NULL OR length(memo) <= 200),
+  example INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -159,6 +162,7 @@ CREATE TABLE IF NOT EXISTS companion_subscriptions (
   webhook_verified INTEGER NOT NULL DEFAULT 0,
   cancel_state TEXT NOT NULL DEFAULT 'none' CHECK (cancel_state IN ('none','in_progress','retry_needed','confirmed')),
   cancel_error TEXT,
+  example INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   -- provider_confirmed is only ever set for the PayPal subscription, by the server, after PayPal answered.
@@ -183,10 +187,18 @@ CREATE TABLE IF NOT EXISTS companion_contacts (
   phone TEXT,
   email TEXT,
   memo TEXT CHECK (memo IS NULL OR length(memo) <= 200),
+  example INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE INDEX IF NOT EXISTS idx_companion_contacts_hh ON companion_contacts(household_id);
+-- One row per demo household that received the "Try as Mary" sample set (seed version + the time it was anchored to).
+CREATE TABLE IF NOT EXISTS demo_seeds (
+  household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
+  seed_version INTEGER NOT NULL,
+  anchored_at TEXT NOT NULL,
+  seeded_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   household_id TEXT,
@@ -199,8 +211,26 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `;
 
 /** Every table the app owns, in an order that respects foreign keys (parents first). Used by backup/migration scripts. */
-export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'companion_payments', 'companion_subscriptions', 'companion_contacts', 'companion_cancel_tokens', 'audit_log'] as const;
+export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'companion_payments', 'companion_subscriptions', 'companion_contacts', 'companion_cancel_tokens', 'demo_seeds', 'audit_log'] as const;
+
+/** Columns added after the first hosted deploy. CREATE TABLE IF NOT EXISTS never alters an existing table, so add them here. */
+export const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [
+  ['payment_requests', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+  ['companion_payments', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+  ['companion_subscriptions', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+  ['companion_contacts', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+];
+
+export function migrateSchema(db: Db) {
+  for (const [table, column, ddl] of ADDED_COLUMNS) {
+    const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name?: string; NAME?: string }[]).map((c) => String(c.name ?? c.NAME ?? '').toLowerCase());
+    if (cols.includes(column)) continue;
+    try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`); }
+    catch (e) { if (!/duplicate column/i.test(String((e as Error)?.message))) throw e; }
+  }
+}
 
 export function initSchema(db: Db) {
   db.exec(SCHEMA_SQL);
+  migrateSchema(db);
 }

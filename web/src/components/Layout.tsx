@@ -6,7 +6,7 @@
  */
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { House, MessageCircle, ListChecks, UserRound, ArrowLeft } from 'lucide-react';
+import { House, MessageCircle, ListChecks, UserRound, ArrowLeft, Globe } from 'lucide-react';
 import { VoiceBar } from './VoiceBar';
 import { useHandoff } from '../lib/handoff';
 import { rememberRole } from '../lib/role';
@@ -120,7 +120,11 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
       <header className="border-b border-line bg-ivory/95 backdrop-blur sticky top-0 z-20">
         <div className={`mx-auto ${width} px-4 sm:px-5 py-2.5 flex items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home" className="min-h-12 inline-flex items-center"><Logo /></Link>
-          {showNav && <nav aria-label="Main" className="hidden md:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
+          <div className="flex items-center gap-1">
+            {showNav && <nav aria-label="Main" className="hidden md:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
+            {/* Back to the public website (the landing page) without signing out. */}
+            {app && <Link to="/" className="inline-flex items-center gap-1.5 min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="website-link"><Globe className="size-5" aria-hidden /><span className="max-[359px]:sr-only">SaySafe website</span></Link>}
+          </div>
         </div>
       </header>
       {showBack && (

@@ -23,6 +23,8 @@ export interface Candidate {
   /** YYYY-MM-DD */
   date: string;
   evidence: PaymentMatchT['evidence'];
+  /** "Try as Mary" sample row. */
+  sample?: boolean;
 }
 
 export interface SearchInput {
@@ -97,6 +99,7 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
   for (const c of cands) amountCount.set(`${c.currency}:${c.amountCents}`, (amountCount.get(`${c.currency}:${c.amountCents}`) ?? 0) + 1);
 
   let excludedShop = 0;
+  const byItem = new Set<string>();
   const out: PaymentMatchT[] = [];
   for (const c of cands) {
     const reasons: string[] = [];
@@ -107,10 +110,18 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
       if (c.source === 'paypal_sandbox') {
         // HARD RULE: never match a shop payment to a person. Only a query about the shop or its items may match.
         if (!queryIsAboutShop(q!, c)) { excludedShop++; continue; }
-        reasons.push(`Paid to ${DEMO_SHOP_RECIPIENT} in this app`);
+        reasons.push(c.sample ? `Sample ${DEMO_SHOP_RECIPIENT} purchase (illustrative)` : `Paid to ${DEMO_SHOP_RECIPIENT} in this app`);
+        if (qTokens.some((t) => !SHOP_WORDS.has(t))) byItem.add(c.id);
         parts.push({ w: 0.5, s: 1 });
       } else {
         const nm = nameMatch(q!, c.recipient);
+        // Not the payee's name: the record's own note may name the item ("Microwave" bought from Currys).
+        const desc = tokens(c.description ?? '');
+        if ((nm.score < 0.7 || nm.matched.length === 0) && qTokens.length && qTokens.every((t) => desc.some((d) => tokenSimilarity(t, d) >= 0.85))) {
+          reasons.push(`Your note says "${c.description}" (paid to ${c.recipient})`);
+          byItem.add(c.id);
+          parts.push({ w: 0.5, s: 0.9 });
+        } else {
         if (nm.score < 0.7 || nm.matched.length === 0) continue;
         if (nm.unmatchedQuery.length) {
           // "John Murphy" asked, record says "John Smith": the surname contradicts. Not the same person.
@@ -123,6 +134,7 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
         reasons.push(nm.score === 1 && !nm.unmatchedQuery.length ? `Name matches "${c.recipient}"` : `Name is similar to "${c.recipient}"`);
         const penalty = nm.unmatchedQuery.length ? 0.6 : 1;
         parts.push({ w: 0.5, s: nm.score * penalty });
+        }
       }
     }
 
@@ -160,10 +172,12 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
       const dup = cands.find((o) => o.id !== c.id && o.source === 'manual' && o.currency === c.currency && o.amountCents === c.amountCents
         && normName(o.recipient) === normName(c.recipient) && Math.abs(toDay(o.date) - toDay(c.date)) <= DATE_TOLERANCE_DAYS);
       if (dup) caveats.push(`Possible duplicate: you recorded a similar payment on ${fmtDate(dup.date)}.`);
-      caveats.push(`${COMPANION_LABELS.manual}. SaySafe can't see whether the money arrived.`);
+      caveats.push(c.sample ? 'Sample data: an illustrative record, not a real payment.' : `${COMPANION_LABELS.manual}. SaySafe can't see whether the money arrived.`);
+    } else if (c.sample) {
+      caveats.push('Sample data: illustrative, there is no PayPal record for it.');
     }
     if (score < 0.45) continue;
-    out.push({ id: c.id, source: c.source, recipient: c.recipient, description: c.description, amountCents: c.amountCents, currency: c.currency, date: c.date, score: Math.round(score * 100) / 100, matchReasons: reasons, caveats, evidence: c.evidence });
+    out.push({ id: c.id, source: c.source, recipient: c.recipient, description: c.description, amountCents: c.amountCents, currency: c.currency, date: c.date, score: Math.round(score * 100) / 100, matchReasons: reasons, caveats, evidence: c.evidence, ...(c.sample ? { sample: true } : {}) });
   }
   out.sort((a, b) => b.score - a.score || b.date.localeCompare(a.date));
   const matches = out.slice(0, 10);
@@ -173,12 +187,16 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
     const people = new Set(matches.filter((m) => m.source === 'manual').map((m) => normName(m.recipient)));
     if (people.size > 1) notes.push(`More than one person matches "${q}". Check which one you mean.`);
   }
+  const itemHits = matches.filter((m) => byItem.has(m.id));
+  if (itemHits.length > 1 && new Set(itemHits.map((m) => normName(m.recipient))).size > 1) {
+    notes.push(`These look like separate purchases of "${q}" from ${[...new Set(itemHits.map((m) => m.recipient))].join(' and ')}. Check you meant to buy more than one.`);
+  }
   if (excludedShop > 0) notes.push(`${DEMO_SHOP_RECIPIENT} payments are not shown: they are shop purchases, not payments to ${q}.`);
   notes.push('SaySafe only knows Demo Shop payments made in this app and records you typed in. It cannot see your bank or your PayPal wallet.');
 
-  const who = q ?? 'them';
+  const who = itemHits.length && itemHits.length === matches.length ? 'the shop' : q ?? 'them';
   let guidance: string;
-  if (!matches.length) guidance = `I couldn't find a record of paying ${who}. That doesn't mean you haven't paid. Check your bank statement, or ask ${who}, before you pay.`;
+  if (!matches.length) guidance = `I couldn't find a record of paying ${q ?? 'them'}. That doesn't mean you haven't paid. Check your bank statement, or ask ${who}, before you pay.`;
   else if (matches.every((m) => m.source === 'paypal_sandbox')) guidance = `These are ${DEMO_SHOP_RECIPIENT} payments made in this app (PayPal sandbox). They are shop purchases, not payments to a person.`;
   else guidance = `I found ${matches.length === 1 ? 'a record' : 'records'} that may match. A record you typed is not proof the money arrived. Don't pay again until you've checked with ${who}.`;
 

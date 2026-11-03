@@ -13,7 +13,14 @@ export const COMPANION_LABELS = {
   sandbox: 'SaySafe Demo Shop (PayPal sandbox)',
   prototype: 'Prototype: you enter these yourself. SaySafe cannot see your bank or cancel anything for you.',
   confirmed: 'You confirmed',
+  sample: 'Sample data — illustrative, not a real record',
+  sampleEvidence: 'Illustrative — no PayPal record',
+  realSandbox: 'Real PayPal Sandbox transaction',
 } as const;
+
+/** PayPal's own public "Send money" page (HTTP 200, title "Send Money Online Instantly | PayPal IE", checked 2026-11-03). */
+export const PAYPAL_SEND_MONEY_URL = 'https://www.paypal.com/ie/digital-wallet/send-receive-money/send-money';
+export const SEND_MONEY_NOTICE = 'Nothing is sent by SaySafe. SaySafe can’t move money from your PayPal account to a person: you send it yourself in PayPal, signed in to PayPal.';
 
 export const DEMO_SHOP_RECIPIENT = 'SaySafe Demo Shop';
 export const MAX_CONTACTS = 50;
@@ -51,6 +58,8 @@ export const ManualPayment = z.object({
   method: z.enum(PAY_METHODS),
   note: z.string().nullable(),
   label: z.literal(COMPANION_LABELS.manual),
+  /** Deterministic "Try as Mary" sample row (shown with a "Sample data" badge). */
+  sample: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -69,6 +78,8 @@ export type PaymentSearchQueryT = z.infer<typeof PaymentSearchQuery>;
 export const PaymentEvidence = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('paypal_sandbox'), captureStatus: z.string().nullable(), webhookVerified: z.boolean(), orderState: z.string() }),
   z.object({ kind: z.literal('manual'), label: z.literal(COMPANION_LABELS.manual), method: z.enum(PAY_METHODS) }),
+  /** "Try as Mary" sample data: never a real payment. basis = which kind of record it illustrates. */
+  z.object({ kind: z.literal('sample'), label: z.literal(COMPANION_LABELS.sampleEvidence), basis: z.enum(['shop', 'record']), method: z.enum(PAY_METHODS).nullable(), orderState: z.string().nullable() }),
 ]);
 
 export const PaymentMatch = z.object({
@@ -83,6 +94,7 @@ export const PaymentMatch = z.object({
   matchReasons: z.array(z.string()),
   caveats: z.array(z.string()),
   evidence: PaymentEvidence,
+  sample: z.boolean().optional(),
 });
 export type PaymentMatchT = z.infer<typeof PaymentMatch>;
 
@@ -199,6 +211,10 @@ export const Subscription = z.object({
   /** Set when the user chose "Stop tracking". Not the same as cancelled. */
   stoppedTrackingAt: z.string().nullable(),
   guide: z.object({ id: z.string(), name: z.string(), url: z.string().url() }).nullable(),
+  /** How it is managed: the merchant's checked official page, general steps (no checked link), or the PayPal API (Demo Membership). */
+  managementMethod: z.enum(['official_link', 'generic_steps', 'paypal_api']).optional(),
+  category: z.string().nullable().optional(),
+  sample: z.boolean().optional(),
   label: z.literal(COMPANION_LABELS.prototype),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -234,13 +250,15 @@ export const Contact = z.object({
   email: z.string().nullable(),
   note: z.string().nullable(),
   label: z.literal(COMPANION_LABELS.contact),
+  sample: z.boolean().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type ContactT = z.infer<typeof Contact>;
 
 // ---------- Assistant intents + cards ----------
-export const COMPANION_ACTIONS = ['payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup'] as const;
+export const COMPANION_ACTIONS = ['payment_search', 'last_payment', 'monthly_costs', 'subscription_help', 'contact_lookup', 'subscription_list', 'send_money'] as const;
+export const SUB_FOCUS = ['all', 'most', 'next'] as const;
 export type CompanionAction = (typeof COMPANION_ACTIONS)[number];
 
 /** What the AI may extract. It only names parameters: the server runs the query on the user's own records. */
@@ -252,8 +270,14 @@ export const CompanionIntentParams = z.object({
   merchant: z.string().trim().max(80).nullable().optional().catch(null),
   contact_name: z.string().trim().max(60).nullable().optional().catch(null),
   relation: z.string().trim().max(40).nullable().optional().catch(null),
+  /** subscription_list: all, the most expensive, or the next to be charged. */
+  focus: z.enum(SUB_FOCUS).nullable().optional().catch(null),
+  /** subscription_help: a kind of subscription ("streaming") when no company was named. */
+  category: z.string().trim().max(40).nullable().optional().catch(null),
+  /** contact_lookup: list every saved contact. */
+  list_all: z.boolean().nullable().optional().catch(null),
 });
-export const COMPANION_PARAM_KEYS = ['recipient', 'amount', 'date_hint', 'merchant', 'contact_name', 'relation'] as const;
+export const COMPANION_PARAM_KEYS = ['recipient', 'amount', 'date_hint', 'merchant', 'contact_name', 'relation', 'focus', 'category', 'list_all'] as const;
 export type CompanionIntentParamsT = z.infer<typeof CompanionIntentParams>;
 
 export const CancelGuideCard = z.object({ id: z.string(), name: z.string(), url: z.string().url().refine((u) => u.startsWith('https://')), steps: z.array(z.string()), note: z.string().nullable(), verifiedOn: z.string() });
@@ -279,6 +303,33 @@ export const CompanionCard = z.discriminatedUnion('kind', [
     cancellationScope: z.object({ billingAuthorisation: z.string(), serviceContract: z.string() }),
   }),
   z.object({ kind: z.literal('contact_card'), contacts: z.array(Contact), query: z.string().nullable(), advice: z.string() }),
+  /** "Show my subscriptions" / "Which costs the most?" / "What's coming out next?" — from her own records. */
+  z.object({
+    kind: z.literal('subscriptions_list'), focus: z.enum(SUB_FOCUS), subscriptions: z.array(Subscription), summary: SubscriptionSummary,
+    highlight: z.object({ mostMonthlyId: z.string().nullable(), largestChargeId: z.string().nullable(), nextId: z.string().nullable() }),
+    demoOffer: z.boolean(),
+  }),
+  /** "Send Alex €50": choose the saved contact, review, then PayPal's own Send money page. SaySafe never sends money. */
+  z.object({
+    kind: z.literal('send_money'), query: z.string().nullable(), contacts: z.array(Contact), amountCents: z.number().int().positive().nullable(), currency: z.string(),
+    paypalSendUrl: z.literal(PAYPAL_SEND_MONEY_URL), notice: z.literal(SEND_MONEY_NOTICE),
+  }),
   z.object({ kind: z.literal('companion_sign_in'), message: z.string() }),
 ]);
 export type CompanionCardT = z.infer<typeof CompanionCard>;
+
+// ---------- Subscription kinds (for "cancel my streaming subscription") ----------
+export const SUB_CATEGORIES: { id: string; words: RegExp; merchants: RegExp }[] = [
+  { id: 'streaming', words: /\b(streaming|tv|television|films?|movies?|box ?sets?|video)\b/i, merchants: /\b(netflix|disney|now ?tv|^now$|apple tv|prime video|paramount|sky)\b/i },
+  { id: 'music', words: /\b(music|songs?|spotify)\b/i, merchants: /\b(spotify|apple music|deezer|tidal|youtube music)\b/i },
+  { id: 'news', words: /\b(news|newspaper|paper)\b/i, merchants: /\b(irish times|irish independent|guardian|times|telegraph|examiner)\b/i },
+  { id: 'shopping', words: /\b(shopping|delivery)\b/i, merchants: /\b(amazon|prime)\b/i },
+];
+/** The kind of a merchant's subscription, from its name only. */
+export function categoryOf(merchant: string): string | null {
+  return SUB_CATEGORIES.find((c) => c.merchants.test(merchant))?.id ?? null;
+}
+/** A kind of subscription named in a request ("my streaming subscription"), if any. */
+export function categoryIn(text: string): string | null {
+  return SUB_CATEGORIES.find((c) => c.words.test(text))?.id ?? null;
+}

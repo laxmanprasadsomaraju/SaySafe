@@ -12,7 +12,7 @@ import { markPayPalReturn } from './thread';
 import { speech } from '../lib/voice';
 import { paymentLabel, verdictLabel, money as moneyCents, when, fetchActivity, shortStatus, truncateRef, TONE_CLS, type Tone } from '../lib/activity';
 import { shortTitle } from '../../../shared/shopping';
-import { COMPANION_REGISTRY } from './companionCards';
+import { COMPANION_REGISTRY, SampleBadge } from './companionCards';
 import { UI_LABEL } from './companion';
 
 export interface BlockActions {
@@ -32,6 +32,10 @@ export interface BlockActions {
   audience?: 'elder' | 'family';
   /** Add an assistant message with cards (validated) to the conversation; optionally speak its text. */
   append?: (text: string, blocks: unknown[], opts?: { speak?: boolean }) => void;
+  /** Send a message as if Mary typed it (welcome prompts, Retry). Same path as typing and voice. */
+  send?: (text: string) => void;
+  /** Run a scam check on this text (training examples). */
+  scan?: (text: string) => void;
   /** Speak a short status line (respects mute and Stop). */
   speak?: (text: string) => void;
 }
@@ -109,14 +113,15 @@ function ProductCardsBlock({ b, act }: { b: BlockOf<'product_cards'>; act: Block
       <ul aria-label={b.source === 'demo' ? 'Demo Shop options' : 'Shop listings'}>
         {shown.map((p, i) => (
           <li key={p.id}>
-            <button type="button" onClick={() => act.openItem(p, b.source)} className="w-full flex items-center gap-3 p-2 rounded-2xl text-left hover:bg-teal-soft min-h-20"
-              aria-label={`${p.title}, ${money(p.price, p.currency)} at ${p.retailer}${p.role === 'best' ? ', best match' : ''}. Open details`}>
+            {/* No aria-label: the visible text (including "Best match") is the accessible name (WCAG 2.5.3 label in name). */}
+            <button type="button" onClick={() => act.openItem(p, b.source)} className="w-full flex items-center gap-3 p-2 rounded-2xl text-left hover:bg-teal-soft min-h-20">
               <Thumb src={p.image} alt="" />
               <span className="min-w-0 flex-1">
                 {p.role === 'best' && i === 0 && <span className="block text-sm font-bold uppercase tracking-wider text-teal">Best match</span>}
                 <span className="block font-bold leading-snug line-clamp-2 break-words">{p.title}</span>
                 <span className="block text-base text-ink-soft truncate">{p.retailer}</span>
                 <span className="block font-bold">{money(p.price, p.currency)}{p.compareAt && p.compareAt > p.price ? <span className="font-normal text-base text-ink-soft"> · was {money(p.compareAt, p.currency)}</span> : null}</span>
+                <span className="sr-only">. Open details</span>
               </span>
               <ChevronRight className="size-6 text-teal shrink-0" aria-hidden />
             </button>
@@ -443,11 +448,11 @@ function PaymentHistoryCard({ b, act }: { b: BlockOf<'payment_history'>; act: Bl
       {b.items.length === 0 ? <p className="p-3 text-ink-soft">{b.query ? 'Nothing matches.' : 'Nothing yet.'}</p> : (
         <ul className="divide-y divide-line">
           {b.items.map((it) => {
-            const s = it.type === 'scan' ? { label: verdictLabel(it.status), tone: 'muted' as Tone } : shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed });
+            const s = it.type === 'scan' ? { label: verdictLabel(it.status), tone: 'muted' as Tone } : it.type === 'record' ? { label: it.sample ? 'Sample record' : 'Recorded by you', tone: 'muted' as Tone } : shortStatus(it.status, { webhookConfirmed: it.webhookConfirmed });
             const inner = (
               <span className="min-w-0 flex-1">
                 <span className="block font-bold break-words">{it.type === 'scan' ? 'Scam check: ' : ''}{it.title}</span>
-                <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-ink-soft">{it.amountCents !== null && <span className="font-bold text-navy">{moneyCents(it.amountCents, it.currency)}</span>}<Pill label={s.label} tone={s.tone} />{when(it.at)}</span>
+                <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-base text-ink-soft">{it.amountCents !== null && <span className="font-bold text-navy">{moneyCents(it.amountCents, it.currency)}</span>}<Pill label={s.label} tone={s.tone} />{it.sample && <SampleBadge />}{!it.sample && it.type === 'payment' && <span className="text-sm">Real PayPal Sandbox transaction</span>}{when(it.at)}</span>
               </span>
             );
             return (

@@ -78,6 +78,8 @@ export interface PaymentRequest {
   risk: { ok: boolean; needsFamily: boolean; reasons: string[] } | null;
   approval: { id: string; status: string; expiresAt: number; decidedAt: string | null; reason: string | null } | null;
   receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string; webhookConfirmed?: boolean } | null;
+  /** "Try as Mary" sample row: no PayPal record, nothing can be done with it. */
+  sample?: { label: string; evidence: string } | null;
   /** REFUND_REQUESTED is only the buyer's request (no money moved). REFUNDED comes from PayPal. */
   refund?: { status: 'REFUND_REQUESTED' | 'REFUND_PENDING' | 'REFUNDED' | null; label: string | null; requestedAt: string | null; canRequest: boolean; refundId: string | null; lastAttemptFailed: boolean } | null;
   createdAt: string; updatedAt: string;

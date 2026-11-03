@@ -65,7 +65,8 @@ export default function Family() {
   };
 
   if (!o) return <Layout mode="family">{err ? <Notice tone="danger" title={err} /> : <p>Loading…</p>}</Layout>;
-  const pending = o.requests.filter((r) => r.state === 'FAMILY_APPROVAL_PENDING' && r.approval?.status === 'pending');
+  // Sample reviews (Mary's demo history) are never actionable: no Approve / Decline, shown in the history with a label.
+  const pending = o.requests.filter((r) => !r.sample && r.state === 'FAMILY_APPROVAL_PENDING' && r.approval?.status === 'pending');
   const history = o.requests.filter((r) => !pending.includes(r));
   return (
     <Layout mode="family">
@@ -96,7 +97,8 @@ export default function Family() {
               <ul className="divide-y divide-line">
                 {history.slice(0, 10).map((r) => (
                   <li key={r.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
-                    <div><p className="font-bold">{r.items.map((i) => i.name).join(', ')}</p><p className="text-ink-soft text-base">{eur(r.amountCents)} · {stateLabel(r.state)}{r.approval?.status && r.approval.status !== 'pending' ? ` · you ${r.approval.status}` : ''}</p></div>
+                    <div><p className="font-bold">{r.items.map((i) => i.name).join(', ')}</p><p className="text-ink-soft text-base">{eur(r.amountCents)} · {stateLabel(r.state)}{r.approval?.status ? (r.sample ? ` · family review ${r.approval.status === 'pending' && r.approval.expiresAt < Date.now() ? 'expired' : r.approval.status}` : r.approval.status !== 'pending' ? ` · you ${r.approval.status}` : '') : ''}</p>
+                      {r.sample && <p className="mt-1"><span className="inline-flex rounded-xl border border-amber/40 bg-amber-soft px-2 text-sm font-bold text-amber" data-testid="sample-badge">Sample data · not actionable</span></p>}</div>
                     {r.refund?.status === 'REFUND_REQUESTED' && <span className="text-base font-bold text-ink-soft">Refund request sent — not refunded yet</span>}
                   </li>
                 ))}

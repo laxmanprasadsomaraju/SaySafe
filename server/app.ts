@@ -14,7 +14,10 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { z } from 'zod';
 import { db, audit, dbConfig } from './db/index.js';
-import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId } from './auth.js';
+import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId, pairDemoFamily } from './auth.js';
+import { seedDemoHousehold, seedInfo } from './demo/seed.js';
+import { TRAINING_EXAMPLES, WELCOME_PROMPTS } from '../shared/demoData.js';
+import { routeCompanion } from './companion/router.js';
 import { scanMessage, extractFromImage, explainMore } from './scam/guardian.js';
 import { TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES } from './scam/directory.js';
 import { normalizeVerdict, VERDICT_LABEL } from './scam/verdicts.js';
@@ -137,8 +140,27 @@ export function createApp() {
   // ---------- Sessions ----------
   app.post('/api/demo/start', (req, res) => {
     const name = z.string().trim().min(1).max(40).catch('Mary').parse(req.body?.name);
-    const { householdId } = startDemoHousehold(res, name);
-    res.json({ ok: true, householdId: householdId.slice(0, 6) });
+    const { householdId, elderId } = startDemoHousehold(res, name);
+    // Each visitor's household gets its own labelled copy of the sample set (stored in the database, never shared).
+    // DEMO_SEED=off only in the unit tests that need an empty household (vitest.config.ts); always on in the app.
+    const seeded = process.env.DEMO_SEED === 'off' ? null : seedDemoHousehold(householdId, elderId);
+    res.json({ ok: true, householdId: householdId.slice(0, 6), seeded });
+  });
+  // "Reset Mary's demo": replaces this household's SAMPLE rows only. Real PayPal Sandbox payments and records you typed are kept.
+  app.post('/api/demo/reset', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    res.json({ ok: true, seeded: seedDemoHousehold(s.householdId, s.userId) });
+  });
+  app.get('/api/demo/info', requireRole('elder'), (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ seed: seedInfo(sessionOf(req).householdId), prompts: WELCOME_PROMPTS, training: TRAINING_EXAMPLES });
+  });
+  // "Try as Alex too": a family session for this same household in this browser (pairing code flow, server-side).
+  const alexLimiter = rateLimit({ windowMs: 15 * 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
+  app.post('/api/demo/alex', alexLimiter, requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const r = pairDemoFamily(res, s.householdId, s.userId, 'Alex');
+    res.json({ ok: true, reused: r.reused });
   });
   app.get('/api/me', (req, res) => {
     const elder = readSession(req, 'elder');
@@ -233,7 +255,11 @@ export function createApp() {
     const lastResults = z.array(z.string().max(100)).max(5).catch([]).parse(req.body?.lastResults);
     const step = z.string().max(40).catch('home').parse(req.body?.step);
     const lang = langOf(req);
-    const { intent, ai, replyLang: aiLang } = await interpret(said, { name, lastResults, step, lang });
+    // Questions about Mary's own records are routed by rules first, so they behave the same with or without the AI
+    // (and the same typed or spoken: voice sends its transcript here too). Everything else goes to the AI.
+    const demoItem = /\b(demo (item|product|shop)s?|something from the (demo )?shop)\b/i.test(said) && !/\bmembership\b/i.test(said);
+    const routed = routeCompanion(said) ?? (demoItem ? { action: 'shop' as const, query: 'demo item', reply: 'Here are some items from the Demo Shop.' } : null);
+    const { intent, ai, replyLang: aiLang } = routed ? { intent: routed, ai: false as const, replyLang: 'en' as const } : await interpret(said, { name, lastResults, step, lang });
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
     let replyLang = aiLang;
@@ -251,7 +277,7 @@ export function createApp() {
         discover = { query: said, suggested: false };
         reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website."; replyLang = 'en';
       } else {
-        products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
+        products = demoItem ? [...PRODUCTS].sort((a, b) => b.rating - a.rating).slice(0, 3) : searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
         // English template, unless the AI already answered in the chosen reply language.
         if (lang === 'en' || replyLang !== lang) { reply = describeOptions(products, name); replyLang = 'en'; }
         if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }

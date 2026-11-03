@@ -57,8 +57,24 @@ export function load(id: string, householdId: string) {
   return r;
 }
 
+export const SAMPLE_LABEL = 'Sample data';
+export const SAMPLE_EVIDENCE = 'Illustrative — no PayPal record';
+export const SAMPLE_NOT_ACTIONABLE = 'This is sample data for the demo. It has no PayPal record, so it can’t be paid, approved, refunded or checked with PayPal.';
+export const isSample = (r: any) => Number(r?.example ?? 0) === 1;
+/** Sample ("Try as Mary") rows are illustrative only: every action that would move money or state is refused. */
+export function assertNotSample(r: any) {
+  if (isSample(r)) throw new PaymentError('sample_not_actionable', SAMPLE_NOT_ACTIONABLE, 409);
+}
+/** load() for any action: 404 for another household, 409 for a sample row. */
+export function loadActionable(id: string, householdId: string) {
+  const r = load(id, householdId);
+  assertNotSample(r);
+  return r;
+}
+
 /** Optimistic-locked transition. Fails if someone else changed the row first (replay / double-click safe). */
 export function transition(r: any, to: PaymentState, actor: string, extra: Record<string, unknown> = {}) {
+  assertNotSample(r);
   assertTransition(r.state, to);
   const sets = ['state=?', 'version=version+1', "updated_at=datetime('now')", ...Object.keys(extra).map((k) => `${k}=?`)];
   let info;
@@ -101,7 +117,9 @@ export function publicView(r: any) {
     currency: r.currency,
     risk: r.risk_json ? JSON.parse(r.risk_json) : null,
     approval: approval ? { id: approval.id, status: effectiveApprovalStatus(approval), expiresAt: approval.expires_at, decidedAt: approval.decided_at, reason: approval.reason } : null,
-    receipt: r.state === 'CAPTURED' || r.state === 'REFUND_PENDING' || r.state === 'REFUNDED' ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id, webhookConfirmed: Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id)) } : null,
+    // Sample rows: no PayPal record exists, so there is no receipt, and the label says so everywhere.
+    sample: isSample(r) ? { label: SAMPLE_LABEL, evidence: SAMPLE_EVIDENCE } : null,
+    receipt: !isSample(r) && (r.state === 'CAPTURED' || r.state === 'REFUND_PENDING' || r.state === 'REFUNDED') ? { captureId: r.paypal_capture_id, amount: r.captured_amount, currency: r.captured_currency, payee: r.payee_name, orderId: r.paypal_order_id, webhookConfirmed: Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id)) } : null,
     refund: refundView(r),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -117,6 +135,7 @@ export const REFUND_REQUEST_LABEL = 'Request sent — not refunded yet';
 export function refundView(r: any) {
   const req = db.prepare('SELECT status, created_at FROM refund_requests WHERE request_id=?').get(r.id) as { status: string; created_at: string } | undefined;
   const ex = db.prepare('SELECT status, refund_id FROM refunds WHERE request_id=?').get(r.id) as { status: string; refund_id: string | null } | undefined;
+  if (isSample(r) && r.state === 'REFUNDED') return { status: 'REFUNDED', label: `${SAMPLE_LABEL}: illustrative refund — no PayPal record`, requestedAt: null, canRequest: false, refundId: null, lastAttemptFailed: false };
   const status = r.state === 'REFUNDED' ? 'REFUNDED' : r.state === 'REFUND_PENDING' ? 'REFUND_PENDING' : req ? 'REFUND_REQUESTED' : null;
   if (!status && r.state !== 'CAPTURED') return null;
   return {
@@ -125,7 +144,7 @@ export function refundView(r: any) {
       : status === 'REFUND_PENDING' ? 'Refund sent to PayPal — waiting for PayPal to confirm'
       : status === 'REFUND_REQUESTED' ? REFUND_REQUEST_LABEL : null,
     requestedAt: req?.created_at ?? null,
-    canRequest: r.state === 'CAPTURED' && !req,
+    canRequest: r.state === 'CAPTURED' && !req && !isSample(r),
     refundId: r.state === 'REFUNDED' ? ex?.refund_id ?? null : null,
     lastAttemptFailed: r.state === 'CAPTURED' && ex?.status === 'FAILED',
   };
@@ -188,7 +207,7 @@ export function hasValidApproval(r: any): boolean {
 
 /** Family decision. Only an active family member of the same household. Nonce prevents replay. */
 export function decide(householdId: string, familyId: string, requestId: string, approvalId: string, decision: 'approve' | 'decline', reason?: string) {
-  const r = load(requestId, householdId);
+  const r = loadActionable(requestId, householdId);
   const a = db.prepare('SELECT * FROM approvals WHERE id=? AND request_id=?').get(approvalId, requestId) as any;
   if (!a) throw new PaymentError('not_found', 'Approval not found.', 404);
   if (a.status !== 'pending') throw new PaymentError('already_decided', 'This request was already decided.', 409);
@@ -212,7 +231,7 @@ export function decide(householdId: string, familyId: string, requestId: string,
 
 /** Creates the PayPal order and moves to PAYER_APPROVAL_PENDING. Family approval does NOT pay: the payer still approves at PayPal. */
 export async function startPayPalCheckout(householdId: string, actor: string, requestId: string, origin: string) {
-  let r = load(requestId, householdId);
+  let r = loadActionable(requestId, householdId);
   if (r.state === 'FAMILY_APPROVED' && !hasValidApproval(r)) throw new PaymentError('approval_invalid', 'The family approval no longer matches this purchase.', 409);
   if (r.state !== 'RISK_REVIEW' && r.state !== 'FAMILY_APPROVED') {
     if (r.state === 'PAYER_APPROVAL_PENDING' && r.paypal_order_id) {
@@ -238,7 +257,7 @@ export async function startPayPalCheckout(householdId: string, actor: string, re
 
 /** Called after PayPal redirects back. Never trusts the redirect: re-reads the order from PayPal, re-checks policy, then captures. */
 export async function confirmAndCapture(householdId: string, actor: string, requestId: string, orderIdFromRedirect: string) {
-  let r = load(requestId, householdId);
+  let r = loadActionable(requestId, householdId);
   if (!r.paypal_order_id || r.paypal_order_id !== orderIdFromRedirect) throw new PaymentError('order_mismatch', 'This PayPal order does not belong to this purchase.', 409);
   if (r.state === 'CAPTURED') return publicView(r);
   const order = await paypal.getOrder(r.paypal_order_id);
@@ -325,7 +344,7 @@ export function reconcileFromWebhook(event: any) {
 }
 
 export function cancelRequest(householdId: string, actor: string, requestId: string) {
-  const r = load(requestId, householdId);
+  const r = loadActionable(requestId, householdId);
   transition(r, 'CANCELLED', actor);
   db.prepare("UPDATE approvals SET status='invalidated' WHERE request_id=? AND status='pending'").run(requestId);
   return publicView(load(requestId, householdId));

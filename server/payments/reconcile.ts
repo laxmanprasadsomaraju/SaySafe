@@ -18,7 +18,7 @@
  */
 import { db, audit } from '../db/index.js';
 import * as paypal from '../paypal/client.js';
-import { load, transition, publicView, PaymentError, confirmAndCapture } from './service.js';
+import { load, loadActionable, assertNotSample, transition, publicView, PaymentError, confirmAndCapture } from './service.js';
 import { recordEvidence } from './evidence.js';
 import { checkCapture } from './captureCheck.js';
 import { reconcileRefund } from './refund.js';
@@ -56,6 +56,7 @@ function stepTo(r: any, path: PaymentState[], extraForLast: Record<string, unkno
 export async function reconcile(requestId: string, opts: { householdId?: string } = {}): Promise<{ outcome: ReconcileOutcome; state: PaymentState }> {
   const r = opts.householdId ? load(requestId, opts.householdId) : (db.prepare('SELECT * FROM payment_requests WHERE id=?').get(requestId) as any);
   if (!r) throw new PaymentError('not_found', 'Payment request not found.', 404);
+  assertNotSample(r);
   if (!RECONCILABLE.includes(r.state) || !r.paypal_order_id) return { outcome: 'not_applicable', state: r.state };
   if (r.state === 'REFUND_PENDING') {
     const out = await reconcileRefund(r);
@@ -146,7 +147,7 @@ export function __resetReconcileThrottle() { lastByRequest.clear(); lastByHouseh
 
 /** Used by the Order page (on load and by the "Check with PayPal" button). At most one PayPal read per request per 5 s. */
 export async function reconcileForUser(householdId: string, requestId: string) {
-  const r = load(requestId, householdId); // household scoping: 404 for anyone else's request
+  const r = loadActionable(requestId, householdId); // household scoping: 404 for anyone else's request; 409 for a sample row
   const last = lastByRequest.get(r.id) ?? 0;
   let outcome: ReconcileOutcome = 'throttled';
   if (Date.now() - last >= RECONCILE_MIN_INTERVAL_MS || !RECONCILABLE.includes(r.state)) {
@@ -167,7 +168,7 @@ export async function sweepHousehold(householdId: string, now = Date.now()) {
   lastByHousehold.set(householdId, now);
   const cutoff = new Date(now - STALE_AFTER_MS).toISOString().replace('T', ' ').slice(0, 19);
   const rows = db.prepare(
-    `SELECT id FROM payment_requests WHERE household_id=? AND paypal_order_id IS NOT NULL AND state IN ('PAYER_APPROVAL_PENDING','PAYER_APPROVED','CAPTURE_PENDING','REFUND_PENDING') AND updated_at < ? ORDER BY updated_at ASC LIMIT 5`,
+    `SELECT id FROM payment_requests WHERE household_id=? AND example=0 AND paypal_order_id IS NOT NULL AND state IN ('PAYER_APPROVAL_PENDING','PAYER_APPROVED','CAPTURE_PENDING','REFUND_PENDING') AND updated_at < ? ORDER BY updated_at ASC LIMIT 5`,
   ).all(householdId, cutoff) as { id: string }[];
   const outcomes: Record<string, ReconcileOutcome> = {};
   for (const row of rows) {
@@ -184,7 +185,7 @@ export async function sweepWithin(householdId: string, ms = 4000) {
 
 /** Explicit "finish payment" for a buyer-approved record (e.g. after a lost redirect). Re-runs every check via confirmAndCapture. */
 export async function finishApproved(householdId: string, actor: string, requestId: string) {
-  const r = load(requestId, householdId);
+  const r = loadActionable(requestId, householdId);
   if (!['PAYER_APPROVED', 'CAPTURE_PENDING', 'PAYER_APPROVAL_PENDING'].includes(r.state) || !r.paypal_order_id) {
     throw new PaymentError('bad_state', 'There is nothing to finish for this purchase.', 409);
   }

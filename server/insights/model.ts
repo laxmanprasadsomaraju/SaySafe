@@ -17,8 +17,8 @@ const dayOf = (iso: string) => iso.slice(0, 10);
 const excerpt = (s: string, n = 140) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 /** Seed scripts mark their rows with an idempotency key (or capture id) prefix; everything else came through the real app flow. */
-export const isSeededRow = (r: { idempotency_key?: string | null; paypal_capture_id?: string | null }) =>
-  Boolean(r.idempotency_key?.startsWith('seed_') || r.paypal_capture_id?.startsWith('SEED'));
+export const isSeededRow = (r: { idempotency_key?: string | null; paypal_capture_id?: string | null; example?: number | null }) =>
+  Boolean(Number(r.example ?? 0) === 1 || r.idempotency_key?.startsWith('seed_') || r.paypal_capture_id?.startsWith('SEED'));
 
 export function buildInsights(householdId: string, viewer: { userId: string; name: string }, now = Date.now()): InsightsPayload {
   const hh = db.prepare('SELECT h.elder_id, u.name AS elder_name FROM households h JOIN users u ON u.id = h.elder_id WHERE h.id = ?').get(householdId) as { elder_id: string; elder_name: string } | undefined;

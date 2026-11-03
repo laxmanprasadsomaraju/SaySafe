@@ -43,7 +43,8 @@ export function parseFollowup(text: string, hasProducts: boolean): Followup {
   if (/\b(seller|shop|store|retailer|website|site|merchant|company)\b/.test(s) && /\b(trust|trustworthy|trusted|legit|legitimate|genuine|real|scam|reliable|reputable|safe|honest)\b/.test(s)) return { kind: 'seller' };
   if (/\bis (this|that|it) (a )?(legit|scam|genuine|real)\b/.test(s)) return { kind: 'seller' };
   if (/\b(cheaper|less expensive|lower price|lower[- ]cost|cheapest|more affordable)\b/.test(s)) return { kind: 'cheaper' };
-  if (/\b(compare|side by side|which (one )?is better|difference)\b/.test(s)) return { kind: 'compare' };
+  // "Compare real shops for a toaster" is a new search, not "compare the products on screen".
+  if (/\b(compare|side by side|which (one )?is better|difference)\b/.test(s) && !/\bcompare\s+(real\s+)?(shops?|prices|retailers|stores)\b.{0,10}\b(for|on)\s+\w/.test(s)) return { kind: 'compare' };
   if (/\b(show more|more options|see more|other options)\b/.test(s)) return { kind: 'more' };
   return { kind: 'none' };
 }
