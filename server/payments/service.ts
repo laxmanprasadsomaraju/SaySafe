@@ -310,7 +310,13 @@ export async function confirmAndCapture(householdId: string, actor: string, requ
     // ORDER_ALREADY_CAPTURED etc: reconcile from PayPal rather than guessing.
     const latest = await paypal.getOrder(r.paypal_order_id).catch(() => null);
     if (latest?.status === 'COMPLETED') return applyCaptureResult(load(requestId, householdId), latest);
-    if (e?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') throw new PaymentError('declined', 'PayPal declined this payment method. You can try again with another one.', 402);
+    if (e?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') {
+      // PayPal refused the card/funding source: no money moved. Terminal (FAILED), never left CAPTURE_PENDING, so the
+      // person isn't stuck on "Confirming payment"; they start a fresh purchase (a new PayPal order) to try again.
+      count('payments.capture_declined');
+      transition(load(requestId, householdId), 'FAILED', 'paypal', {});
+      throw new PaymentError('declined', DECLINED_MESSAGE, 402);
+    }
     // Timeout, dropped connection or PayPal 5xx: the outcome is unknown, not failed. Stay CAPTURE_PENDING;
     // a later confirm re-sends the same PayPal-Request-Id, so PayPal can never capture twice.
     if (paypal.isUnknownOutcome(e)) {
@@ -325,6 +331,9 @@ export async function confirmAndCapture(householdId: string, actor: string, requ
     releaseCaptureLease(r.id);
   }
 }
+
+/** Shown when PayPal declines the payment method at capture. */
+export const DECLINED_MESSAGE = 'PayPal declined this payment method. Nothing was charged. Please start again from the Demo Shop and choose another payment method at PayPal.';
 
 function leaseHeld(r: any, now = Date.now()) { return Number(r.capture_lease_until ?? 0) > now; }
 const captureInProgress = () => new PaymentError('capture_in_progress', 'PayPal is already confirming this payment. You will not be charged twice. Check again in a moment.', 409);

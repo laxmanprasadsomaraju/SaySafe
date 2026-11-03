@@ -50,6 +50,7 @@ vi.mock('../server/paypal/client', () => ({
     const mode = st.captureMode;
     if (mode === 'timeout_nocapture') throw fail(); // request lost before PayPal acted: outcome unknown to SaySafe
     if (mode === '4xx') throw fail(422, 'INSTRUMENT_DECLINED_NOT');
+    if (mode === 'declined') throw fail(422, 'INSTRUMENT_DECLINED');
     if (mode === '5xx') throw fail(500);
     const amount = mode === 'wrong_amount' ? { currency_code: 'EUR', value: '0.01' } : o.purchase_units[0].amount;
     const cap = { id: 'CAP' + orderId, status: mode === 'pending' ? 'PENDING' : 'COMPLETED', amount, create_time: new Date().toISOString() };
@@ -234,6 +235,19 @@ describe('failure injection: capture', () => {
     st.captureMode = '4xx';
     await expect(pay.confirmAndCapture(b.hh, b.u, b.id, b.orderId)).rejects.toMatchObject({ code: 'capture_failed' });
     expect(stateOf(b.id)).toBe('FAILED');
+  });
+  it('INSTRUMENT_DECLINED: terminal FAILED (never stuck CAPTURE_PENDING), "nothing charged, start again"; no money moved; a retry does not capture', async () => {
+    const p = await approvedAtPayPal();
+    st.captureMode = 'declined';
+    await expect(pay.confirmAndCapture(p.hh, p.u, p.id, p.orderId)).rejects.toMatchObject({ code: 'declined', status: 402, message: pay.DECLINED_MESSAGE });
+    expect(pay.DECLINED_MESSAGE).toMatch(/Nothing was charged/);
+    expect(pay.DECLINED_MESSAGE).toMatch(/start again/i);
+    expect(stateOf(p.id)).toBe('FAILED');
+    expect(st.paypalCaptures.has(`capture-${p.id}`)).toBe(false);
+    st.captureMode = 'ok';
+    await expect(pay.confirmAndCapture(p.hh, p.u, p.id, p.orderId)).rejects.toBeTruthy();
+    expect(stateOf(p.id)).toBe('FAILED');
+    expect(st.captureCalls).toEqual([`capture-${p.id}`]);
   });
   it('200 with an unknown body or a PENDING capture: never recorded as CAPTURED', async () => {
     const a = await approvedAtPayPal();
