@@ -120,6 +120,21 @@ describe('GET /api/activity', () => {
     await mary.get('/api/activity?limit=500').expect(400);
   });
 
+  it('shows a buyer refund request as REFUND_REQUESTED (never refunded) and refund states as they are', async () => {
+    const mary = await elder();
+    const a = (await buy(mary, 'kettle-classic')).body.request.id;
+    const c = (await buy(mary, 'toaster')).body.request.id;
+    const hh = hhOf(a);
+    db.prepare("UPDATE payment_requests SET state='CAPTURED', paypal_capture_id=? WHERE id=?").run('CAPQA' + a.slice(-6), a);
+    db.prepare("INSERT INTO refund_requests (id, request_id, household_id, requested_by, status) VALUES (?,?,?,?,?)").run('rr_' + a, a, hh, 'usr_x', 'REFUND_REQUESTED');
+    db.prepare("UPDATE payment_requests SET state='REFUND_PENDING' WHERE id=?").run(c);
+    const items = (await mary.get('/api/activity?status=refunded').expect(200)).body.items;
+    const byId = Object.fromEntries(items.map((i: any) => [i.id, i]));
+    expect(byId[a]).toMatchObject({ status: 'REFUND_REQUESTED', state: 'CAPTURED' });
+    expect(byId[a].refundLabel).toMatch(/not refunded yet/);
+    expect(byId[c]).toMatchObject({ status: 'REFUND_PENDING' });
+  });
+
   it('paginates without gaps or repeats', async () => {
     const mary = await elder();
     const made: string[] = [];
@@ -138,6 +153,7 @@ describe('GET /api/activity', () => {
     expect(groupOf('REFUND_REQUESTED')).toBe('refunded');
     expect(groupOf('PARTIALLY_REFUNDED')).toBe('refunded');
     expect(groupOf('CAPTURED')).toBe('paid');
+    expect(groupOf('REFUND_PENDING')).toBe('refunded');
     expect(groupOf('WHATEVER')).toBe('other');
   });
 

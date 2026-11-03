@@ -57,7 +57,7 @@ export function VoiceBar() {
             {!s.caption && !s.notice && s.micMessage && <span className="text-navy font-bold"> {s.micMessage}</span>}
           </p>}
         </div>
-        <div className="flex gap-1.5 justify-end shrink-0 ml-auto">
+        <div className="flex flex-wrap gap-1.5 justify-end ml-auto">
           <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
             className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
             <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
@@ -96,14 +96,14 @@ export function VoiceSettings({ className = '' }: { className?: string }) {
               <input type="checkbox" className="size-6 accent-[var(--color-teal)]" checked={s.prefs.readAll} onChange={(e) => speech.setPrefs({ readAll: e.target.checked })} />
               Read everything (whole results lists)
             </label>
-            <label className="inline-flex items-center gap-3 min-h-11 font-bold">
+            <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
               Reply language (beta)
               <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
                 {LANG_CODES.map((c) => <option key={c} value={c} lang={LANGS[c].bcp47}>{LANGS[c].label}</option>)}
               </select>
             </label>
             {s.prefs.lang !== 'en' && <p className="w-full text-base text-ink-soft">SaySafe will answer and listen in {LANGS[s.prefs.lang].name} where it can. Screens stay in English. Anything not in {LANGS[s.prefs.lang].name} is shown as text, not spoken{speech.hasVoice(s.prefs.lang) ? '' : `. This device has no ${LANGS[s.prefs.lang].name} voice, so replies are shown on screen`}.</p>}
-            <label className="inline-flex items-center gap-3 min-h-11 font-bold">
+            <label className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 min-h-11 font-bold max-w-full">
               Speed
               <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={String(s.prefs.rate)} onChange={(e) => speech.setPrefs({ rate: Number(e.target.value) })}>
                 <option value="0.8">Slower</option>

@@ -12,7 +12,7 @@ const CHIPS: { id: string; label: string; filter: Partial<ActivityFilters> }[] =
   { id: 'pending', label: 'Waiting', filter: { status: 'pending' } },
   { id: 'paid', label: 'Paid', filter: { status: 'paid' } },
   { id: 'cancelled', label: 'Cancelled', filter: { status: 'cancelled' } },
-  { id: 'refunded', label: 'Refunded', filter: { status: 'refunded' } },
+  { id: 'refunded', label: 'Refunds', filter: { status: 'refunded' } },
   { id: 'scan', label: 'Scam checks', filter: { type: 'scan' } },
 ];
 const TONE: Record<string, string> = { pending: 'bg-amber-soft text-amber border-amber/40', paid: 'bg-teal-soft text-teal-deep border-teal/40', refunded: 'bg-teal-soft text-teal-deep border-teal/40', cancelled: 'bg-line text-navy border-line', failed: 'bg-danger-soft text-danger border-danger/40', scan: 'bg-paper text-navy border-line', other: 'bg-line text-navy border-line' };

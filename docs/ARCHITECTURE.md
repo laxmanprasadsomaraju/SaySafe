@@ -16,10 +16,11 @@
 7. Webhooks (`PAYMENT.CAPTURE.*`) are signature-verified with PayPal, deduplicated by event id, and reconcile `CAPTURE_PENDING` requests.
 
 ## Scam check flow
-1. Rules engine extracts links/emails/phones and scores signals (high/medium/info). Verdict: any high or 2+ medium → `suspicious`; a lone exact official resource → `verified_official_contact`; else `needs_verification`.
+Full detail, limits and eval results: [SCAM-DETECTION.md](SCAM-DETECTION.md).
+1. Rules engine extracts links/emails/phones and scores signals (high/medium/info, grouped in risk families). Three verdicts only: `suspicious`, `needs_checking`, `no_obvious_warning_signs` (always with a disclosure). Legacy codes are mapped by `normalizeVerdict`.
 2. Threat-intel adapters (local list, optional Google Web Risk, optional PhishTank) receive only the URL string. We never fetch the URL.
-3. Groq explains in plain words. Its verdict is merged with `mergeVerdict`, which can only escalate. Spoken text always matches the final verdict.
-4. Screenshots: magic-byte checked, 4 MB max, processed in memory, never stored; the vision model transcribes and flags unclear characters, which downgrades any "verified" result.
+3. Groq may add evidence: each reason needs a fixed category and an exact quote from the message (`server/scam/aiEvidence.ts`). Only validated reasons can raise the verdict, by one step (`raiseWithEvidence`): never lower, never grant the all-clear. Invalid output after one retry -> rules only, labelled. Spoken text always matches the final verdict.
+4. Screenshots: magic-byte checked, 4 MB max, processed in memory, never stored; the vision model transcribes and flags unclear characters, which rules out "No obvious warning signs".
 
 ## Data
 SQLite tables: users, sessions (hashed tokens), households, family_links, spending_policies, payment_requests (versioned), approvals, webhook_events, security_scans (verdict + headline only, never the message), audit_log.

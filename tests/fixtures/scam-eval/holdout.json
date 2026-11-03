@@ -1,0 +1,90 @@
+{
+  "about": "Held-out cases written after the first rule-fix round. First run (before any change): 7 of 12 matched, 1 scam got 'No obvious warning signs'. Those results led to a second fix round, so this set is no longer strictly held out; see docs/SCAM-DETECTION.md.",
+  "cases": [
+    {
+      "id": "ho-legit-refund-issued",
+      "category": "legit_paypal_receipt",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "text": "Hi Mary Kelly, Garden Supplies Ltd has issued you a full refund of €18.40 EUR. It should be in your PayPal balance within a day."
+    },
+    {
+      "id": "ho-legit-sister-photos",
+      "category": "legit_family",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "text": "Lovely to see you Sunday! The kids loved the cake. Talk soon, love Ciara"
+    },
+    {
+      "id": "ho-legit-pharmacy-ready",
+      "category": "legit_reminder",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "text": "Your prescription is ready to collect at the pharmacy. Opening hours 9am to 6pm Monday to Saturday."
+    },
+    {
+      "id": "ho-legit-bank-new-card",
+      "category": "legit_bank_reminder",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "text": "Your new debit card has been posted and should arrive within 5 working days. Your PIN will arrive separately."
+    },
+    {
+      "id": "ho-legit-neighbour-pay-back",
+      "category": "legit_friend_bill_split",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "text": "Thanks for getting the bin tags, I owe you €12. I'll transfer it tonight, or I can pay you cash Saturday.",
+      "label_note": "Label corrected after the first run: the neighbour is paying the user; nothing is asked of the user."
+    },
+    {
+      "id": "ho-scam-revenue-refund",
+      "category": "convincing_fake_refund",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "Revenue: You are entitled to a tax refund of €264.80. Submit your bank details to claim before 30 Nov: revenue-refund-ie.net"
+    },
+    {
+      "id": "ho-scam-bank-safe-account",
+      "category": "convincing_bank_impersonation",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "This is your bank's fraud team. Your savings are at risk. Move your money to a safe account today, we will text you the new account details."
+    },
+    {
+      "id": "ho-scam-paypal-call-back",
+      "category": "genuine_paypal_domain_phone_invoice",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "PayPal: Payment of €512.00 EUR to Best Electronics Online has been authorised. If you don't recognise this payment, ring our helpline on 1800 555 019."
+    },
+    {
+      "id": "ho-scam-grandson-bail",
+      "category": "convincing_family_emergency",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "Nana it's me, I'm in trouble, I had a car accident and I need €1,200 for the garage before they call the guards. Please don't tell Mum. Can you send it now?"
+    },
+    {
+      "id": "ho-scam-paypal-me-deposit",
+      "category": "convincing_marketplace",
+      "truth": "scam",
+      "expected": "needs_checking",
+      "text": "The apartment is still available. To hold the viewing please pay the €300 deposit to paypal.me/rentals-dublin-ie first."
+    },
+    {
+      "id": "ho-scam-steam-wallet",
+      "category": "convincing_gift_card",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "Your Eir broadband will be cut off tonight. To keep your service, buy a €100 Steam wallet card and reply with the numbers on the back."
+    },
+    {
+      "id": "ho-scam-crypto-recovery",
+      "category": "convincing_crypto",
+      "truth": "scam",
+      "expected": "suspicious",
+      "text": "We can recover the money you lost to the Bitcoin scam. Our recovery agents need a €150 activation fee to start. WhatsApp us on +44 7700 900456."
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "id": "1M659057GE5643901",
+  "amount": {
+    "currency_code": "EUR",
+    "value": "32.00"
+  },
+  "note_to_payer": "SaySafe Demo Shop refund (sandbox, no real money)",
+  "seller_payable_breakdown": {
+    "gross_amount": {
+      "currency_code": "EUR",
+      "value": "32.00"
+    },
+    "paypal_fee": {
+      "currency_code": "EUR",
+      "value": "1.09"
+    },
+    "net_amount": {
+      "currency_code": "EUR",
+      "value": "30.91"
+    },
+    "total_refunded_amount": {
+      "currency_code": "EUR",
+      "value": "32.00"
+    }
+  },
+  "custom_id": "pay_kPyY4csvcw_9",
+  "status": "COMPLETED",
+  "create_time": "2026-11-02T17:28:08-08:00",
+  "update_time": "2026-11-02T17:28:08-08:00",
+  "links": [
+    {
+      "href": "https://api.sandbox.paypal.com/v2/payments/refunds/1M659057GE5643901",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://api.sandbox.paypal.com/v2/payments/captures/7GW748197L509353B",
+      "rel": "up",
+      "method": "GET"
+    }
+  ]
+}

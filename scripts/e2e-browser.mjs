@@ -29,8 +29,12 @@ try {
   await m.waitForURL('**/check'); ok('Try it as Mary opens the guided scam check', true);
   await m.goto(BASE + '/home'); await m.waitForLoadState('networkidle');
   await m.screenshot({ path: `${OUT}/home-mobile.png`, fullPage: true }); await axe(m, 'home mobile');
-  const tiles = await m.locator('nav[aria-label="Main actions"] button').count();
-  ok('home has 3 main actions', tiles === 3, `found ${tiles}`);
+  const tiles = await m.locator('nav[aria-label="Shortcuts"] button').count();
+  ok('home has 4 shortcuts', tiles === 4, `found ${tiles}`);
+  const tabs = await m.locator('nav[aria-label="Main"] a').evaluateAll((as) => as.filter((a) => a.getBoundingClientRect().height > 0).map((a) => a.textContent));
+  ok('one bottom nav: Home, Assistant, Activity, Profile', tabs.join() === 'Home,Assistant,Activity,Profile', tabs.join());
+  await m.getByRole('button', { name: /Check a message/ }).click(); await m.waitForURL('**/assistant');
+  ok('Check a message opens the Assistant in check mode', await m.locator('#assistant-input').isVisible());
 
   // Check a fake support message
   await m.goto(BASE + '/check'); await m.waitForLoadState('networkidle');

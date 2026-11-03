@@ -50,6 +50,7 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/activity" element={<Activity />} />
     <Route path="/profile" element={<Profile />} />
     <Route path="/check" element={<Check />} />
+    <Route path="/check/share" element={<Check />} />
     <Route path="/shop" element={<Shop />} />
     <Route path="/order/:id" element={<Order />} />
     <Route path="/checkout/return" element={<ReturnGate />} />

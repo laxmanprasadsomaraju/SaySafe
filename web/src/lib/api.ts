@@ -69,7 +69,7 @@ export interface Product {
 
 export type PaymentState =
   | 'DRAFT' | 'RISK_REVIEW' | 'BLOCKED' | 'FAMILY_APPROVAL_PENDING' | 'FAMILY_APPROVED' | 'PAYER_APPROVAL_PENDING'
-  | 'PAYER_APPROVED' | 'CAPTURE_PENDING' | 'CAPTURED' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+  | 'PAYER_APPROVED' | 'CAPTURE_PENDING' | 'CAPTURED' | 'FAILED' | 'CANCELLED' | 'REFUND_PENDING' | 'REFUNDED';
 
 export interface PaymentRequest {
   id: string; state: PaymentState;
@@ -78,16 +78,18 @@ export interface PaymentRequest {
   risk: { ok: boolean; needsFamily: boolean; reasons: string[] } | null;
   approval: { id: string; status: string; expiresAt: number; decidedAt: string | null; reason: string | null } | null;
   receipt: { captureId: string; amount: string; currency: string; payee: string; orderId: string; webhookConfirmed?: boolean } | null;
+  /** REFUND_REQUESTED is only the buyer's request (no money moved). REFUNDED comes from PayPal. */
+  refund?: { status: 'REFUND_REQUESTED' | 'REFUND_PENDING' | 'REFUNDED' | null; label: string | null; requestedAt: string | null; canRequest: boolean; refundId: string | null; lastAttemptFailed: boolean } | null;
   createdAt: string; updatedAt: string;
   timeline?: PaymentTimeline;
 }
 
 export interface PaymentTimeline {
   label: string;
-  events: { kind: 'order_created' | 'buyer_approved' | 'capture_completed' | 'webhook_received'; label: string; at: string; paypalTime: string | null; source: string; verification: string; verified: boolean }[];
+  events: { kind: 'order_created' | 'buyer_approved' | 'capture_completed' | 'capture_verified' | 'webhook_received' | 'refund_asked' | 'refund_requested' | 'refund_completed' | 'refund_verified' | 'refund_webhook'; label: string; at: string; paypalTime: string | null; source: string; verification: string; verified: boolean }[];
   pending: string[];
 }
-export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled';
+export type ReconcileOutcome = 'captured' | 'buyer_approved' | 'cancelled' | 'pending' | 'no_change' | 'mismatch' | 'unknown' | 'not_applicable' | 'throttled' | 'refunded' | 'refund_failed';
 
 export interface ScanResult {
   scanId: string;
@@ -103,3 +105,27 @@ export interface ScanResult {
 }
 
 export const newKey = () => (crypto.randomUUID?.() ?? Math.random().toString(36).slice(2) + Date.now()).replace(/[^A-Za-z0-9_-]/g, '');
+
+/** Scan result as the server sends it since the scam-audit branch (three public verdicts, evidence, limits). */
+export type ScanVerdict = 'suspicious' | 'needs_checking' | 'no_obvious_warning_signs';
+export type FindingBasis = 'deterministic_rule' | 'ai_judgement' | 'independently_verified';
+export interface ScanResultV2 extends Omit<ScanResult, 'verdict' | 'signals'> {
+  verdict: ScanVerdict;
+  verdictLabel: string;
+  /** suspicious | needs_verification | verified_official_contact, for older clients. */
+  legacyVerdict?: 'suspicious' | 'needs_verification' | 'verified_official_contact';
+  /** Always set when verdict is no_obvious_warning_signs. */
+  disclosure: string | null;
+  signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string; basis?: FindingBasis }[];
+  nextSteps: { id: string; text: string; url?: string; urlLabel?: string }[];
+  couldNotVerify: string[];
+  /** Three evidence classes (since scam-calibrate). Older servers do not send it. */
+  evidence?: ScanEvidence;
+  ai: { used: boolean; model?: string; mode?: 'ai_checked' | 'rules_only'; raised?: boolean };
+}
+export interface ScanEvidence {
+  observable: { kind: 'link' | 'phone' | 'email' | 'amount' | 'screenshot' | 'scam_list'; text: string; quote?: string }[];
+  rule: { code: string; severity: 'high' | 'medium' | 'info'; title: string; quote?: string; detail: string }[];
+  ai: { category: string; categoryLabel: string; quote: string; explanation: string }[];
+  labels: { observable: string; rule: string; ai: string };
+}

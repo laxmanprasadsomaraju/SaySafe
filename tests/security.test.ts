@@ -167,9 +167,21 @@ describe('prompt injection', () => {
     expect(after).toBe(before);
   });
 
-  it('a genuine PayPal invoice link is never "verified"', async () => {
+  it('a genuine PayPal invoice link never gets "No obvious warning signs"', async () => {
     const r = await request(app).post('/api/scan').set(H).send({ text: 'https://www.paypal.com/invoice/p/#INV2-ABCD-1234' }).expect(200);
-    expect(r.body.verdict).not.toBe('verified_official_contact');
+    expect(r.body.verdict).toBe('needs_checking');
+    expect(r.body.legacyVerdict).toBe('needs_verification');
+  });
+
+  it('every result uses one of the three public verdicts and never says safe', async () => {
+    for (const text of ['Thanks for lunch!', 'Pay €20 now at bit.ly/x', 'https://www.paypal.com/ie/security/report-suspicious-messages']) {
+      const r = await request(app).post('/api/scan').set(H).send({ text }).expect(200);
+      expect(['suspicious', 'needs_checking', 'no_obvious_warning_signs']).toContain(r.body.verdict);
+      expect(['Suspicious', 'Needs checking', 'No obvious warning signs']).toContain(r.body.verdictLabel);
+      expect(JSON.stringify(r.body)).not.toMatch(/"verdict":"(safe|legitimate)"/);
+      if (r.body.verdict === 'no_obvious_warning_signs') expect(r.body.disclosure).toBe("No concerning signs were found in what you shared. This isn't a guarantee it's safe.");
+      expect(r.body.couldNotVerify.length).toBeGreaterThan(0);
+    }
   });
 });
 

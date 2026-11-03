@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX, RefreshCw, ShieldCheck, CircleDashed } from 'lucide-react';
+import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX, RefreshCw, ShieldCheck, CircleDashed, RotateCcw } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, type PaymentRequest, type PaymentState, type PaymentTimeline, type ReconcileOutcome } from '../lib/api';
@@ -14,13 +14,13 @@ export function stateLabel(s: PaymentState) {
   return ({
     DRAFT: 'Started', RISK_REVIEW: 'Checking', BLOCKED: 'Stopped for safety', FAMILY_APPROVAL_PENDING: 'Waiting for family',
     FAMILY_APPROVED: 'Family approved — ready to pay', PAYER_APPROVAL_PENDING: 'Waiting for your PayPal approval', PAYER_APPROVED: 'Approved — finishing',
-    CAPTURE_PENDING: 'Payment processing', CAPTURED: 'Paid', FAILED: 'Did not go through', CANCELLED: 'Cancelled', REFUNDED: 'Refunded',
+    CAPTURE_PENDING: 'Payment processing', CAPTURED: 'Paid', FAILED: 'Did not go through', CANCELLED: 'Cancelled', REFUND_PENDING: 'Refund pending', REFUNDED: 'Refunded',
   } as Record<PaymentState, string>)[s];
 }
 
 export { spokenReceipt };
 
-const RECONCILABLE: PaymentState[] = ['PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'CAPTURE_PENDING'];
+const RECONCILABLE: PaymentState[] = ['PAYER_APPROVAL_PENDING', 'PAYER_APPROVED', 'CAPTURE_PENDING', 'REFUND_PENDING'];
 
 function outcomeText(o: ReconcileOutcome): string {
   return ({
@@ -30,6 +30,8 @@ function outcomeText(o: ReconcileOutcome): string {
     pending: 'PayPal has not finished this yet. Nothing more is needed from you right now.',
     unknown: 'I could not reach PayPal just now. Nothing was changed. You can check again in a moment.',
     mismatch: 'PayPal’s details do not match this purchase, so I have not marked it as paid.',
+    refunded: 'PayPal confirms this payment was refunded.',
+    refund_failed: 'PayPal did not complete the refund. The payment is still paid.',
     no_change: 'Up to date with PayPal.', throttled: 'Up to date with PayPal.', not_applicable: 'Up to date with PayPal.',
   } as Record<ReconcileOutcome, string>)[o];
 }
@@ -115,8 +117,9 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
   useEffect(() => {
     if (!r) return;
     const waitingNotice = r.state === 'CAPTURED' && r.receipt && !r.receipt.webhookConfirmed;
-    if (!['FAMILY_APPROVAL_PENDING', 'CAPTURE_PENDING'].includes(r.state) && !waitingNotice) return;
-    const t = setInterval(() => (r.state === 'CAPTURE_PENDING' ? checkWithPayPal() : load()), r.state === 'CAPTURE_PENDING' ? 6000 : 4000);
+    if (!['FAMILY_APPROVAL_PENDING', 'CAPTURE_PENDING', 'REFUND_PENDING'].includes(r.state) && !waitingNotice) return;
+    const viaPayPal = r.state === 'CAPTURE_PENDING' || r.state === 'REFUND_PENDING';
+    const t = setInterval(() => (viaPayPal ? checkWithPayPal() : load()), viaPayPal ? 6000 : 4000);
     const stop = waitingNotice ? setTimeout(() => clearInterval(t), 120_000) : undefined;
     return () => { clearInterval(t); if (stop) clearTimeout(stop); };
   }, [r?.state, r?.receipt?.webhookConfirmed]); // eslint-disable-line
@@ -131,6 +134,12 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
     setBusy(true); setErr(null);
     try { const { approveUrl } = await api(`/api/payments/${id}/checkout`, { body: {} }); goToPayPal(approveUrl); }
     catch (e: any) { setErr(e.message); setBusy(false); }
+  };
+  const askRefund = async () => {
+    setBusy(true); setErr(null);
+    try { setR(await api<PaymentRequest>(`/api/payments/${id}/refund-request`, { body: {} })); }
+    catch (e: any) { setErr(e.message); }
+    finally { setBusy(false); }
   };
   const cancel = async () => { setBusy(true); try { setR(await api(`/api/payments/${id}/cancel`, { body: {} })); } catch (e: any) { setErr(e.message); } setBusy(false); };
 
@@ -153,9 +162,9 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
           </div>
           <ul className="mt-5 divide-y divide-line">
             {r.items.map((l) => (
-              <li key={l.productId} className="py-4 flex gap-4 items-center">
-                <img src={`/products/${l.image}`} alt="" className="size-16 rounded-xl object-cover bg-teal-soft" />
-                <p className="flex-1 font-bold">{l.name} <span className="font-normal text-ink-soft">× {l.quantity}</span></p>
+              <li key={l.productId} className="py-4 flex gap-3 sm:gap-4 items-center">
+                <img src={`/products/${l.image}`} alt="" className="size-12 sm:size-16 rounded-xl object-cover bg-teal-soft" />
+                <p className="flex-1 min-w-0 font-bold break-words hyphens-auto" lang="en">{l.name} <span className="font-normal text-ink-soft">× {l.quantity}</span></p>
                 <p className="font-bold">{eur(l.lineCents)}</p>
               </li>
             ))}
@@ -188,6 +197,10 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
           {RECONCILABLE.includes(r.state) && <Button className="w-full" variant="secondary" icon={<RefreshCw className="size-6" aria-hidden />} onClick={() => checkWithPayPal(true)} busy={checking} disabled={busy}>Check with PayPal</Button>}
           {['FAMILY_APPROVAL_PENDING', 'FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING', 'PAYER_APPROVED'].includes(r.state) && <Button className="w-full" variant="secondary" onClick={cancel} disabled={busy}>Cancel this purchase</Button>}
           {paid && <Button className="w-full" variant="secondary" icon={<Volume2 className="size-6" aria-hidden />} onClick={() => speech.speak(spokenReceipt(r), { priority: 'user' })}>Read my receipt</Button>}
+          {r.refund?.status === 'REFUND_REQUESTED' && <Notice tone="info" title="Request sent — not refunded yet">The shop decides. You have not been refunded. If it is refunded, this page will say “Refunded”.</Notice>}
+          {r.refund?.status === 'REFUND_PENDING' && <Notice tone="info" title="Refund sent to PayPal — not confirmed yet">PayPal has not confirmed it. This page updates when it does.</Notice>}
+          {r.state === 'REFUNDED' && <Notice tone="ok" title="Refunded">The Demo Shop refunded this payment through PayPal (Sandbox — no real money).</Notice>}
+          {paid && r.refund?.canRequest && <Button className="w-full" variant="secondary" icon={<RotateCcw className="size-6" aria-hidden />} onClick={askRefund} busy={busy}>Request a refund</Button>}
           {paid && <Button className="w-full" variant="ghost" icon={<PackageX className="size-6" aria-hidden />} onClick={() => nav('/help', { state: { problem: true, requestId: r.id } })}>Problem with this order?</Button>}
           <Button className="w-full" variant="ghost" onClick={() => nav('/home')}>Back to home</Button>
         </div>

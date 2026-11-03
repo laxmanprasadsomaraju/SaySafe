@@ -68,6 +68,35 @@ CREATE TABLE IF NOT EXISTS approvals (
   decided_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Buyer-facing "Request a refund". A request only: it never moves money and never changes payment state.
+CREATE TABLE IF NOT EXISTS refund_requests (
+  id TEXT PRIMARY KEY,
+  request_id TEXT NOT NULL UNIQUE REFERENCES payment_requests(id) ON DELETE CASCADE,
+  household_id TEXT NOT NULL,
+  requested_by TEXT NOT NULL,
+  reason TEXT,
+  status TEXT NOT NULL CHECK (status IN ('REFUND_REQUESTED','REFUNDED')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+-- Merchant (admin) refund execution. One row per payment (full refunds only). The PayPal-Request-Id is written
+-- here BEFORE PayPal is called, so a retry after a timeout or restart reuses it and PayPal cannot refund twice.
+CREATE TABLE IF NOT EXISTS refunds (
+  request_id TEXT PRIMARY KEY REFERENCES payment_requests(id) ON DELETE CASCADE,
+  household_id TEXT NOT NULL,
+  capture_id TEXT NOT NULL,
+  paypal_request_id TEXT NOT NULL UNIQUE,
+  attempt INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL CHECK (status IN ('IN_FLIGHT','UNKNOWN','PENDING','COMPLETED','FAILED')),
+  refund_id TEXT UNIQUE,
+  amount TEXT NOT NULL,
+  currency TEXT NOT NULL,
+  paypal_status TEXT,
+  last_error TEXT,
+  actor TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS webhook_events (
   id TEXT PRIMARY KEY,
   event_type TEXT NOT NULL,
@@ -102,7 +131,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 `;
 
 /** Every table the app owns, in an order that respects foreign keys (parents first). Used by backup/migration scripts. */
-export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'] as const;
+export const TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'] as const;
 
 export function initSchema(db: Db) {
   db.exec(SCHEMA_SQL);

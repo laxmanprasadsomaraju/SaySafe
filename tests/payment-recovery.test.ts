@@ -38,6 +38,14 @@ vi.mock('../server/paypal/client', () => ({
     if (pp.captureMode === 'webhook_first') pp.onWebhookFirst?.(o);
     return o;
   }),
+  // Payments v2 GET capture: the capture as PayPal holds it on the order (with custom_id + order link, like the real API).
+  getCapture: vi.fn(async (capId: string) => {
+    for (const o of orders.values()) {
+      const c = o.purchase_units?.[0]?.payments?.captures?.find((x: any) => x.id === capId);
+      if (c) return { ...c, custom_id: o.purchase_units[0].custom_id, supplementary_data: { related_ids: { order_id: o.id } } };
+    }
+    const e: any = new Error('RESOURCE_NOT_FOUND'); e.status = 404; throw e;
+  }),
   refundCapture: vi.fn(async () => ({ status: 'COMPLETED' })),
   verifyWebhook: vi.fn(async () => true),
   isUnknownOutcome: (e: any) => !e?.status || e.status >= 500,

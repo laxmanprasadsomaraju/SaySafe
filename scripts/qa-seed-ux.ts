@@ -18,4 +18,7 @@ db.prepare('INSERT INTO payment_requests (id, household_id, state, items_json, m
   .run(id, hh, 'FAMILY_APPROVAL_PENDING', JSON.stringify(q.lines), q.merchant, q.totalCents, q.currency, fingerprint(q), JSON.stringify({ ok: true, needsFamily: true, reasons: ['Above your protected limit (example).'] }), `seed_${id}`);
 db.prepare('INSERT INTO approvals (id, request_id, fingerprint, status, nonce, expires_at) VALUES (?,?,?,?,?,?)')
   .run(`apr_seed${crypto.randomBytes(5).toString('hex')}`, id, fingerprint(q), 'pending', crypto.randomBytes(16).toString('hex'), Date.now() + APPROVAL_TTL_MS);
-console.log(JSON.stringify({ household: hh, pending: id }));
+// One example captured payment with a buyer refund REQUEST (not a refund), so Activity shows that label.
+const cap = db.prepare("SELECT id FROM payment_requests WHERE household_id=? AND state='CAPTURED' AND id NOT IN (SELECT request_id FROM refund_requests) ORDER BY created_at ASC LIMIT 1").get(hh) as { id: string } | undefined;
+if (cap) db.prepare("INSERT INTO refund_requests (id, request_id, household_id, requested_by, reason, status) VALUES (?,?,?,?,?,?)").run(`rr_seed${crypto.randomBytes(5).toString('hex')}`, cap.id, hh, 'seed', 'example', 'REFUND_REQUESTED');
+console.log(JSON.stringify({ household: hh, pending: id, refundRequested: cap?.id ?? null }));

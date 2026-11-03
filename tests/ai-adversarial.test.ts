@@ -208,9 +208,40 @@ describe('injection through data the model reads', () => {
   });
 });
 
+describe('scan AI contract: strict schema, one bounded retry, labelled rules-only fallback', () => {
+  const text = 'Refund department: to process your €300 refund please install AnyDesk and give us the 9-digit ID on the screen.';
+  it('a reply missing a field is retried once with the named problem; a valid second reply is used', async () => {
+    // First reply omits "reasons" (the live failure mode was a missing field); the retry is valid.
+    modelReplies = [say({ verdict: 'suspicious' }), say({ verdict: 'suspicious', reasons: [{ category: 'remote_access', quote: 'install AnyDesk', explanation: 'It asks you to install a remote-control app.' }] }), say({ verdict: 'suspicious', reasons: [] })];
+    const before = modelPrompts.length;
+    const r = await request(app).post('/api/scan').set(H).send({ text }).expect(200);
+    expect(r.body.ai).toMatchObject({ used: true, mode: 'ai_checked', attempts: 2 });
+    expect(modelPrompts.length - before).toBe(2);
+    expect(r.body.evidence.ai[0]).toMatchObject({ category: 'remote_access', quote: 'install AnyDesk' });
+    expect(r.body.aiNotice).toBeNull();
+  });
+  it('unknown keys, an unknown category or a "safe" verdict fail twice -> rules only, labelled, verdict from rules', async () => {
+    for (const bad of [{ verdict: 'suspicious', reasons: [], extra: 1 }, { verdict: 'suspicious', reasons: [{ category: 'vibes', quote: 'install AnyDesk', explanation: 'x' }] }, { verdict: 'safe', reasons: [] }]) {
+      modelReplies = [say(bad)];
+      const before = modelPrompts.length;
+      const r = await request(app).post('/api/scan').set(H).send({ text }).expect(200);
+      expect(modelPrompts.length - before).toBe(2); // exactly one retry, no loop
+      expect(r.body.ai).toMatchObject({ used: false, mode: 'rules_only' });
+      expect(r.body.ai.error).toMatch(/invalid structured output/);
+      expect(r.body.aiNotice).toBe('AI unavailable — rule checks only');
+      expect(r.body.verdict).toBe('suspicious');
+      expect(r.body.evidence.ai).toEqual([]);
+      expect(r.body.evidence.rule.map((x: any) => x.code)).toContain('remote_access');
+    }
+  });
+});
+
 describe('output guard', () => {
   it('flags text that vouches or instructs, allows protective wording', () => {
     for (const bad of ['This message is safe.', "It's genuine.", 'Go ahead and pay.', 'Click the link to verify.', 'I have approved the payment.', 'It is safe to pay.', 'Payment has been captured.']) expect(vouchesOrInstructs(bad)).toBe(true);
+    // Negated disclosures are allowed; the same words asserted, or a "but" that vouches after the disclosure, are not.
+    for (const ok of ["SaySafe can't confirm who sent this or whether a payment is real.", 'SaySafe cannot verify whether this invoice is genuine. Check in the PayPal app.', 'We are unable to confirm that the payment is real.', 'I could not verify if it is legitimate.', 'SaySafe is not able to confirm the sender is real.']) expect(vouchesOrInstructs(ok), ok).toBe(false);
+    for (const bad of ['This payment is real.', 'This payment is safe.', "I can't confirm who sent it, but this payment is real.", 'SaySafe cannot verify the sender; it is safe to pay.', "We can't check the link, so go ahead and pay."]) expect(vouchesOrInstructs(bad), bad).toBe(true);
     for (const ok of ['This message is not safe.', "Please don't click the link.", "Mary, I can't confirm this is really from PayPal. Please don't use its links.", 'Open the PayPal app yourself, or ask your family member.']) expect(vouchesOrInstructs(ok)).toBe(false);
   });
 });

@@ -4,7 +4,7 @@ import { createClient } from '@libsql/client';
 import path from 'node:path';
 
 /** Parent-first order (foreign keys). Tables found in the database but not listed here are appended. */
-export const KNOWN_TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'];
+export const KNOWN_TABLES = ['users', 'households', 'sessions', 'family_links', 'spending_policies', 'payment_requests', 'refund_requests', 'refunds', 'approvals', 'webhook_events', 'security_scans', 'user_preferences', 'audit_log'];
 
 export function parseArgs(argv = process.argv.slice(2)) {
   const out = { _: [] };

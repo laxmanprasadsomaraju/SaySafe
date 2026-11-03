@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { db } from './db/index.js';
+import { refundView } from './payments/service.js';
 
 export type StatusGroup = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'failed' | 'scan' | 'other';
 
@@ -14,7 +15,9 @@ export interface ActivityItem {
   at: string; // ISO, UTC
   updatedAt: string;
   title: string;
-  status: string; // raw state or verdict
+  status: string; // what to show: payment state, REFUND_REQUESTED for a buyer request, or the scan verdict
+  state?: string; // raw payment state
+  refundLabel?: string | null;
   statusGroup: StatusGroup;
   amountCents: number | null;
   currency: string | null;
@@ -60,11 +63,14 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
   const items: ActivityItem[] = rows.map((r) => {
     const a = db.prepare('SELECT status, expires_at, decided_at, reason FROM approvals WHERE request_id=? ORDER BY created_at DESC LIMIT 1').get(r.id) as any;
     const lines = (() => { try { return JSON.parse(r.items_json) as { name: string; quantity: number }[]; } catch { return []; } })();
+    // A buyer refund request is only a request: shown as REFUND_REQUESTED, never as refunded (same rule as the receipt).
+    const rv = refundView(r);
+    const shown = String(rv?.status ?? r.state);
     const webhook = Boolean(r.paypal_capture_id && db.prepare("SELECT 1 FROM webhook_events WHERE resource_id=? AND event_type='PAYMENT.CAPTURE.COMPLETED' AND verified=1").get(r.paypal_capture_id));
     return {
       id: r.id, type: 'payment', at: iso(r.created_at), updatedAt: iso(r.updated_at),
       title: lines.map((l) => `${l.name}${l.quantity > 1 ? ` × ${l.quantity}` : ''}`).join(', ') || 'Purchase',
-      status: String(r.state), statusGroup: groupOf(String(r.state)),
+      status: shown, state: String(r.state), refundLabel: rv?.label ?? null, statusGroup: groupOf(shown),
       amountCents: r.amount_cents, currency: r.currency, merchant: r.merchant,
       captured: Boolean(r.paypal_capture_id), webhookConfirmed: webhook, sandbox: true,
       approval: a ? { status: a.status === 'pending' && a.expires_at < Date.now() ? 'expired' : a.status, decidedAt: a.decided_at ? iso(a.decided_at) : null, reason: a.reason ?? null } : null,

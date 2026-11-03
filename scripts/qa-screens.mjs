@@ -1,5 +1,6 @@
 // Visual + accessibility QA of every app screen: axe WCAG 2.2 A/AA, horizontal overflow and
 // small touch targets, in default / high-contrast / large-text modes at 320px and 390px.
+// Updated for the app shell (Home/Assistant/Activity/Profile tabs). See scripts/qa-ux.mjs for the full shell QA.
 // node scripts/qa-screens.mjs [base]   (RECEIPT_COOKIE + RECEIPT_ID for a real captured order)
 import { chromium } from 'playwright';
 import AxeBuilder from '@axe-core/playwright';
@@ -30,7 +31,7 @@ for (const width of [320, 390]) for (const mode of ['default', 'contrast', 'larg
   const p = await ctx.newPage(); const tag = `${width}px ${mode}`;
   await p.goto(BASE + '/'); await p.waitForLoadState('networkidle'); await audit(p, `${tag} landing`);
   await post(p, '/api/demo/start', { name: 'Mary' });
-  for (const path of ['/home', '/help']) { await p.goto(BASE + path); await p.waitForLoadState('networkidle'); await audit(p, `${tag} ${path}`); }
+  for (const path of ['/home', '/assistant', '/activity', '/profile', '/help']) { await p.goto(BASE + path); await p.waitForLoadState('networkidle'); await audit(p, `${tag} ${path}`); }
   await p.goto(BASE + '/check'); await p.getByRole('button', { name: /invoice/i }).first().click();
   await p.getByText(/Suspicious|Needs checking/).first().waitFor({ timeout: 45000 }); await audit(p, `${tag} check result`);
   if (mode === 'default') await p.screenshot({ path: `${OUT}/${width}-check.png`, fullPage: true });

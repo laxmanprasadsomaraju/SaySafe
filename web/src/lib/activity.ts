@@ -5,7 +5,7 @@ import type { PaymentState } from './api';
 
 export type StatusGroup = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'failed' | 'scan' | 'other';
 export interface ActivityItem {
-  id: string; type: 'payment' | 'scan'; at: string; updatedAt: string; title: string; status: string; statusGroup: StatusGroup;
+  id: string; type: 'payment' | 'scan'; at: string; updatedAt: string; title: string; status: string; state?: string; refundLabel?: string | null; statusGroup: StatusGroup;
   amountCents: number | null; currency: string | null; merchant: string | null; captured: boolean; webhookConfirmed: boolean; sandbox: boolean;
   approval: { status: string; decidedAt: string | null; reason: string | null } | null; verdict: string | null; sharedWithFamily?: boolean; href: string | null;
 }
@@ -19,11 +19,14 @@ export function fetchActivity(f: ActivityFilters) {
 }
 
 const humanise = (s: string) => s.toLowerCase().replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+const paymentLabelSpecial = (s: string) => (s === 'REFUND_REQUESTED' ? 'Refund requested — not refunded yet' : 'Refund pending — not confirmed yet');
 /** Known states use the receipt page's wording; refund or future states get a readable fallback. */
 export function paymentLabel(state: string): string {
+  if (state === 'REFUND_REQUESTED' || state === 'REFUND_PENDING') return paymentLabelSpecial(state);
   const known = stateLabel(state as PaymentState) as string | undefined;
   if (known) return known;
-  if (state === 'REFUND_REQUESTED') return 'Refund requested';
+  if (state === 'REFUND_REQUESTED') return 'Refund requested — not refunded yet';
+  if (state === 'REFUND_PENDING') return 'Refund pending — not confirmed yet';
   return humanise(state);
 }
 export function verdictLabel(v: string): string {

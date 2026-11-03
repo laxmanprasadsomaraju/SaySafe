@@ -32,7 +32,7 @@ export default function ReturnGate() {
   const paid = st?.capture?.status === 'COMPLETED';
   return (
     <Layout>
-      <PageTitle eyebrow="Payment check" title={paid ? 'PayPal confirms this payment' : st ? 'No payment was taken' : 'Checking with PayPal'} lead="Your SaySafe session ended (the demo server restarts when idle), so I asked PayPal directly. I will never charge you again because of this." />
+      <PageTitle eyebrow="Payment check" title={paid ? 'PayPal confirms this payment' : st ? 'No payment was taken' : 'Checking with PayPal'} lead="This browser isn't signed in to SaySafe (for example a different browser, a private window, or an expired session), so I asked PayPal directly. Nothing is charged from this page. Sign in on the device you started on to finish." />
       <Card className="p-6 md:p-8 max-w-2xl">
         {err && <p className="flex gap-2 text-danger font-bold"><CircleAlert className="size-6 shrink-0" aria-hidden />{err}</p>}
         {st && (

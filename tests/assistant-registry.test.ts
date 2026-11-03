@@ -3,7 +3,7 @@ import { parseBlock, productItems, restoreThread, BLOCK_KINDS } from '../web/src
 import { parseFollowup, askedAge, ageAnswer, ageClaims, sellerAnswer, sellerFacts, toShopItem } from '../web/src/assistant/followups';
 import { compareRows } from '../shared/shopping';
 
-const item = (over: Record<string, unknown> = {}) => ({ id: 'p1', title: 'Wooden Train Set', brand: null, image: 'https://cdn.trychannel3.com/a.jpg', imageAlt: '', features: ['30 pieces'], price: 24.99, compareAt: null, currency: 'EUR', retailer: 'Smyths', url: 'https://www.smythstoys.com/ie/en-ie/p/1', availability: 'InStock', ...over });
+const item = (over: Record<string, unknown> = {}): any => ({ id: 'p1', title: 'Wooden Train Set', brand: null, image: 'https://cdn.trychannel3.com/a.jpg', imageAlt: '', features: ['30 pieces'], price: 24.99, compareAt: null, currency: 'EUR', retailer: 'Smyths', url: 'https://www.smythstoys.com/ie/en-ie/p/1', availability: 'InStock', ...over });
 
 describe('assistant component registry', () => {
   it('has exactly the approved components', () => {

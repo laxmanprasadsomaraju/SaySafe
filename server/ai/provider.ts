@@ -155,21 +155,35 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
   throw lastErr;
 }
 
-/** Ask for JSON and validate it with a schema. Throws if invalid after one repair attempt. */
-export async function chatJSON<T>(schema: z.ZodType<T>, messages: ChatMessage[], opts: ChatOptions = {}): Promise<{ data: T; provider: string; model: string }> {
-  const first = await chat(messages, { ...opts, json: true });
-  const tryParse = (t: string) => {
+/** Raised when the model's JSON still fails the schema after the one bounded retry. `issues` names the fields. */
+export class AIInvalidOutputError extends Error {
+  constructor(public issues: string[]) { super(`AI returned invalid structured output (${issues.slice(0, 4).join('; ') || 'not JSON'})`); }
+}
+
+function describeIssues(e: z.ZodError): string[] {
+  return e.issues.slice(0, 6).map((i) => `${i.path.join('.') || '(root)'}: ${i.code === 'invalid_type' && /undefined|required/i.test(i.message) ? 'missing' : i.message}`.slice(0, 120));
+}
+
+/**
+ * Ask for JSON and validate it with a schema. One bounded retry that tells the model exactly which
+ * fields were wrong; after that, throws AIInvalidOutputError (callers fall back to rule checks only).
+ */
+export async function chatJSON<T>(schema: z.ZodType<T>, messages: ChatMessage[], opts: ChatOptions = {}): Promise<{ data: T; provider: string; model: string; attempts: number }> {
+  const parse = (t: string): { ok: true; data: T } | { ok: false; issues: string[] } => {
     const m = t.match(/\{[\s\S]*\}/);
-    return schema.safeParse(JSON.parse(m ? m[0] : t));
+    let raw: unknown;
+    try { raw = JSON.parse(m ? m[0] : t); } catch { return { ok: false, issues: ['(root): not valid JSON'] }; }
+    const p = schema.safeParse(raw);
+    return p.success ? { ok: true, data: p.data } : { ok: false, issues: describeIssues(p.error) };
   };
-  try {
-    const p = tryParse(first.text);
-    if (p.success) return { data: p.data, provider: first.provider, model: first.model };
-  } catch { /* fallthrough */ }
-  const second = await chat([...messages, { role: 'assistant', content: first.text }, { role: 'user', content: 'That was not valid JSON for the schema. Reply with only the corrected JSON object.' }], { ...opts, json: true });
-  const p2 = tryParse(second.text);
-  if (!p2.success) throw new Error('AI returned invalid structured output');
-  return { data: p2.data, provider: second.provider, model: second.model };
+  const first = await chat(messages, { ...opts, json: true });
+  const p1 = parse(first.text);
+  if (p1.ok) return { data: p1.data, provider: first.provider, model: first.model, attempts: 1 };
+  const fix = `That JSON did not match the required format. Problems: ${p1.issues.join('; ')}. Reply with only the corrected JSON object, with every required field and no other fields.`;
+  const second = await chat([...messages, { role: 'assistant', content: first.text.slice(0, 4000) }, { role: 'user', content: fix }], { ...opts, json: true });
+  const p2 = parse(second.text);
+  if (!p2.ok) throw new AIInvalidOutputError([...new Set([...p1.issues, ...p2.issues])]);
+  return { data: p2.data, provider: second.provider, model: second.model, attempts: 2 };
 }
 
 /** Speech to text with Groq Whisper. */

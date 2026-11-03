@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, X, ShieldAlert, Clock, Wallet, RotateCcw, BarChart3 } from 'lucide-react';
+import { Check, X, ShieldAlert, Clock, Wallet, BarChart3 } from 'lucide-react';
 import { useConfig } from '../lib/insightsApi';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
@@ -34,7 +34,7 @@ export function FamilyPair() {
   );
 }
 
-interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; summary: string; created_at: string }[] }
+interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; verdictLabel?: string; summary: string; created_at: string }[] }
 
 export default function Family() {
   const nav = useNavigate();
@@ -56,12 +56,6 @@ export default function Family() {
   const decide = async (r: PaymentRequest, decision: 'approve' | 'decline') => {
     setBusyId(r.id); setErr(null);
     try { await api(`/api/family/requests/${r.id}/decision`, { body: { decision, approvalId: r.approval!.id } }); await load(); }
-    catch (e: any) { setErr(e.message); }
-    finally { setBusyId(null); }
-  };
-  const refund = async (r: PaymentRequest) => {
-    setBusyId(r.id); setErr(null);
-    try { await api(`/api/family/requests/${r.id}/refund`, { body: {} }); await load(); }
     catch (e: any) { setErr(e.message); }
     finally { setBusyId(null); }
   };
@@ -103,7 +97,7 @@ export default function Family() {
                 {history.slice(0, 10).map((r) => (
                   <li key={r.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
                     <div><p className="font-bold">{r.items.map((i) => i.name).join(', ')}</p><p className="text-ink-soft text-base">{eur(r.amountCents)} · {stateLabel(r.state)}{r.approval?.status && r.approval.status !== 'pending' ? ` · you ${r.approval.status}` : ''}</p></div>
-                    {r.state === 'CAPTURED' && <Button variant="secondary" className="!min-h-12 !text-base" onClick={() => refund(r)} busy={busyId === r.id} icon={<RotateCcw className="size-5" aria-hidden />}>Demo shop: refund</Button>}
+                    {r.refund?.status === 'REFUND_REQUESTED' && <span className="text-base font-bold text-ink-soft">Refund request sent — not refunded yet</span>}
                   </li>
                 ))}
               </ul>
@@ -133,6 +127,7 @@ export default function Family() {
               <ul className="mt-3 space-y-3">
                 {o.alerts.map((a) => (
                   <li key={a.id} className={`rounded-2xl p-4 border-l-[6px] ${a.verdict === 'suspicious' ? 'bg-danger-soft border-danger' : 'bg-amber-soft border-amber'}`}>
+                    {a.verdictLabel && <p className="text-sm font-bold uppercase tracking-wider">{a.verdictLabel}</p>}
                     <p className="font-bold">{a.summary}</p><p className="text-base text-ink-soft">{new Date(a.created_at + 'Z').toLocaleString()}</p>
                   </li>
                 ))}

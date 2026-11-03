@@ -6,16 +6,25 @@
 import { parse as parseDomain } from 'tldts';
 import { domainToUnicode } from 'node:url';
 import { PROTECTED_BRANDS, TRUSTED_DOMAINS, TRUSTED_EMAILS, TRUSTED_HELP_PAGES, URL_SHORTENERS, PAYPAL_USER_CONTENT_DOMAINS } from './directory.js';
+import { decideFromSignals, maxVerdict, normalizeVerdict, type Verdict, type Family, type Basis } from './verdicts.js';
+import { extractLinks, extractPhones, truncateSafe } from './evidence.js';
+import { detectIndicators } from './indicators.js';
 
+export type { Verdict } from './verdicts.js';
 export type Severity = 'high' | 'medium' | 'info';
-export type Verdict = 'suspicious' | 'needs_verification' | 'verified_official_contact';
 
 export interface Signal {
   code: string;
   severity: Severity;
   title: string; // plain words, shown to the user
-  detail: string;
+  detail: string; // why it matters
+  /** The exact matched text, URL or indicator from the message (safely truncated, shown as plain text). */
   evidence?: string;
+  family?: Family;
+  /** Where the finding comes from: a deterministic rule, the AI model, or an independent source. */
+  basis?: Basis;
+  /** An info signal that still rules out "No obvious warning signs". */
+  blocksAllClear?: boolean;
 }
 
 export interface ExtractedLink {
@@ -36,36 +45,9 @@ export interface RuleResult {
   officialMatches: string[];
 }
 
-const URL_RE = /\b((?:https?:\/\/|www\.)[^\s<>"')\]]+|[a-z0-9][a-z0-9.-]*\.(?:com|net|org|info|xyz|top|ie|co|io|me|app|site|online|link|live|support|help|shop|biz|ru|cn|tk|ml|ga|cf|gq|uk|us)(?:\/[^\s<>"')\]]*)?)/gi;
-const EMAIL_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
-const PHONE_RE = /(?:\+|00)?\d[\d\s().-]{7,}\d/g;
-
-const URGENCY = [
-  'immediately', 'urgent', 'within 24 hours', 'within 24h', 'right now', 'act now', 'final notice',
-  'last warning', 'suspended', 'will be closed', 'locked', 'limited', 'restricted', 'expire today',
-  'legal action', 'police', 'arrest', 'avoid suspension',
-];
-const SENSITIVE = [
-  'password', 'one-time code', 'one time code', 'otp', 'verification code', 'security code', 'pin',
-  'card number', 'cvv', 'bank details', 'login details', 'confirm your identity', 'verify your account',
-  'remote access', 'anydesk', 'teamviewer',
-];
-const GIFT_CARD = ['gift card', 'giftcard', 'itunes card', 'google play card', 'steam card', 'amazon voucher', 'crypto', 'bitcoin', 'usdt'];
-const PAY_DEMAND = ['pay', 'payment of', 'send €', 'send $', 'send £', 'refund fee', 'unlock fee', 'release fee', 'transfer'];
-const INVOICE_SCAM = [
-  'geek squad', 'norton', 'mcafee', 'bitcoin purchase', 'btc purchase', 'did not authorise', 'did not authorize',
-  "didn't authorise", "didn't authorize", 'not authorised', 'not authorized', 'if you did not make this',
-  'if this was not you', 'cancel this transaction', 'cancel this order', 'to dispute this', 'billing department',
-];
 // PayPal pages that ANY PayPal user can create and send: real PayPal URL, but not proof the sender is honest.
 const USER_CONTENT_PATH = /^\/(?:[a-z]{2}\/)?(?:invoice|invoices|request|myaccount\/transfer|paypalme|pools|donate|ncp|qrcodes|checkoutnow|webapps\/hermes|signin\/.*invoice)/i;
 const HOME_PATH = /^\/(?:[a-z]{2}(?:\/home)?\/?)?$/i;
-
-const CALL_US = ['call us', 'call our', 'contact our security team', 'call the number', 'ring us', 'phone us'];
-
-function norm(s: string) {
-  return s.normalize('NFKC').toLowerCase();
-}
 
 /** Levenshtein distance, small strings only. */
 export function editDistance(a: string, b: string): number {
@@ -144,8 +126,10 @@ export function analyseLink(raw: string): { link: ExtractedLink; signals: Signal
         signals.push({ code: 'url_brand_in_subdomain', severity: 'high', title: `The link pretends to be ${cap(brand)}`, detail: `"${brand}" appears at the start, but the real website is ${registrable}.`, evidence: hostname });
       } else if (label.includes(brand) || flat.includes(brand)) {
         signals.push({ code: 'url_brand_lookalike', severity: 'high', title: `The link imitates ${cap(brand)}`, detail: `${registrable} is not ${cap(brand)}'s website.`, evidence: hostname });
-      } else if (label.length >= 4 && editDistance(deHomoglyph(label), brand) <= 2) {
+      } else if (label.length >= 4 && isTyposquat(label, brand)) {
         signals.push({ code: 'url_typosquat', severity: 'high', title: `The link is spelled almost like ${cap(brand)}`, detail: `${registrable} is a near-copy of ${brand}.com.`, evidence: hostname });
+      } else if (url.pathname.toLowerCase().includes(brand) || url.search.toLowerCase().includes(brand)) {
+        signals.push({ code: 'url_brand_in_path', severity: 'medium', title: `The link mentions ${cap(brand)} but goes to another website`, detail: `The website is ${registrable}. "${brand}" later in the address means nothing.`, evidence: truncateSafe(hostname + url.pathname, 100) });
       }
     }
     if (/(login|signin|verify|secure|account|update|unlock|support|billing|confirm)/i.test(url.pathname + hostname) && !official) {
@@ -155,26 +139,43 @@ export function analyseLink(raw: string): { link: ExtractedLink; signals: Signal
       signals.push({ code: 'url_http', severity: 'info', title: 'The link is not secure (http)', detail: 'It does not use an encrypted connection.', evidence: hostname });
     }
   }
+  for (const sg of signals) {
+    sg.family ??= sg.code === 'paypal_user_content' ? 'payment' : 'link';
+    sg.basis ??= 'deterministic_rule';
+    if (sg.evidence) sg.evidence = truncateSafe(sg.evidence, 120);
+  }
   return { link, signals };
+}
+
+/** Near-spellings of a brand. Tight on purpose: "payday" or "paypay" are real words/brands, not lookalikes. */
+function isTyposquat(label: string, brand: string): boolean {
+  const flat = label.replace(/[-_]/g, '');
+  if (editDistance(deHomoglyph(flat), brand) <= 1) return true;
+  // two edits only when the label also uses digits or look-alike characters (paypa1l, pay-pa1)
+  return /[0-9]/.test(label) && editDistance(deHomoglyph(flat), brand) <= 2;
 }
 
 const BRAND_NAMES: Record<string, string> = { paypal: 'PayPal' };
 function cap(s: string) { return BRAND_NAMES[s] ?? s.charAt(0).toUpperCase() + s.slice(1); }
 
+const EMAIL_RE = /\b[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}\b/gi;
+
 export function extract(text: string) {
-  const links = Array.from(new Set((text.match(URL_RE) ?? []).filter((u) => !/@/.test(u.split('/')[0]) || /^https?:/i.test(u))));
-  const emails = Array.from(new Set((text.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase())));
-  // drop link matches that are actually the domain part of an email
+  const src = text.normalize('NFKC');
+  const emails = Array.from(new Set((src.match(EMAIL_RE) ?? []).map((e) => e.toLowerCase())));
   const emailDomains = new Set(emails.map((e) => e.split('@')[1]));
-  const cleanLinks = links.filter((l) => !emailDomains.has(l.toLowerCase()));
-  const phones = Array.from(new Set((text.match(PHONE_RE) ?? []).map((p) => p.trim()).filter((p) => p.replace(/\D/g, '').length >= 8 && p.replace(/\D/g, '').length <= 15)));
-  return { links: cleanLinks, emails, phones };
+  const links = extractLinks(src).map((l) => l.raw).filter((l) => !emailDomains.has(l.toLowerCase()));
+  // Email addresses also look like phone-free text; remove them before looking for numbers.
+  const noEmails = src.replace(EMAIL_RE, (m) => ' '.repeat(m.length));
+  const phones = Array.from(new Set(extractPhones(noEmails).map((p) => p.raw)));
+  return { links, emails, phones };
 }
 
-export function analyseText(input: string): RuleResult {
-  const text = norm(input).slice(0, 20000);
+export function analyseText(input: string, opts: { ocrUncertain?: boolean } = {}): RuleResult {
+  const src = input.normalize('NFKC').slice(0, 20000);
+  const lower = src.toLowerCase();
   const signals: Signal[] = [];
-  const { links: rawLinks, emails, phones } = extract(input);
+  const { links: rawLinks, emails, phones } = extract(src);
   const links: ExtractedLink[] = [];
   const officialMatches: string[] = [];
 
@@ -184,74 +185,55 @@ export function analyseText(input: string): RuleResult {
     signals.push(...r.signals);
     if (r.link.isOfficialPayPal) officialMatches.push(r.link.hostname!);
   }
+  const unofficial = links.filter((l) => !l.isOfficialPayPal);
+  if (unofficial.length && !signals.some((s) => s.family === 'link' && s.severity !== 'info')) {
+    signals.push({ code: 'link_unverified', severity: 'info', blocksAllClear: true, family: 'link', basis: 'deterministic_rule', title: 'A link SaySafe cannot check', detail: 'SaySafe reads the address but never opens it, so it cannot tell you what is on that page.', evidence: truncateSafe(unofficial.map((l) => l.raw).join(', '), 120) });
+  }
 
   for (const e of emails) {
     const domain = e.split('@')[1];
     const reg = parseDomain(domain).domain;
     const trusted = TRUSTED_EMAILS.find((t) => t.value === e);
+    const base = { basis: 'deterministic_rule' as const, evidence: e };
     if (trusted) {
       officialMatches.push(e);
     } else if (isOfficialDomain(reg)) {
-      signals.push({ code: 'email_paypal_unlisted', severity: 'info', title: 'An @paypal.com address we have not verified', detail: 'Sender names and addresses can be faked. Check inside the PayPal app instead.', evidence: e });
+      signals.push({ ...base, code: 'email_paypal_unlisted', severity: 'info', family: 'identity', title: 'An @paypal.com address we have not verified', detail: 'Sender names and addresses can be faked. Check inside the PayPal app instead.' });
     } else if (PROTECTED_BRANDS.some((b) => domain.includes(b) || deHomoglyph(domain).includes(b))) {
-      signals.push({ code: 'email_brand_lookalike', severity: 'high', title: 'An email address pretends to be PayPal', detail: `${domain} is not PayPal.`, evidence: e });
-    } else if (/(gmail|outlook|hotmail|yahoo|icloud|proton|aol|mail)\./.test(domain) && /paypal|support|security|billing|refund/.test(text)) {
-      signals.push({ code: 'email_free_provider', severity: 'high', title: 'A free email address claims to be support', detail: 'Companies like PayPal do not use Gmail, Outlook or Yahoo for support.', evidence: e });
+      signals.push({ ...base, code: 'email_brand_lookalike', severity: 'high', family: 'identity', title: 'An email address pretends to be PayPal', detail: `${domain} is not PayPal.` });
+    } else if (/(gmail|outlook|hotmail|yahoo|icloud|proton|aol|gmx|mail)\./.test(domain) && /paypal|support|security|billing|refund|helpdesk|customer service/.test(lower)) {
+      signals.push({ ...base, code: 'email_free_provider', severity: 'high', family: 'identity', title: 'A free email address claims to be support', detail: 'Companies like PayPal do not use Gmail, Outlook or Yahoo for support.' });
+    } else {
+      signals.push({ ...base, code: 'email_unverified', severity: 'info', blocksAllClear: true, family: 'identity', title: 'An email address SaySafe cannot check', detail: 'Anyone can create an email address. Reply only to addresses you already know.' });
     }
   }
 
   if (phones.length) {
-    signals.push({ code: 'phone_unverified', severity: /call|ring|phone|contact/.test(text) ? 'medium' : 'info', title: 'A phone number we cannot verify', detail: 'Do not call numbers from messages. Use the official PayPal contact page instead.', evidence: phones.join(', ') });
+    const askedToCall = /\b(call|ring|phone|dial|contact|whatsapp|text)\b/.test(lower);
+    signals.push({ code: 'phone_unverified', severity: askedToCall ? 'medium' : 'info', blocksAllClear: true, family: 'contact', basis: 'deterministic_rule', title: 'A phone number we cannot verify', detail: 'Do not call numbers from messages. Scammers put their own number on real-looking invoices. Use the contact page inside the PayPal app.', evidence: truncateSafe(phones.join(', '), 80) });
   }
 
-  const hits = (words: string[]) => words.filter((w) => text.includes(w));
-  const urgent = hits(URGENCY);
-  if (urgent.length) signals.push({ code: 'urgency', severity: urgent.length > 1 ? 'high' : 'medium', title: 'It pressures you to act fast', detail: 'Scammers rush you so you do not stop and check.', evidence: urgent.slice(0, 4).join(', ') });
-  const sens = hits(SENSITIVE);
-  if (sens.length) signals.push({ code: 'sensitive_request', severity: 'high', title: 'It asks for private details', detail: 'PayPal never asks for your password, codes or card details in a message.', evidence: sens.slice(0, 4).join(', ') });
-  const gift = hits(GIFT_CARD);
-  if (gift.length) signals.push({ code: 'gift_card', severity: 'high', title: 'It asks for gift cards or crypto', detail: 'No real company asks to be paid in gift cards or crypto.', evidence: gift.join(', ') });
-  const pay = hits(PAY_DEMAND);
-  const amount = input.match(/[€$£]\s?\d[\d,.]*|\d[\d,.]*\s?(?:eur|euro|usd|gbp)/i);
-  if (pay.length && amount) signals.push({ code: 'payment_demand', severity: 'medium', title: 'It demands a payment', detail: 'Check any payment request inside the PayPal app, never from a link.', evidence: amount[0] });
-  const inv = hits(INVOICE_SCAM);
-  if (inv.length) {
-    const strong = phones.length > 0 || links.some((l) => l.officialKind === 'user_content');
-    signals.push({ code: 'invoice_scam', severity: strong ? 'high' : 'medium', title: 'It looks like a fake invoice or charge', detail: 'Scammers send scary "you were charged" invoices so you call them. Check your real activity in the PayPal app. Never call a number on an invoice.', evidence: inv.slice(0, 3).join(', ') });
-  }
-  const callUs = hits(CALL_US);
-  if (callUs.length) signals.push({ code: 'call_us', severity: 'medium', title: 'It tells you to call or contact "support"', detail: 'Fake support lines are a common trick.', evidence: callUs.join(', ') });
-  if (/\b(dear (customer|user|client|member))\b/.test(text)) signals.push({ code: 'generic_greeting', severity: 'info', title: 'It does not use your name', detail: 'Real PayPal emails usually greet you by your name.', evidence: 'dear customer' });
+  signals.push(...detectIndicators(src, { phones: phones.length, unofficialLinks: unofficial.length, userContentLinks: links.filter((l) => l.officialKind === 'user_content').length }));
 
-  return { verdict: decideVerdict(signals, officialMatches, links, input), signals, links, emails, phones, officialMatches };
+  return { verdict: decideVerdict(signals, officialMatches, links, input, opts), signals, links, emails, phones, officialMatches };
 }
 
 /**
- * Verdict policy (deterministic):
- * - any high signal, or 2+ medium  -> suspicious
- * - the input is ONLY an exact official resource (link/email) with no other content signals -> verified_official_contact
- * - otherwise -> needs_verification (never "safe")
+ * Verdict policy (deterministic). See decideFromSignals in verdicts.ts:
+ * - any high signal, or medium signals from 2+ risk families (one of them deceptive) -> suspicious
+ * - any other warning, any phone number / unknown link / unknown email               -> needs_checking
+ * - nothing found                                                                    -> no_obvious_warning_signs
+ *   (always shown with the disclosure that SaySafe cannot confirm the sender or payment)
+ * A genuine paypal.com link never lowers the verdict: it only means "no lookalike signal".
  */
-export function decideVerdict(signals: Signal[], officialMatches: string[], links: ExtractedLink[], input: string): Verdict {
-  const high = signals.filter((s) => s.severity === 'high').length;
-  const med = signals.filter((s) => s.severity === 'medium').length;
-  if (high > 0 || med >= 2) return 'suspicious';
-  const trimmed = input.trim();
-  const isSingleToken = !/\s/.test(trimmed);
-  // Only pages we verified (help pages, home page) count. Invoices, requests and other PayPal pages never do.
-  const allLinksOfficial = links.length > 0 && links.every((l) => l.isOfficialPayPal && (l.officialKind === 'help' || l.officialKind === 'home'));
-  if (isSingleToken && officialMatches.length > 0 && (links.length === 0 || allLinksOfficial) && med === 0) {
-    return 'verified_official_contact';
-  }
-  return 'needs_verification';
+export function decideVerdict(signals: Signal[], _officialMatches: string[], links: ExtractedLink[], _input: string, opts: { ocrUncertain?: boolean } = {}): Verdict {
+  return decideFromSignals(signals, links, opts);
 }
 
-/** AI may only escalate, never downgrade. */
-export function mergeVerdict(rules: Verdict, ai: Verdict | null | undefined): Verdict {
-  const rank: Record<Verdict, number> = { verified_official_contact: 0, needs_verification: 1, suspicious: 2 };
-  if (!ai || ai === 'verified_official_contact') return rules; // AI can never grant "verified"
-  // Rules only say "verified" for a bare official PayPal help/home page with no warning signals.
-  // A model's vague doubt about that can lower it to "needs checking", but not to "scam".
-  if (rules === 'verified_official_contact' && ai === 'suspicious') return 'needs_verification';
-  return rank[ai] > rank[rules] ? ai : rules;
+/** AI may only escalate, never downgrade. Accepts legacy codes from older callers. */
+export function mergeVerdict(rules: Verdict, ai: string | null | undefined): Verdict {
+  if (!ai) return rules;
+  const a = normalizeVerdict(ai);
+  if (a === 'no_obvious_warning_signs') return rules; // AI can never grant the all-clear
+  return maxVerdict(rules, a);
 }
