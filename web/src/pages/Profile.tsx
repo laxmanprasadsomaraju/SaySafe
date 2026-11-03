@@ -67,6 +67,47 @@ function ShoppingSummary() {
   );
 }
 
+/** Mary's private companion records: links into the Assistant, and "Delete all" (asks first). Never shown to family. */
+function CompanionData() {
+  const [ask, setAsk] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const del = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api<{ deleted: { payments: number; subscriptions: number; contacts: number } }>('/api/companion/all', { method: 'DELETE', body: { confirm: true } });
+      const d = r.deleted ?? { payments: 0, subscriptions: 0, contacts: 0 };
+      setMsg(`Deleted ${d.payments} payment record${d.payments === 1 ? '' : 's'}, ${d.subscriptions} subscription${d.subscriptions === 1 ? '' : 's'} and ${d.contacts} contact${d.contacts === 1 ? '' : 's'}. Demo Shop payments are kept.`);
+      setAsk(false);
+    } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-3 border-t border-line pt-3" data-testid="companion-data">
+      <p className="font-bold">My records <span className="font-normal text-ink-soft">· private to you, saved to your account</span></p>
+      <ul className="divide-y divide-line">
+        <li><Link className={linkRow} to="/assistant?records=payments">Payments I recorded<ChevronRight className="size-5" aria-hidden /></Link></li>
+        <li><Link className={linkRow} to="/assistant?records=subscriptions">My subscriptions<ChevronRight className="size-5" aria-hidden /></Link></li>
+        <li><Link className={linkRow} to="/assistant?records=contacts">Trusted contacts<ChevronRight className="size-5" aria-hidden /></Link></li>
+      </ul>
+      {!ask ? (
+        <button type="button" onClick={() => { setAsk(true); setMsg(null); }} className="mt-2 min-h-12 px-4 rounded-full border-2 border-danger text-danger font-bold hover:bg-danger-soft">Delete all my companion data</button>
+      ) : (
+        <div className="mt-2 rounded-2xl border-2 border-danger p-3" role="group" aria-label="Delete all my companion data?">
+          <p className="font-bold">Delete all your payment records, subscriptions and trusted contacts?</p>
+          <p className="mt-1 text-base text-ink-soft">This can’t be undone. Your Demo Shop payments are kept. A Demo Membership still billing through PayPal must be cancelled first.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="button" onClick={() => void del()} disabled={busy} className="min-h-12 px-4 rounded-full bg-danger text-white font-bold disabled:opacity-60">{busy ? 'Deleting…' : 'Yes, delete everything'}</button>
+            <button type="button" onClick={() => setAsk(false)} className="min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal">Keep my records</button>
+          </div>
+        </div>
+      )}
+      {err && <p role="alert" className="mt-2 text-danger font-bold">{err}</p>}
+      {msg && <p role="status" className="mt-2 font-bold">{msg}</p>}
+    </div>
+  );
+}
+
 export default function Profile() {
   const { role, name, loading } = useShellRole();
   const nav = useNavigate();
@@ -134,6 +175,7 @@ export default function Profile() {
             <span className="min-w-0"><span className="block font-bold">Assistant conversation</span><Where /></span>
             <button type="button" onClick={clearConversation} disabled={cleared} className="min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal disabled:opacity-60">{cleared ? 'Cleared' : 'Clear conversation'}</button>
           </div>
+          {!family && <CompanionData />}
         </Section>
         <Section id="help-h" icon={LifeBuoy} title="Help & documentation">
           <ul className="divide-y divide-line">

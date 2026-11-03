@@ -9,6 +9,11 @@ const tx = db.transaction(() => {
     db.prepare('DELETE FROM security_scans WHERE household_id=?').run(h.id);
     db.prepare('DELETE FROM audit_log WHERE household_id=?').run(h.id);
     // Delete children explicitly: Turso connections may not enforce ON DELETE CASCADE (foreign_keys is per connection).
+    // Payment companion records (private to the elder). Explicit for the same reason.
+    db.prepare('DELETE FROM companion_cancel_tokens WHERE household_id=?').run(h.id);
+    db.prepare('DELETE FROM companion_payments WHERE household_id=?').run(h.id);
+    db.prepare('DELETE FROM companion_subscriptions WHERE household_id=?').run(h.id);
+    db.prepare('DELETE FROM companion_contacts WHERE household_id=?').run(h.id);
     db.prepare('DELETE FROM approvals WHERE request_id IN (SELECT id FROM payment_requests WHERE household_id=?)').run(h.id);
     db.prepare('DELETE FROM payment_requests WHERE household_id=?').run(h.id);
     db.prepare('DELETE FROM family_links WHERE household_id=?').run(h.id);

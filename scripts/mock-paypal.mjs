@@ -2,11 +2,14 @@
 // driven end to end without PayPal keys. It is NOT PayPal: approve links point at sandbox.paypal.com (the browser test
 // stops there), approval is simulated with POST /mock/approve/:orderId, and webhook signatures always FAIL to verify
 // (so receipts honestly show "Verification pending").
+// Subscriptions v1 (SaySafe Demo Membership): create -> APPROVAL_PENDING + approve link, POST /mock/approve-sub/:id -> ACTIVE
+// (returns PayPal's return URL), cancel -> 204 then GET shows CANCELLED. POST /mock/sub-cancel-mode/500 makes cancel fail once.
+// GET /mock/sub/:id shows the mock's own status (for tests).
 //   node scripts/mock-paypal.mjs 9999
 //   PAYPAL_API_BASE=http://127.0.0.1:9999 PAYPAL_ALLOW_LIVE=yes PAYPAL_CLIENT_ID=mock PAYPAL_CLIENT_SECRET=mock npx tsx server/index.ts
 import http from 'node:http';
 const PORT = Number(process.argv[2] ?? 9999);
-const orders = new Map(); const captures = new Map();
+const orders = new Map(); const captures = new Map(); const subs = new Map(); let subCancelFail = 0;
 const rid = (p) => p + Math.random().toString(36).slice(2, 12).toUpperCase();
 const send = (res, code, body) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
 http.createServer((req, res) => {
@@ -31,6 +34,21 @@ http.createServer((req, res) => {
       return send(res, 201, o);
     }
     if (req.method === 'GET' && (x = m(/^\/v2\/payments\/captures\/([A-Z0-9]+)$/))) { const c = captures.get(x[1]); return c ? send(res, 200, c) : send(res, 404, {}); }
+    if (req.method === 'POST' && u.pathname === '/v1/billing/subscriptions') {
+      const id = 'I-' + rid('MOCK'); const ac = body.application_context ?? {};
+      const s = { id, status: 'APPROVAL_PENDING', plan_id: body.plan_id, custom_id: body.custom_id, status_update_time: new Date().toISOString(), links: [{ rel: 'approve', href: `https://www.sandbox.paypal.com/webapps/billing/subscriptions?ba_token=BA-${id}` }], return_url: ac.return_url };
+      subs.set(id, s); return send(res, 201, s);
+    }
+    if (req.method === 'POST' && (x = m(/^\/mock\/approve-sub\/(I-[A-Z0-9]+)$/))) { const s = subs.get(x[1]); if (!s) return send(res, 404, {}); s.status = 'ACTIVE'; s.billing_info = { next_billing_time: new Date(Date.now() + 30 * 86400000).toISOString() }; return send(res, 200, { ok: true, returnUrl: `${s.return_url}?subscription_id=${s.id}&ba_token=BA-${s.id}&token=MOCKTOKEN` }); }
+    if (req.method === 'POST' && (x = m(/^\/mock\/sub-cancel-mode\/(\d+)$/))) { subCancelFail = Number(x[1]) >= 500 ? 1 : 0; return send(res, 200, { ok: true }); }
+    if (req.method === 'GET' && (x = m(/^\/mock\/sub\/(I-[A-Z0-9]+)$/))) { const s = subs.get(x[1]); return s ? send(res, 200, { id: s.id, status: s.status }) : send(res, 404, {}); }
+    if (req.method === 'GET' && (x = m(/^\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)$/))) { const s = subs.get(x[1]); if (!s) return send(res, 404, { name: 'RESOURCE_NOT_FOUND' }); const { return_url, ...pub } = s; return send(res, 200, pub); }
+    if (req.method === 'POST' && (x = m(/^\/v1\/billing\/subscriptions\/(I-[A-Z0-9]+)\/cancel$/))) {
+      const s = subs.get(x[1]); if (!s) return send(res, 404, { name: 'RESOURCE_NOT_FOUND' });
+      if (subCancelFail) { subCancelFail = 0; return send(res, 500, { name: 'INTERNAL_SERVER_ERROR' }); }
+      if (s.status !== 'ACTIVE' && s.status !== 'SUSPENDED') return send(res, 422, { name: 'UNPROCESSABLE_ENTITY', details: [{ issue: 'SUBSCRIPTION_STATUS_INVALID' }] });
+      s.status = 'CANCELLED'; s.status_update_time = new Date().toISOString(); res.writeHead(204); return res.end();
+    }
     if (req.method === 'POST' && u.pathname === '/v1/notifications/verify-webhook-signature') return send(res, 200, { verification_status: 'FAILURE' });
     send(res, 404, { name: 'NOT_MOCKED', path: u.pathname });
   });

@@ -24,6 +24,8 @@ import { compareRows, shortTitle, type ShopItem, type Recommendation } from '../
 import { parseBlock, productItems, restoreThread, Mode as ModeSchema, ServerPayment, ServerActivity, parseServer, familyStatusFrom, receiptFrom, refundFrom, historyFrom, type Block, type BlockOf, type Message, type Mode, type ProductItem, type Thread } from '../assistant/schemas';
 import { parseFollowup, ageAnswer, sellerAnswer, sellerFacts, toShopItem } from '../assistant/followups';
 import { RenderBlock, ProductSheet, type BlockActions } from '../assistant/blocks';
+import { COMPANION_CHIPS, TAP_ONLY_REPLY, looksCompanion, shortSpoken, money as companionMoney } from '../assistant/companion';
+import { SubscriptionSummary } from '../../../shared/companion';
 
 const KEY = THREAD_KEY;
 const MODES: { mode: Exclude<Mode, 'chat'>; label: string; icon: typeof Mic; placeholder: string }[] = [
@@ -104,7 +106,7 @@ export default function Assistant() {
 
   // ---------- actions using the existing APIs ----------
   const showScan = (r: ScanResult) => {
-    const block = { kind: 'scam_result', scanId: r.scanId, verdict: r.verdict, headline: r.headline, summary: r.spokenSummary, signals: r.signals.slice(0, 8).map((s) => ({ severity: s.severity, title: s.title, detail: s.detail, ...(s.evidence ? { evidence: s.evidence.slice(0, 300) } : {}) })), safeActions: r.safeActions.slice(0, 4), aiNotice: r.aiNotice ?? null };
+    const block = { kind: 'scam_result', scanId: r.scanId, verdict: r.verdict, headline: r.headline, summary: r.spokenSummary, signals: r.signals.slice(0, 8).map((s) => ({ severity: s.severity, title: s.title, detail: s.detail, ...(s.evidence ? { evidence: s.evidence.slice(0, 300) } : {}), ...(s.code ? { code: s.code.slice(0, 60) } : {}) })), safeActions: r.safeActions.slice(0, 4), aiNotice: r.aiNotice ?? null };
     const spoken = spokenScam(r as any);
     add('assistant', spoken, [block]);
     speech.speak(spoken, { priority: 'critical', lang: 'en' });
@@ -249,6 +251,8 @@ export default function Assistant() {
     const mode = threadRef.current.mode;
     const ctx = lastBlock('product_cards');
     try {
+      // A Demo Membership cancel card is waiting: a spoken or typed "yes" never cancels, in any mode (only the tap does).
+      if (/^(yes|yeah|yep|ok|okay|sure|go ahead|confirm|do it|cancel it|please do)\b[\s.!]*$/i.test(text) && lastBlock('demo_cancel_intent')?.phase === 'confirm') { add('assistant', TAP_ONLY_REPLY); return say(TAP_ONLY_REPLY, turn); }
       const f = parseFollowup(text, Boolean(ctx));
       if (f.kind === 'refund') return await showRefund(turn);
       if (f.kind === 'search') return await showHistory(turn, f.q);
@@ -271,10 +275,15 @@ export default function Assistant() {
         }
       }
       if (mode === 'check') return await scan(text, turn);
-      if (mode === 'payments') return await showHistory(turn);
+      if (mode === 'payments' && !looksCompanion(text)) return await showHistory(turn);
       const r = await api<any>('/api/assistant', { body: { text, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
       if (!speech.isCurrent(turn)) return;
       const a = r.intent?.action;
+      // Payment companion: the server answered from Mary's own records (template reply + one card). Spoken reply stays short.
+      if (r.companion) {
+        add('assistant', r.reply, [r.companion], 'en');
+        return say(shortSpoken(r.reply), turn);
+      }
       if (a === 'check_message') {
         const msg = r.intent.message_text && r.intent.message_text !== text ? r.intent.message_text : text.length > 40 ? text : '';
         if (msg) return await scan(msg, turn);
@@ -290,6 +299,8 @@ export default function Assistant() {
         if (item) { setThread((t) => ({ ...t, focusId: item.id })); if (ctx.source === 'demo') return await prepare(item); setSheet({ item, source: ctx.source }); return; }
       }
       if (a === 'cancel') { const ready = lastBlock('payment_prep'); if (ready?.status === 'ready') return deny(ready); }
+      // A spoken or typed "yes" never cancels the Demo Membership: only the tap on the card sends the token.
+      if (a === 'confirm' && lastBlock('demo_cancel_intent')?.phase === 'confirm') { add('assistant', TAP_ONLY_REPLY); return say(TAP_ONLY_REPLY, turn); }
       if (a === 'confirm') { const ready = lastBlock('payment_prep'); if (ready?.status === 'ready') { const m = 'To be safe, please tap Allow on the card yourself.'; add('assistant', m); return say(m, turn); } }
       if (a === 'trusted_help' || a === 'order_problem' || mode === 'help') return await showHelp(r.reply, turn, r.replyLang);
       add('assistant', r.reply, [], r.replyLang);
@@ -326,7 +337,45 @@ export default function Assistant() {
     receipt: (id) => run((turn) => appendReceipt(id, undefined, turn)),
     refund: (id) => run((turn) => showRefund(turn, id)),
     synced: (p) => { const rc = receiptFrom(p); if (rc) updateBlock((b) => b.kind === 'receipt' && b.requestId === p.id, rc); },
+    audience: 'elder',
+    append: (text, blocks, o) => { add('assistant', text, blocks, 'en'); if (o?.speak) say(shortSpoken(text)); },
+    speak: (text) => say(text),
   };
+
+  // Companion suggestion chips: answered on the device from Mary's own records (nothing guessed, nothing written).
+  const companionChip = (chip: string) => run(async (turn) => {
+    setMode('chat');
+    add('user', chip);
+    if (chip === COMPANION_CHIPS[0]) {
+      const t = 'Tell me who and roughly how much, for example “Did I already pay John €80?”. Or search the records you saved.';
+      add('assistant', t, [{ kind: 'companion_records', section: 'payments' }]); return say(shortSpoken(t, 1), turn);
+    }
+    if (chip === COMPANION_CHIPS[1]) {
+      const summary = parseServer(SubscriptionSummary, await api('/api/companion/subscriptions/summary'));
+      if (!speech.isCurrent(turn)) return;
+      const t = !summary.totals.length ? 'You haven’t added any subscriptions yet. Add them here and I’ll add up what they cost.'
+        : `From the subscriptions you added, that’s about ${summary.totals.map((x) => `${companionMoney(x.monthlyCents, x.currency)} a month`).join(' and ')}. You entered these yourself.`;
+      add('assistant', t, [{ kind: 'monthly_costs', summary }]); return say(t, turn);
+    }
+    const t = 'Here are the contacts you saved. You can also ask, for example, “my son’s number”.';
+    add('assistant', t, [{ kind: 'companion_records', section: 'contacts' }]); say(shortSpoken(t, 1), turn);
+  });
+
+  // Back from PayPal after starting the Demo Membership (?membership=<PayPal status>), or opened from Profile
+  // (?records=payments|subscriptions|contacts). The card re-reads the server; the URL value is only a hint.
+  useEffect(() => {
+    if (!me) return;
+    const ms = sp.get('membership');
+    const rec = sp.get('records');
+    if ((ms && /^[a-z_]{2,30}$/.test(ms)) || ['payments', 'subscriptions', 'contacts'].includes(rec ?? '')) setMode('chat');
+    if (ms && /^[a-z_]{2,30}$/.test(ms)) {
+      add('assistant', ms === 'active' ? 'Back from PayPal. Here is what PayPal says about your Demo Membership.' : 'Here is your Demo Membership, checked with PayPal.', [{ kind: 'demo_membership', returned: ms }], 'en');
+      nav('/assistant', { replace: true });
+    } else if (rec === 'payments' || rec === 'subscriptions' || rec === 'contacts') {
+      add('assistant', rec === 'payments' ? 'Here are the payment records you saved.' : rec === 'subscriptions' ? 'Here are the subscriptions you added.' : 'Here are the contacts you saved.', [{ kind: 'companion_records', section: rec }], 'en');
+      nav('/assistant', { replace: true });
+    }
+  }, [me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Back from PayPal (or opened from a receipt): re-read the purchase from the server and add its card. Never trusts the URL.
   useEffect(() => {
@@ -386,6 +435,8 @@ export default function Assistant() {
   const lastMsg = thread.messages[thread.messages.length - 1];
   const lastKind = lastMsg?.blocks[lastMsg.blocks.length - 1]?.kind;
   const suggestions = !busy && lastMsg?.role === 'assistant' && lastKind ? SUGGEST[lastKind] ?? [] : [];
+  // With nothing else to suggest (a text-only reply, e.g. the greeting), offer the companion questions.
+  const chips = !busy && lastMsg?.role === 'assistant' && !lastKind && suggestions.length === 0 && thread.mode !== 'check' ? COMPANION_CHIPS : [];
   return (
     <Layout dock={composer} footer={false}>
       <LeaveGuard when={prepReady.length > 0 || famWaiting.length > 0} id={guardId}
@@ -409,6 +460,11 @@ export default function Assistant() {
       {suggestions.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2" aria-label="Suggestions" role="group">
           {suggestions.map((s) => <button key={s} type="button" onClick={() => { if (s === 'Refund options') { const r = lastBlock('receipt'); if (r) return act.refund(r.requestId); } void handle(s); }} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold">{s}</button>)}
+        </div>
+      )}
+      {chips.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2" aria-label="Ask about your records" role="group">
+          {chips.map((c) => <button key={c} type="button" onClick={() => companionChip(c)} className="min-h-12 px-4 rounded-full border-2 border-teal text-teal-deep bg-paper font-bold text-left">{c}</button>)}
         </div>
       )}
       <div ref={endRef} />

@@ -5,6 +5,7 @@
  * /products folder or https. Anything that fails validation is dropped and the text reply stands alone.
  */
 import { z } from 'zod';
+import { COMPANION_BLOCKS, COMPANION_KINDS } from './companion';
 
 const isHttps = (u: string) => { try { return new URL(u).protocol === 'https:'; } catch { return false; } };
 export const HttpsUrl = z.string().max(2000).refine(isHttps, 'https only');
@@ -43,7 +44,7 @@ const ScamResult = z.object({
   verdict: Str(40),
   headline: Str(300),
   summary: Str(1200),
-  signals: z.array(z.object({ severity: z.enum(['high', 'medium', 'info']), title: Str(200), detail: Str(600), evidence: Str(300).optional() })).max(8),
+  signals: z.array(z.object({ severity: z.enum(['high', 'medium', 'info']), title: Str(200), detail: Str(600), evidence: Str(300).optional(), code: Str(60).optional() })).max(8),
   safeActions: z.array(z.object({ label: Str(120), url: HttpsUrl })).max(4),
   aiNotice: Str(200).nullable(),
   shared: z.boolean().optional(),
@@ -148,10 +149,11 @@ const TrustedLinks = z.object({
   items: z.array(z.union([z.object({ label: Str(120), to: InternalRoute }), z.object({ label: Str(120), href: HttpsUrl })])).min(1).max(6),
 });
 
-export const Block = z.discriminatedUnion('kind', [ScamResult, ProductCards, Compare, PaymentPrep, FamilyStatus, FamilyReview, Receipt, PaymentHistory, Refund, TrustedLinks]);
+/** Payment companion cards (elder-only, see ./companion.ts) are part of the same registry. */
+export const Block = z.discriminatedUnion('kind', [ScamResult, ProductCards, Compare, PaymentPrep, FamilyStatus, FamilyReview, Receipt, PaymentHistory, Refund, TrustedLinks, ...COMPANION_BLOCKS]);
 export type Block = z.infer<typeof Block>;
 export type BlockOf<K extends Block['kind']> = Extract<Block, { kind: K }>;
-export const BLOCK_KINDS = ['scam_result', 'product_cards', 'compare', 'payment_prep', 'family_status', 'family_review', 'receipt', 'payment_history', 'refund', 'trusted_links'] as const;
+export const BLOCK_KINDS = ['scam_result', 'product_cards', 'compare', 'payment_prep', 'family_status', 'family_review', 'receipt', 'payment_history', 'refund', 'trusted_links', ...COMPANION_KINDS] as const;
 
 /** Validate one block. Returns null (and the block is not shown) if anything is off. */
 export function parseBlock(raw: unknown): Block | null {
@@ -177,12 +179,12 @@ export const Thread = z.object({ v: z.literal(1), mode: Mode, focusId: Str(200).
 export type Thread = { v: 1; mode: Mode; focusId: string | null; messages: Message[] };
 
 /** Restores a saved conversation, re-validating every block (sessionStorage is not trusted either). */
-export function restoreThread(raw: string | null): Thread | null {
+export function restoreThread(raw: string | null, opts: { drop?: (b: Block) => boolean } = {}): Thread | null {
   if (!raw) return null;
   try {
     const t = Thread.safeParse(JSON.parse(raw));
     if (!t.success) return null;
-    return { ...t.data, messages: t.data.messages.map((m) => ({ ...m, blocks: m.blocks.map(parseBlock).filter((b): b is Block => b !== null) })) };
+    return { ...t.data, messages: t.data.messages.map((m) => ({ ...m, blocks: m.blocks.map(parseBlock).filter((b): b is Block => b !== null && !opts.drop?.(b)) })) };
   } catch { return null; }
 }
 

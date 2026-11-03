@@ -1,4 +1,4 @@
-# Payment companion (phase 1: server)
+# Payment companion (phase 1: server · phase 2: Assistant cards)
 
 Helps Mary answer three everyday questions by voice or chat, using **only her own records**:
 
@@ -6,7 +6,7 @@ Helps Mary answer three everyday questions by voice or chat, using **only her ow
 2. **"What do my subscriptions cost, and how do I cancel one?"** — a manual subscription tracker (prototype) plus one real PayPal sandbox subscription, the *SaySafe Demo Membership*.
 3. **"Is this message really from my son?"** — trusted contacts she saved, used by the scam check (`contact_mismatch`).
 
-SaySafe never pays, blocks, marks anything as paid, or cancels anything on its own. The UI cards come in phase 2 (`shared/companion.ts` holds the zod schemas they use).
+SaySafe never pays, blocks, marks anything as paid, or cancels anything on its own. The Assistant cards (phase 2) are described in [Assistant cards](#assistant-cards-phase-2).
 
 ## Data sources
 
@@ -124,8 +124,9 @@ Contacts are read server-side from the signed-in elder's household and **never s
 ```bash
 # 1. Plan (idempotent; prints PAYPAL_DEMO_PLAN_ID=P-…)
 PAYPAL_CLIENT_ID=… PAYPAL_CLIENT_SECRET=… npx tsx scripts/paypal-setup-plan.ts
-# 2. Set PAYPAL_DEMO_PLAN_ID on the server, and add BILLING.SUBSCRIPTION.ACTIVATED / .CANCELLED (and optionally
-#    .SUSPENDED / .EXPIRED) to the existing webhook's event types in the PayPal developer dashboard.
+# 2. Set PAYPAL_DEMO_PLAN_ID on the server (render.yaml lists it, sync: false). The sandbox webhook 3E931603S3756844F
+#    already has BILLING.SUBSCRIPTION.ACTIVATED / .CANCELLED (added 2026-11-03 via PATCH /v1/notifications/webhooks/{id},
+#    replacing event_types with the four existing ones + these two; GET before/after kept in the project notes).
 # 3. In the app (browser, signed in as Mary) or with a cookie jar:
 curl -c jar -b jar -X POST https://<host>/api/demo/start -H 'Content-Type: application/json' -d '{"name":"Mary"}'
 curl -c jar -b jar -X POST https://<host>/api/companion/subscriptions/demo/start -H 'Content-Type: application/json' -d '{}'
@@ -138,8 +139,37 @@ npx tsx scripts/paypal-setup-plan.ts --cancel I-XXXX     # expect "cancel -> 204
 ```
 (Inside the Hark sandbox, Node needs `NODE_USE_ENV_PROXY=1` so credentials are injected on the wire.)
 
+## Assistant cards (phase 2)
+
+All in the existing zod registry (`web/src/assistant/companion.ts` schemas + helpers, `web/src/assistant/companionCards.tsx`
+components, merged into `REGISTRY`). Elder-only: `FamilyAssistant` drops every companion kind when it restores or adds
+blocks, and each component renders nothing for `audience: 'family'`; the server answers 403 anyway. Every card that shows
+records **re-reads the server when it mounts**, so a reload (or an edit elsewhere) shows the current state; only the
+search query / ids are kept in the saved conversation.
+
+| Card (`kind`) | From | What it shows / does |
+|---|---|---|
+| `payment_matches` | `payment_search` intent, or a search in the records card | Candidates with a source badge (**"PayPal Sandbox capture"** / **"Recorded by you — not verified"**), evidence (capture status + signed-notice flag, or the method she typed), match reasons, caveats, the **"Don't pay again until you've checked"** box with the server's guidance, and the notes (e.g. Demo Shop purchases excluded next to a person's name). **Add a record** (recipient, amount, date, method, note), **Edit / Delete** on her own rows; the card re-runs the same search afterwards. |
+| `last_payment` | `last_payment` intent | One row + guidance. |
+| `monthly_costs` | `monthly_costs` intent or the "What do I pay every month?" chip | Monthly + annual totals per currency (method in a disclosure), list with merchant, amount, frequency, next expected charge, source. **Tap a row** → Keep / Help me cancel / Edit / Stop tracking (≠ cancel) / Track again / Delete. Add a subscription. "Try the Demo Membership". |
+| `subscription_help` | `subscription_help {merchant}` intent (voice: "cancel my Netflix") or **Help me cancel** | Two boxes separating **the service with the company** from **the PayPal automatic payment (billing authorisation)**, the official link card (`shared/cancelGuides.ts`, checked date, steps) or generic steps, PayPal's automatic-payments link, disclaimer. **I've cancelled it** (optional note) → `user_reported_cancelled`, shown as **"You told SaySafe this is cancelled — not confirmed by the provider"**; "It's still active" undoes it; **Keep it**. |
+| `demo_membership` | "Try the Demo Membership", or `/assistant?membership=<status>` after PayPal's return | Status re-read from PayPal via the server (PayPal status, last checked, signed notice, next charge). **Start** → `POST …/demo/start` → `goToPayPal(approveUrl)`; **Continue to PayPal** while APPROVAL_PENDING; **Cancel membership** → cancel-intent card. |
+| `demo_cancel_intent` | `subscription_help` about the demo (server), or the Cancel button | The exact text **"Cancel SaySafe Demo Membership billing via PayPal"**, the two-scope copy, and a big **"Cancel billing via PayPal"** button. Only that tap sends the token; a typed/spoken "yes" (any mode) gets "To be safe, please tap … yourself" and nothing is sent. Phases: `confirm` → `pending` → `confirmed` (only when the server's subscription is `provider_confirmed`) or `retry_needed` / `error` with **Retry** (fetches a new intent; another tap needed). The token is removed from the saved conversation as soon as it is used. |
+| `contact_card` | `contact_lookup` intent | The saved contact(s), **"Saved by you — not verified"**, **Call** (`tel:` built from the saved digits only) / **Email** links, Edit / Delete, advice. |
+| `companion_records` | Chips, Profile › Privacy & data › My records (`/assistant?records=payments|subscriptions|contacts`) | Live managers: payment records (+ search), subscriptions, trusted contacts (add / edit / delete). |
+| `scam_result` | existing | Now also shows the `contact_mismatch` (or "same number, can be spoofed") signal first, in its own box: what the message claimed, the number seen, "call the number you saved (ending …)". |
+
+Also: suggestion chips **"Did I already pay someone?" · "What do I pay every month?" · "Find a trusted contact"** on a
+text-only reply (answered on the device from her own records); spoken replies are cut to one or two sentences; the
+existing Stop / mute controls are unchanged. Profile › Privacy & data has **My records** links and **Delete all my
+companion data** (asks first; Demo Shop payments kept; refused while the Demo Membership still bills).
+
+Tests: `tests/companion-cards.test.ts` (server answers → card schemas, builders, labels, "yes" never cancels, success only
+on provider_confirmed, family exclusion). Browser: `scripts/e2e-companion.mjs` (local server + `scripts/mock-paypal.mjs`,
+which now fakes Subscriptions v1: create / approve / GET / cancel, and a one-shot 500 on cancel).
+
 ## Known gaps
-- No UI yet (phase 2: cards + voice in `web/src`).
-- `scripts/reset-demo.ts` doesn't delete companion rows explicitly; locally they cascade with the household, on Turso (FKs may be off) they'd be orphaned.
-- The PayPal 204 cancel on an ACTIVE subscription and live `BILLING.SUBSCRIPTION.*` delivery are verified only after a buyer approves and the webhook event types are added.
+- Only the user's own typed records and Demo Shop payments: no bank / PayPal wallet import.
+- The PayPal 204 cancel on an ACTIVE subscription and live `BILLING.SUBSCRIPTION.*` delivery are verified only after a sandbox buyer approves a real subscription (the browser test uses the mock).
+- The scam phone extractor misses a spaced Irish national number ("087 999 1111") and a number followed directly by a full stop, so `contact_mismatch` then falls back to the "new number" wording without showing the number.
 - Name matching is English-centric (no phonetic matching beyond one typo).

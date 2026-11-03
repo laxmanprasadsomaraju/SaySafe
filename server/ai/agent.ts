@@ -62,7 +62,7 @@ export function fallbackIntent(said: string): IntentT {
     return { action: 'payment_search', recipient: paid?.[1]?.trim() || null, amount: amt ? Number((amt[1] ?? amt[2]).replace(',', '.')) : null, date_hint: dh?.[1] ?? null, reply: "I'll look at your records." };
   }
   if (/\b(last|latest|most recent) payment\b/.test(s)) return { action: 'last_payment', recipient: s.match(/payment (?:to|for) ([a-z][a-z' -]{1,40})/)?.[1]?.trim() ?? null, reply: "I'll look." };
-  if (/\b(subscriptions?|monthly costs?|regular payments?|direct debits?)\b/.test(s) && !/\bcancel|stop\b/.test(s)) return { action: 'monthly_costs', reply: "I'll add them up." };
+  if ((/\b(subscriptions?|monthly costs?|regular payments?|direct debits?)\b/.test(s) || /\bwhat (do|am) i pay(ing)?\b.{0,20}\b(every|each|a|per) (month|week|year)\b/.test(s)) && !/\bcancel|stop\b/.test(s)) return { action: 'monthly_costs', reply: "I'll add them up." };
   const cancelSub = s.match(/\b(?:cancel|stop|end)\s+(?:my\s+)?([a-z0-9+ ]{2,40}?)\s*(?:subscription|membership|plan)?[?.!]*$/);
   if (cancelSub && !/^(no|stop|cancel|not now)[.!]*$/.test(s.trim()) && /(subscription|membership|netflix|spotify|disney|prime|apple|google one|now tv|sky|demo)/.test(s)) return { action: 'subscription_help', merchant: cancelSub[1].replace(/\b(subscription|membership|plan)\b/g, '').trim() || null, reply: "Here's how to cancel." };
   const relQ = s.match(/\bmy (son|daughter|grandson|granddaughter|brother|sister|nephew|niece|husband|wife|friend|neighbour|neighbor|carer|doctor)'?s? (?:phone |mobile )?(?:number|phone|email|contact)/);

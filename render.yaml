@@ -15,6 +15,8 @@ services:
         sync: false
       - key: PAYPAL_WEBHOOK_ID
         sync: false
+      - key: PAYPAL_DEMO_PLAN_ID   # SaySafe Demo Membership plan (P-…), printed by scripts/paypal-setup-plan.ts. Unset = demo membership routes answer 503.
+        sync: false
       - key: GROQ_API_KEY
         sync: false
       - key: ADMIN_TOKEN   # merchant admin token for POST /api/admin/payments/:id/refund (>= 24 chars). Unset = refunds disabled.

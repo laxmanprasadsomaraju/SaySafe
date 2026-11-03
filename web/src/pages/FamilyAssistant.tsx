@@ -13,12 +13,14 @@ import { fetchActivity } from '../lib/activity';
 import { AssistantHeader } from '../assistant/AssistantHeader';
 import { RenderBlock, type BlockActions } from '../assistant/blocks';
 import { FAMILY_THREAD_KEY } from '../assistant/thread';
+import { isCompanionKind } from '../assistant/companion';
 import { parseBlock, restoreThread, ServerPayment, ServerActivity, parseServer, familyReviewFrom, historyFrom, type Block, type Message, type Thread } from '../assistant/schemas';
 
 const mid = () => Math.random().toString(36).slice(2, 10);
 const HELLO = 'I show purchases waiting for your review and the household’s history. You can’t pay from their account: they always approve at PayPal.';
 const fresh = (): Thread => ({ v: 1, mode: 'chat', focusId: null, messages: [{ id: mid(), role: 'assistant', text: HELLO, blocks: [] }] });
-const load = (): Thread => { try { return restoreThread(sessionStorage.getItem(FAMILY_THREAD_KEY)) ?? fresh(); } catch { return fresh(); } };
+// The elder's payment companion cards are private to her: never restored, added or shown in the family view.
+const load = (): Thread => { try { return restoreThread(sessionStorage.getItem(FAMILY_THREAD_KEY), { drop: (b) => isCompanionKind(b.kind) }) ?? fresh(); } catch { return fresh(); } };
 const CHIPS = ['What’s waiting for me?', 'Show history'];
 
 interface Overview { elder: { name: string | null }; requests: unknown[] }
@@ -33,7 +35,7 @@ export default function FamilyAssistant() {
   useEffect(() => { try { sessionStorage.setItem(FAMILY_THREAD_KEY, JSON.stringify(thread)); } catch { /* */ } }, [thread]);
 
   const add = useCallback((role: Message['role'], text: string, blocks: unknown[] = []) => {
-    const valid = blocks.map(parseBlock).filter((b): b is Block => b !== null);
+    const valid = blocks.map(parseBlock).filter((b): b is Block => b !== null && !isCompanionKind(b.kind));
     setThread((t) => ({ ...t, messages: [...t.messages, { id: mid(), role, text: text.slice(0, 4000), blocks: valid }].slice(-80) }));
   }, []);
   const shownIds = () => new Set(threadRef.current.messages.flatMap((m) => m.blocks).filter((b) => b.kind === 'family_review').map((b) => (b as { requestId: string }).requestId));
@@ -92,6 +94,7 @@ export default function FamilyAssistant() {
     finally { setBusy(false); }
   };
   const act: BlockActions = {
+    audience: 'family',
     openItem: () => {}, compare: () => {}, allow: () => {}, deny: () => {}, share: () => {}, receipt: () => {}, refund: () => {},
     replace: (old, next) => {
       const ok = parseBlock(next); if (!ok) return;

@@ -12,6 +12,8 @@ import { markPayPalReturn } from './thread';
 import { speech } from '../lib/voice';
 import { paymentLabel, verdictLabel, money as moneyCents, when, fetchActivity, shortStatus, truncateRef, TONE_CLS, type Tone } from '../lib/activity';
 import { shortTitle } from '../../../shared/shopping';
+import { COMPANION_REGISTRY } from './companionCards';
+import { UI_LABEL } from './companion';
 
 export interface BlockActions {
   openItem: (item: ProductItem, source: 'channel3' | 'demo') => void;
@@ -26,6 +28,12 @@ export interface BlockActions {
   refund: (requestId: string) => void;
   /** A card learned newer server data for a purchase: other cards about it (e.g. the receipt) update too. */
   synced?: (p: ServerPayment) => void;
+  /** Who is looking. Companion cards (Mary's private records) render nothing for "family". */
+  audience?: 'elder' | 'family';
+  /** Add an assistant message with cards (validated) to the conversation; optionally speak its text. */
+  append?: (text: string, blocks: unknown[], opts?: { speak?: boolean }) => void;
+  /** Speak a short status line (respects mute and Stop). */
+  speak?: (text: string) => void;
 }
 
 const money = (n: number, c: string) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: c }).format(n);
@@ -42,13 +50,24 @@ const VERDICT: Record<string, { icon: typeof ShieldAlert; cls: string; ic: strin
 };
 function ScamResultCard({ b, act }: { b: BlockOf<'scam_result'>; act: BlockActions }) {
   const v = VERDICT[b.verdict] ?? VERDICT.needs_checking;
-  const top = b.signals.filter((s) => s.severity !== 'info').slice(0, 3);
+  // contact_mismatch (or "same number, can be spoofed"): compared with a contact Mary saved. Shown first, on its own.
+  const contact = b.signals.find((s) => s.code === 'contact_mismatch') ?? b.signals.find((s) => s.code === 'contact_same_number_spoofable');
+  const top = b.signals.filter((s) => s.severity !== 'info' && s !== contact).slice(0, contact ? 2 : 3);
   return (
     <div className={`border-l-[8px] rounded-[var(--radius-card)] p-4 sm:p-5 ${v.cls}`} data-card="scam_result">
       <p className={`flex items-center gap-2 font-bold uppercase tracking-wider text-sm ${v.ic}`}><v.icon className="size-6" aria-hidden />{verdictLabel(b.verdict)}</p>
       <h3 className="text-[1.4rem] mt-1 break-words">{b.headline}</h3>
       <p className="mt-2 break-words">{b.summary}</p>
       {b.aiNotice && <p className="mt-2 text-base text-ink-soft">{b.aiNotice}. The safe steps are the same.</p>}
+      {contact && (
+        <div className={`mt-3 rounded-2xl border-2 bg-paper p-3 ${contact.code === 'contact_mismatch' ? 'border-danger' : 'border-amber'}`} data-testid="contact-evidence">
+          <p className="text-sm font-bold uppercase tracking-wider text-ink-soft">Compared with a contact you saved</p>
+          <p className="mt-1 font-bold break-words">{contact.title}</p>
+          {contact.evidence && <p className="mt-1 text-base break-all"><span className="text-ink-soft">Seen in the message: </span>{contact.evidence}</p>}
+          <p className="mt-1 break-words">{contact.detail}</p>
+          <p className="mt-1 text-sm text-ink-soft">Your contact is “{UI_LABEL.contact}”.</p>
+        </div>
+      )}
       {top.length > 0 && (
         <ul className="mt-3 space-y-2">
           {top.map((s, i) => (
@@ -510,6 +529,7 @@ export const REGISTRY: { [K in Block['kind']]: (p: { b: BlockOf<K>; act: BlockAc
   payment_history: ({ b, act }) => <PaymentHistoryCard b={b} act={act} />,
   refund: ({ b, act }) => <RefundCard b={b} act={act} />,
   trusted_links: ({ b }) => <TrustedLinksCard b={b} />,
+  ...COMPANION_REGISTRY,
 };
 export function RenderBlock({ b, act }: { b: Block; act: BlockActions }) {
   const C = REGISTRY[b.kind] as (p: { b: Block; act: BlockActions }) => ReactNode;

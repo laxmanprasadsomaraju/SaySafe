@@ -33,7 +33,9 @@ export function parseFollowup(text: string, hasProducts: boolean): Followup {
   if (/\brefunds?\b|\bmoney back\b/.test(s)) return { kind: 'refund' };
   const sm = s.match(/^(?:search|find|look for)\s+(?:my\s+)?(?:payments?|purchases?|orders?|history|activity)\s+(?:for\s+)?(.{2,60})$/) ?? s.match(/^(?:search|find)\s+(?:my\s+)?(.{2,40}?)\s+(?:payment|purchase|order|receipt)s?$/);
   if (sm) return { kind: 'search', q: sm[1].replace(/[?.!]+$/, '').trim() };
-  if (/\b(last|latest|most recent|previous)\b.{0,20}\b(payment|purchase|order|receipt)\b/.test(s) || /^(show )?(my )?receipt\b/.test(s)) return { kind: 'last_payment' };
+  // "my last payment to John" is about Mary's own records (the companion), not the Demo Shop receipt.
+  const toPerson = /\b(payment|paid)\s+(to|for)\s+(?!the shop|demo)[a-z]/.test(s);
+  if (!toPerson && (/\b(last|latest|most recent|previous)\b.{0,20}\b(payment|purchase|order|receipt)\b/.test(s) || /^(show )?(my )?receipt\b/.test(s))) return { kind: 'last_payment' };
   if (/\b(my|all|show) (payments|purchases|orders)\b|\bpayment history\b|\bwhat (have i|did i) (bought|buy|paid|pay)\b/.test(s)) return { kind: 'payments' };
   if (!hasProducts) return { kind: 'none' };
   const age = askedAge(s);
