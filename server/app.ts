@@ -3,6 +3,7 @@ import { parseRequest, recommend, spokenRecommendation, sanitizeProfile, profile
 import { getProfile, saveProfile, clearProfile } from './prefs/store.js';
 import { explainBest } from './ai/explain.js';
 import { normaliseLang } from '../shared/lang.js';
+import { dropTranscript } from '../shared/voice.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -170,8 +171,12 @@ export function createApp() {
     const f = (req as any).file as Express.Multer.File | undefined;
     if (!f) return res.status(400).json({ error: 'no_audio' });
     try {
+      // Tiny uploads are silence: never send them to Whisper (it answers silence with "Thank you.").
+      if (f.size < 2000) return res.json({ text: '', dropped: 'too_short' });
+      const voicedMs = z.coerce.number().min(0).max(60000).catch(0).parse(req.body?.voicedMs);
       const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm', langOf(req));
-      res.json({ text });
+      const dropped = dropTranscript(text, voicedMs);
+      res.json(dropped ? { text: '', dropped } : { text: text.trim() });
     } catch (e) {
       if (e instanceof AIUnavailableError) return res.status(503).json({ error: 'stt_unavailable', message: 'Voice is not available right now. You can type instead.' });
       throw e;
@@ -181,7 +186,7 @@ export function createApp() {
   app.post('/api/assistant', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const name = s?.name ?? 'Mary';
-    const said = z.string().trim().min(1).max(4000).parse(req.body?.text);
+    const said = z.string().trim().min(1).max(4000).refine((t) => /\p{L}/u.test(t)).parse(req.body?.text); // never call the AI on empty/punctuation
     const lastResults = z.array(z.string().max(100)).max(5).catch([]).parse(req.body?.lastResults);
     const step = z.string().max(40).catch('home').parse(req.body?.step);
     const lang = langOf(req);

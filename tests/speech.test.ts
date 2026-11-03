@@ -65,7 +65,7 @@ describe('speech controller', () => {
   it('a turn token goes stale on stop / navigation / mic', async () => {
     const turn = s.beginTurn();
     expect(s.getSnapshot().status).toBe('thinking');
-    s.setListening(true); // barge-in by tapping the mic
+    s.stopAll(); // Stop control / navigation / mic barge-in all invalidate the turn
     expect(await s.speak('Reply for the old turn.', { turn })).toBe(false);
     const t2 = s.beginTurn();
     expect(await s.speak('Fresh reply.', { turn: t2 })).toBe(true);

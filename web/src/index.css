@@ -72,7 +72,7 @@ main:focus, main:focus-visible { outline: none; }
 
 /* Microphone pulse while listening */
 @keyframes ring { 0% { box-shadow: 0 0 0 0 rgb(8 125 112 / .35); } 100% { box-shadow: 0 0 0 28px rgb(8 125 112 / 0); } }
-.mic-listening { animation: ring 1.4s ease-out infinite; }
+.mic-listening { box-shadow: 0 0 0 10px rgb(158 29 44 / .18); } /* static ring: no pulsing */
 @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .fade-up { animation: fade-up .35s ease-out both; }
 

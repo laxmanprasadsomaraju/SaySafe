@@ -13,8 +13,11 @@
  */
 
 import { LANGS, normaliseLang, type LangCode } from '../../../shared/lang';
+import { VAD, MIC_MESSAGES, pickMime, browserMeter, type MicEnv } from './mic';
+import { dropTranscript } from '../../../shared/voice';
 
-export type SpeechStatus = 'ready' | 'listening' | 'thinking' | 'speaking' | 'paused' | 'muted' | 'unavailable' | 'error';
+/** One state for all of SaySafe's voice: mic, transcription, AI turn and speech. */
+export type SpeechStatus = 'ready' | 'listening' | 'processing' | 'thinking' | 'speaking' | 'paused' | 'cancelled' | 'muted' | 'unavailable' | 'error';
 /** auto: short reply, only if autoSpeak is on. critical: safety warning, spoken if autoSpeak is on even when longer.
  *  user: the user pressed a Read aloud / Replay button (unmutes). list: the opt-in "Read everything" mode. */
 export type SpeechPriority = 'auto' | 'critical' | 'user' | 'list';
@@ -31,6 +34,9 @@ export interface SpeechSnapshot {
   error: string | null;
   /** Why something was shown as text instead of spoken (language / no voice). */
   notice: string | null;
+  /** Mic outcome to show on screen, never spoken ("I didn't hear anything. Tap to try again."). */
+  micMessage: string | null;
+  micSupported: boolean;
 }
 
 export interface SpeechEnv {
@@ -70,7 +76,12 @@ export class SpeechController {
   private segTotal = 0;
   private speaking = false;
   private paused = false;
-  private activity: 'listening' | 'thinking' | null = null;
+  private activity: 'listening' | 'processing' | 'thinking' | null = null;
+  private micSession = 0;
+  private micCleanup: (() => void) | null = null;
+  private micMessage: string | null = null;
+  private cancelledUntil = 0;
+  private lastTranscript = { text: '', at: 0 };
   private lastText: string | string[] | null = null;
   private lastPriority: SpeechPriority = 'user';
   private err: string | null = null;
@@ -81,7 +92,7 @@ export class SpeechController {
   private listeners = new Set<() => void>();
   private snap: SpeechSnapshot;
 
-  constructor(private env: SpeechEnv) {
+  constructor(private env: SpeechEnv, private mic: MicEnv | null = null) {
     this.prefs = this.loadPrefs();
     this.snap = this.build();
     try { env.synth?.addEventListener?.('voiceschanged', () => this.emit()); } catch { /* optional */ }
@@ -104,10 +115,12 @@ export class SpeechController {
   private build(): SpeechSnapshot {
     const supported = Boolean(this.env.synth && this.env.Utterance);
     const status: SpeechStatus = this.activity === 'listening' ? 'listening'
+      : this.activity === 'processing' ? 'processing'
       : this.err ? 'error'
       : this.speaking ? 'speaking'
       : this.paused ? 'paused'
       : this.activity === 'thinking' ? 'thinking'
+      : this.cancelledUntil > Date.now() ? 'cancelled'
       : !supported ? 'unavailable'
       : this.prefs.muted ? 'muted' : 'ready';
     const cur = this.queue[Math.min(this.index, this.queue.length - 1)];
@@ -118,6 +131,8 @@ export class SpeechController {
       canReplay: this.lastText !== null && supported,
       error: this.err,
       notice: this.notice,
+      micMessage: this.micMessage,
+      micSupported: this.micSupported(),
     };
   }
 
@@ -158,17 +173,120 @@ export class SpeechController {
   // ----- turns: a token that goes stale when anything newer happens -----
   get generation() { return this.gen; }
   /** Call when the user sends something: stops current speech and returns a token for the reply. */
-  beginTurn(): number { this.stop(); this.activity = 'thinking'; this.emit(); return this.gen; }
+  beginTurn(): number { this.stop(); this.micMessage = null; if (!this.micBusy) this.activity = 'thinking'; this.emit(); return this.gen; }
   isCurrent(turn: number) { return turn === this.gen; }
   /** Clear the "thinking" state if a turn ended without speech (error, nothing to say). */
   endThinking() { if (this.activity === 'thinking') { this.activity = null; this.emit(); } }
-  /** Mic state. Starting the mic is a barge-in: it stops speech. */
-  setListening(on: boolean) {
-    if (on) { this.stop(); this.activity = 'listening'; }
-    else if (this.activity === 'listening') this.activity = null;
-    this.emit();
+  // ----- microphone (tap-to-talk). One session at a time; every callback checks its session token. -----
+  micSupported() { return Boolean(this.mic?.getUserMedia && this.mic?.MediaRecorder); }
+  get micBusy() { return this.activity === 'listening' || this.activity === 'processing'; }
+
+  /** The mic button: idle -> listen; listening/processing -> cancel quietly; speaking -> stop speech, then listen. */
+  micToggle(onText: (t: string) => void) {
+    if (this.micBusy) { this.cancelListening(); return; }
+    void this.startListening(onText);
   }
-  setThinking(on: boolean) { if (on) this.activity = 'thinking'; else if (this.activity === 'thinking') this.activity = null; this.emit(); }
+
+  /** Cancel listening/transcribing without a sound. Any late recorder or transcription result is ignored. */
+  cancelListening() {
+    if (!this.micBusy) return;
+    this.micSession++;
+    this.micCleanup?.(); this.micCleanup = null;
+    this.activity = null; this.micMessage = null;
+    this.cancelledUntil = Date.now() + 1500;
+    this.emit();
+    setTimeout(() => this.emit(), 1600); // let the "Cancelled" chip fall back to Ready
+  }
+
+  /** The Stop control: stops speech, listening and processing, and makes any pending AI reply stale. */
+  stopAll() {
+    this.micSession++;
+    this.micCleanup?.(); this.micCleanup = null;
+    if (this.activity) this.activity = null;
+    this.micMessage = null; this.cancelledUntil = 0;
+    this.stop();
+  }
+
+  async startListening(onText: (t: string) => void): Promise<void> {
+    const mic = this.mic;
+    if (!mic?.getUserMedia || !mic.MediaRecorder) { this.micMessage = MIC_MESSAGES.unsupported; this.emit(); return; }
+    if (this.micBusy) return; // never two recorders
+    this.stop(); // barge-in: silence SaySafe first (also makes any in-flight AI reply stale)
+    const session = ++this.micSession;
+    const lang = this.prefs.lang;
+    this.activity = 'listening'; this.micMessage = null; this.cancelledUntil = 0;
+    this.emit();
+
+    let stream: MediaStream;
+    try {
+      stream = await mic.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    } catch (e: any) {
+      if (session !== this.micSession) return;
+      this.activity = null;
+      this.micMessage = e?.name === 'NotAllowedError' || e?.name === 'SecurityError' ? MIC_MESSAGES.denied : MIC_MESSAGES.unavailable;
+      this.emit(); return;
+    }
+    const stopTracks = () => { try { stream.getTracks().forEach((t) => t.stop()); } catch { /* */ } };
+    if (session !== this.micSession) { stopTracks(); return; } // cancelled while the permission prompt was open
+
+    const mime = pickMime(mic.MediaRecorder);
+    let rec: MediaRecorder;
+    try { rec = new mic.MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+    catch { stopTracks(); this.activity = null; this.micMessage = MIC_MESSAGES.unavailable; this.emit(); return; }
+    const chunks: Blob[] = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    const meter = mic.meter(stream);
+    const startAt = mic.now();
+    let voicedMs = 0, heard = false, lastVoiceAt = startAt, finishing = false;
+    let tick: ReturnType<typeof setInterval> | null = null;
+    const release = () => { if (tick) clearInterval(tick); tick = null; meter?.close(); stopTracks(); };
+    this.micCleanup = () => { rec.onstop = null; release(); try { if (rec.state !== 'inactive') rec.stop(); } catch { /* */ } };
+
+    const finish = (reason: 'silence' | 'done') => {
+      if (finishing || session !== this.micSession) return;
+      finishing = true;
+      const duration = mic.now() - startAt;
+      if (tick) clearInterval(tick); tick = null;
+      rec.onstop = async () => {
+        release();
+        if (session !== this.micSession) return; // cancelled meanwhile: drop silently
+        this.micCleanup = null;
+        // No voice, too short, or silence timeout: never upload. Whisper turns silence into "Thank you."
+        const noMeter = meter === null;
+        if (reason === 'silence' || duration < VAD.minClipMs || (!noMeter && !heard)) {
+          this.activity = null; this.micMessage = MIC_MESSAGES.nothingHeard; this.emit(); return;
+        }
+        this.activity = 'processing'; this.emit();
+        let text = '';
+        try { text = await mic.transcribe(new Blob(chunks, { type: rec.mimeType || mime || 'audio/webm' }), { voicedMs: noMeter ? 0 : voicedMs, lang, mime: rec.mimeType || mime }); }
+        catch { if (session === this.micSession) { this.activity = null; this.micMessage = MIC_MESSAGES.unclear; this.emit(); } return; }
+        if (session !== this.micSession) return; // Stop / navigation / new tap while transcribing
+        const dropped = dropTranscript(text, noMeter ? 0 : voicedMs);
+        this.activity = null;
+        if (dropped) { this.micMessage = MIC_MESSAGES.nothingHeard; this.emit(); return; }
+        const clean = text.trim().slice(0, 4000);
+        const now = mic.now();
+        if (clean.toLowerCase() === this.lastTranscript.text.toLowerCase() && now - this.lastTranscript.at < 10_000) { this.micMessage = MIC_MESSAGES.duplicate; this.emit(); return; }
+        this.lastTranscript = { text: clean, at: now };
+        this.emit();
+        onText(clean);
+      };
+      try { if (rec.state !== 'inactive') rec.stop(); else void rec.onstop?.(new Event('stop')); } catch { void rec.onstop?.(new Event('stop')); }
+    };
+
+    try { rec.start(); } catch { release(); this.activity = null; this.micMessage = MIC_MESSAGES.unavailable; this.emit(); return; }
+    tick = setInterval(() => {
+      if (session !== this.micSession) { if (tick) clearInterval(tick); return; }
+      const t = mic.now();
+      const lvl = meter ? meter.level() : 0;
+      if (lvl >= VAD.floor) { voicedMs += VAD.tickMs; lastVoiceAt = t; if (voicedMs >= VAD.minVoicedMs) heard = true; }
+      if (meter && !heard && t - startAt >= VAD.silenceTimeoutMs) finish('silence');
+      else if (heard && t - lastVoiceAt >= VAD.endOfSpeechMs) finish('done');
+      else if (t - startAt >= (meter ? VAD.maxMs : 8000)) finish(meter && !heard ? 'silence' : 'done');
+    }, VAD.tickMs);
+  }
+
+  setThinking(on: boolean) { if (on) { if (!this.micBusy) this.activity = 'thinking'; } else if (this.activity === 'thinking') this.activity = null; this.emit(); }
 
   /**
    * Speak text (or a list of parts, read one after another). Returns true if speech started.
@@ -284,8 +402,29 @@ function browserEnv(): SpeechEnv {
   };
 }
 
-export const speech = new SpeechController(browserEnv());
+function browserMic(): MicEnv | null {
+  if (typeof window === 'undefined') return null;
+  const md = navigator.mediaDevices;
+  return {
+    getUserMedia: typeof md?.getUserMedia === 'function' ? (c) => md.getUserMedia(c) : null,
+    MediaRecorder: 'MediaRecorder' in window ? (window as any).MediaRecorder : null,
+    meter: browserMeter,
+    now: () => performance.now(),
+    transcribe: async (blob, info) => {
+      const fd = new FormData();
+      fd.append('audio', blob, info.mime.includes('mp4') ? 'speech.mp4' : info.mime.includes('ogg') ? 'speech.ogg' : 'speech.webm');
+      fd.append('language', info.lang);
+      fd.append('voicedMs', String(Math.round(info.voicedMs)));
+      const res = await fetch('/api/voice/transcribe', { method: 'POST', body: fd, credentials: 'same-origin', headers: { 'X-SaySafe-Lang': info.lang } });
+      if (!res.ok) throw new Error('transcribe failed');
+      const j = await res.json().catch(() => ({}));
+      return typeof j.text === 'string' ? j.text : '';
+    },
+  };
+}
+
+export const speech = new SpeechController(browserEnv(), browserMic());
 if (typeof window !== 'undefined') {
   (window as any).__saysafeSpeech = speech; // for QA scripts
-  window.addEventListener('pagehide', () => speech.stop());
+  window.addEventListener('pagehide', () => speech.stopAll());
 }

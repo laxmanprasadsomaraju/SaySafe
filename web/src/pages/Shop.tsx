@@ -42,7 +42,9 @@ export default function Shop() {
     setBusy(true); setErr(null); setCaption(`You said: “${text}”`);
     turn.current = speech.beginTurn();
     try {
+      const myTurn = turn.current;
       const r = await api('/api/assistant', { body: { text, step: quote ? 'review' : products.length ? 'choosing' : 'shop', lastResults: products.map((p) => p.name) } });
+      if (!speech.isCurrent(myTurn)) return; // stale reply: a newer request, Stop, or navigation happened
       applyAssistant(r);
     } catch (e: any) { setErr(e.message); }
     finally { setBusy(false); speech.endThinking(); }
@@ -79,7 +81,7 @@ export default function Shop() {
       <PageTitle eyebrow="Shop by voice" title={quote ? 'Check before you pay' : 'What do you need?'} lead={quote ? 'Here is exactly what you would pay, and who you would pay.' : 'Tell me, for example: “Find me a reliable kettle under €40.”'} />
       {!quote && (
         <div className="grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
-          <MicButton state={busy ? 'processing' : voice.state} onClick={voice.toggle} />
+          <MicButton state={voice.state} onClick={voice.toggle} />
           <div className="space-y-4 min-w-0">
             <form className="flex gap-3" onSubmit={(e) => { e.preventDefault(); if (query.trim()) ask(query.trim()); }}>
               <label htmlFor="q" className="sr-only">Type what you are looking for</label>
@@ -149,7 +151,7 @@ export default function Shop() {
               <Button onClick={pay} busy={paying}>{quote.needsFamily ? 'Ask my family to check' : 'Continue to PayPal'}</Button>
               <Button variant="secondary" icon={<ArrowLeft className="size-6" aria-hidden />} onClick={() => { setQuote(null); setCaption(null); }} disabled={paying}>Cancel, go back</Button>
             </div>
-            <div className="flex flex-col items-center pt-2"><MicButton size="md" state={busy ? 'processing' : voice.state} onClick={voice.toggle} label="Or say “yes” or “cancel”" /></div>
+            <div className="flex flex-col items-center pt-2"><MicButton size="md" state={voice.state} onClick={voice.toggle} label="Or say “yes” or “cancel”" /></div>
           </div>
         </div>
       )}

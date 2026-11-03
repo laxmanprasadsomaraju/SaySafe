@@ -39,24 +39,24 @@ export function PageTitle({ eyebrow, title, lead }: { eyebrow?: string; title: s
   );
 }
 
-/** Large, labelled mic button with explicit states (never icon-only). */
+/** Large, labelled mic button with explicit states (never icon-only). Tap: listen / cancel / interrupt. */
 export function MicButton({ state, onClick, size = 'lg', label = 'Tap to speak' }: { state: VoiceState; onClick: () => void; size?: 'lg' | 'md'; label?: string }) {
   if (state === 'unsupported') return <p className="max-w-xs text-center text-lg text-ink-soft font-bold">Voice input isn’t available in this browser. Please type instead.</p>;
   const dims = size === 'lg' ? 'size-36 md:size-40' : 'size-20';
-  const text = state === 'listening' ? 'Listening… tap to stop' : state === 'processing' ? 'Working it out…' : label;
+  const aria = state === 'listening' ? 'Stop listening' : state === 'processing' ? 'Cancel' : state === 'speaking' ? 'Interrupt and speak' : 'Start listening';
+  const text = state === 'listening' ? 'Listening… tap to cancel' : state === 'processing' ? 'Thinking… tap to cancel' : state === 'speaking' ? 'Tap to interrupt' : label;
   return (
     <div className="flex flex-col items-center gap-3">
       <button
         type="button"
         onClick={onClick}
-        disabled={state === 'processing'}
         aria-pressed={state === 'listening'}
-        aria-label={text}
-        className={`${dims} rounded-full grid place-items-center text-white transition-colors ${state === 'listening' ? 'bg-danger mic-listening' : 'bg-teal hover:bg-teal-deep shadow-[var(--shadow-lift)]'}`}
+        aria-label={aria}
+        className={`${dims} rounded-full grid place-items-center text-white transition-colors ${state === 'listening' ? 'bg-danger ring-8 ring-danger/20' : 'bg-teal hover:bg-teal-deep shadow-[var(--shadow-lift)]'}`}
       >
-        {state === 'processing' ? <Loader2 className="size-12 animate-spin" aria-hidden /> : state === 'listening' ? <Square className="size-10" aria-hidden fill="currentColor" /> : <Mic className={size === 'lg' ? 'size-14' : 'size-9'} aria-hidden />}
+        {state === 'processing' ? <Loader2 className="size-12 motion-safe:animate-spin" aria-hidden /> : state === 'listening' ? <Square className="size-10" aria-hidden fill="currentColor" /> : <Mic className={size === 'lg' ? 'size-14' : 'size-9'} aria-hidden />}
       </button>
-      <span className="font-bold text-lg" aria-live="polite">{text}</span>
+      <span className="font-bold text-lg" aria-hidden>{text}</span>
     </div>
   );
 }

@@ -67,7 +67,7 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
     // A sentence may legitimately start between reading the log and the click; what matters is nothing after the cancel.
     const ci = after.findIndex((x) => x.t === 'cancel');
     check('Stop cancels and nothing else is spoken afterwards', ci >= 0 && !after.slice(ci).some((x) => x.t === 'speak'), JSON.stringify(after.map((x) => x.t)));
-    check('Stop button disabled once stopped', await p.getByRole('button', { name: 'Stop speaking' }).isDisabled());
+    check('Stop button disabled once stopped', await p.getByRole('button', { name: 'Stop', exact: true }).isDisabled());
 
     // Pause / resume.
     await p.getByRole('button', { name: /Read all \d+ listings aloud/ }).click();

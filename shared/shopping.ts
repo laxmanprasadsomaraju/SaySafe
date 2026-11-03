@@ -367,13 +367,13 @@ function ordinal(s: string): number | null {
 /** Deterministic parser for follow-ups about the results already on screen. */
 export function parseFollowup(text: string, hasResults: boolean): Followup {
   const s = text.toLowerCase().trim().replace(/[!?.]+$/, '');
-  if (/^(stop|stop talking|stop reading|be quiet|quiet|hush|shush|silence|enough|that's enough|shut up)\b/.test(s) || /\bstop (talking|reading|speaking)\b/.test(s)) return { kind: 'stop' };
+  if (/^(no,? )?(stop|stop talking|stop reading|be quiet|quiet|hush|shush|silence|enough|that's enough|shut up)\b/.test(s) || /\bstop (talking|reading|speaking)\b/.test(s)) return { kind: 'stop' };
   if (!hasResults) return { kind: 'search', text };
   if (/\bwhy\b/.test(s) && /\b(recommend|pick|picked|choose|chose|this|that|it|one)\b/.test(s)) return { kind: 'why', index: ordinal(s) };
   if (/\b(spec|specs|specification|specifications|more powerful|bigger|which is better|which one is better|compare)\b/.test(s)) return { kind: 'specs' };
   if (/\b(tell me more|more about|more detail|details (on|about|of)|what about|describe)\b/.test(s)) { const i = ordinal(s); if (i !== null) return { kind: 'more', index: i }; }
   const b = parseBudget(s);
-  const rest = parseRequest(s).keywords.filter((k) => !['show', 'only', 'just', 'those', 'them', 'ones', 'filter', 'items', 'results', 'option', 'options'].includes(k));
+  const rest = parseRequest(s).keywords.filter((k) => !['show', 'only', 'just', 'those', 'them', 'ones', 'filter', 'items', 'results', 'option', 'options', 'no', 'yes', 'ok', 'okay', 'actually', 'instead', 'rather', 'let', 'see', 'look', 'at', 'these', 'all', 'more', 'please'].includes(k));
   if (b.max !== null && rest.length === 0) return { kind: 'budget', max: b.max };
   if (/\b(cheaper|less expensive|lower price|lower[- ]cost|cheapest|more affordable)\b/.test(s) && rest.length === 0) return { kind: 'cheaper' };
   return { kind: 'search', text };

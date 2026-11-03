@@ -29,7 +29,7 @@ if (localStorage.getItem('ss-contrast') === 'on') document.documentElement.class
  *  effect runs before a new page's own mount effects (which may legitimately start speaking). */
 function RouteSpeechGuard() {
   const { pathname } = useLocation();
-  useEffect(() => { speech.stop(); }, [pathname]);
+  useEffect(() => { speech.stopAll(); }, [pathname]);
   return null;
 }
 

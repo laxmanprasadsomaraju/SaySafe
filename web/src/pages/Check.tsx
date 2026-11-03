@@ -51,8 +51,8 @@ export default function Check() {
   const scan = useCallback(async (t: string) => {
     if (!t.trim()) { setErr('Please paste or type the message first.'); return; }
     setBusy(true); setErr(null); setResult(null);
-    turn.current = speech.beginTurn();
-    try { show(await api<ScanResult>('/api/scan', { body: { text: t } })); }
+    const myTurn = (turn.current = speech.beginTurn());
+    try { const r = await api<ScanResult>('/api/scan', { body: { text: t } }); if (speech.isCurrent(myTurn)) show(r); }
     catch (e: any) { setErr(e.message); }
     finally { setBusy(false); speech.endThinking(); }
   }, []);

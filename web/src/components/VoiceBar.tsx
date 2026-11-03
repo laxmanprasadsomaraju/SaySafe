@@ -6,9 +6,11 @@ import { useSpeech } from '../lib/voice';
 
 const CHIP: Record<SpeechStatus, { label: string; cls: string; dot: string }> = {
   ready: { label: 'Ready', cls: 'bg-teal-soft text-teal-deep', dot: 'bg-teal' },
-  listening: { label: 'Listening', cls: 'bg-danger-soft text-danger', dot: 'bg-danger' },
-  thinking: { label: 'Thinking', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
-  speaking: { label: 'Speaking', cls: 'bg-navy text-white', dot: 'bg-white' },
+  listening: { label: 'Listening…', cls: 'bg-danger-soft text-danger', dot: 'bg-danger' },
+  processing: { label: 'Thinking…', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
+  thinking: { label: 'Thinking…', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
+  speaking: { label: 'Speaking…', cls: 'bg-navy text-white', dot: 'bg-white' },
+  cancelled: { label: 'Cancelled', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
   paused: { label: 'Paused', cls: 'bg-amber-soft text-amber', dot: 'bg-amber' },
   muted: { label: 'Muted', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
   unavailable: { label: 'Voice unavailable', cls: 'bg-line text-navy', dot: 'bg-ink-soft' },
@@ -22,11 +24,12 @@ export function VoiceBar() {
   const s = useSpeech();
   const [open, setOpen] = useState(false);
   const panelId = useId();
-  const active = s.status === 'speaking' || s.status === 'paused';
+  const speakingNow = s.status === 'speaking' || s.status === 'paused';
+  const active = speakingNow || s.status === 'listening' || s.status === 'processing' || s.status === 'thinking';
 
   // Escape stops speech from anywhere (it does not steal Escape from open dialogs: those stop propagation).
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && (speech.getSnapshot().status === 'speaking' || speech.getSnapshot().status === 'paused')) speech.stop(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && ['speaking', 'paused', 'listening', 'processing'].includes(speech.getSnapshot().status)) speech.stopAll(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
@@ -67,7 +70,7 @@ export function VoiceBar() {
       <div className="mx-auto max-w-5xl px-4 sm:px-5 py-2 flex flex-col-reverse sm:flex-row sm:items-center gap-x-3 gap-y-1.5">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <span className={`inline-flex items-center gap-2 rounded-full px-3 min-h-9 text-sm font-bold whitespace-nowrap shrink-0 ${chip.cls}`}>
-            <span className={`size-2.5 rounded-full ${chip.dot} ${s.status === 'speaking' || s.status === 'listening' ? 'motion-safe:animate-pulse' : ''}`} aria-hidden />
+            <span className={`size-2.5 rounded-full ${chip.dot}`} aria-hidden />
             <span><span className="sr-only">Voice status: </span>{chip.label}</span>
           </span>
           <p className="min-w-0 flex-1 text-base text-ink-soft line-clamp-2 break-words" title={s.caption || undefined}>
@@ -75,14 +78,15 @@ export function VoiceBar() {
             {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
             {s.error && <span className="text-danger font-bold"> {s.error}</span>}
             {!s.caption && s.notice && <span className="text-ink-soft"> {s.notice}</span>}
+            {!s.caption && !s.notice && s.micMessage && <span className="text-navy font-bold"> {s.micMessage}</span>}
           </p>
         </div>
         <div className="flex gap-1.5 justify-end shrink-0">
-          <button type="button" onClick={() => speech.stop()} disabled={!active} aria-label="Stop speaking"
+          <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
             className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
             <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
           </button>
-          <button type="button" onClick={() => speech.togglePause()} disabled={!active} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
+          <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
             {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}
           </button>
           <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>

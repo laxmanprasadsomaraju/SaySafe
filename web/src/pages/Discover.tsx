@@ -52,12 +52,13 @@ export default function Discover() {
     else speech.speak(r.reply, { turn });
   };
 
-  const search = async (text: string, maxPrice?: number) => {
+  const search = async (text: string, maxPrice?: number, label?: string) => {
     const turn = speech.beginTurn();
     setBusy(true); setErr(null);
     try {
       const r = await api<Result>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest() } });
       if (!speech.isCurrent(turn)) return; // user navigated, stopped, or asked something else meanwhile
+      if (label && r.products.length === 0) { const msg = `${label}, I found no other listings for ${r.searchQuery}.`; setCaption(msg); speech.speak(msg, { turn }); return; }
       setRes(r); setCompare([]);
       speakResults(r, turn);
     } catch (e: any) { setErr(e.message); }
@@ -103,11 +104,11 @@ export default function Discover() {
         return say(specsAnswer(pickItems, pickItems.map((p) => shortTitle(p.title))), speech.beginTurn());
       }
       case 'cheaper': {
-        const cheaper = pickAt(picks.findIndex((k) => k.role === 'cheaper'));
-        if (cheaper) return say(`The lower-cost option is the ${shortTitle(cheaper.p.title)}, ${money(cheaper.p.offers[0].price, cheaper.p.offers[0].currency)} at ${cheaper.p.offers[0].retailer}.`, speech.beginTurn());
+        // Stop talking and ask Channel3 again: same product words (same category), strictly below the best match's price.
         const best = pickItems[0];
-        if (best) return search(res!.searchQuery, Math.max(1, Math.floor(best.offers[0].price - 0.01)));
-        return;
+        if (!best) return search(res!.searchQuery);
+        const cap = Math.round((best.offers[0].price - 0.01) * 100) / 100;
+        return search(res!.searchQuery, cap, `Cheaper than ${money(best.offers[0].price, best.offers[0].currency)}`);
       }
       case 'budget':
         if (rerankLocally(f.max)) return;
@@ -134,7 +135,7 @@ export default function Discover() {
         These listings come from other shops, found with Channel3. SaySafe doesn’t sell them or take payment for them. Family Circle checks and the SaySafe sandbox checkout don’t cover them.
       </Notice>
       <div className="mt-8 grid grid-cols-1 md:grid-cols-[auto_1fr] gap-8 items-center">
-        <MicButton state={busy ? 'processing' : voice.state} onClick={voice.toggle} />
+        <MicButton state={voice.state} onClick={voice.toggle} />
         <div className="space-y-4 min-w-0">
           <form className="flex flex-wrap gap-3" onSubmit={(e) => { e.preventDefault(); if (query.trim()) ask(query.trim()); }}>
             <label htmlFor="dq" className="sr-only">Type what you are looking for, or ask about the results</label>
