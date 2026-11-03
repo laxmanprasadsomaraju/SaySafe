@@ -137,7 +137,7 @@ const TOPICS: Topic[] = [
       'As Mary, choose a Demo Shop item over €75, for example the €120 microwave. It shows “Waiting for family”.',
       'Alex sees the exact item, shop and price, and chooses Approve or Decline. The answer applies only to that purchase and expires after 30 minutes.',
       'If Alex approves, Mary continues to PayPal and approves the payment herself. If Alex declines, nothing can be paid.',
-      'Alex can also see shared scam checks and a read-only Insights dashboard (see “Insights”), and can change Mary’s limit.',
+      'Alex sees only the requests sent to him, scam checks Mary shares, and a read-only Insights dashboard (see “Insights”). Purchases under the limit stay private unless Mary turns on “Share spending summaries with Alex” (totals only) or “Share my individual purchase history with Alex”, both off by default. Only Mary can change her limit.',
     ],
     notes: ['Alex can never pay from Mary’s account or approve the PayPal step.', 'Tested with two browser sessions. Not yet tested on two physical phones.'],
     shots: [
@@ -340,6 +340,7 @@ export default function Help() {
           <SandboxBadge />
           <h1 className="mt-5 display-2">SaySafe Help centre</h1>
           <p className="mt-4 text-xl text-ink-soft leading-relaxed">Step-by-step help for checking messages, shopping, family reviews and PayPal sandbox payments. No real money moves in this demo.</p>
+          <p className="mt-4 text-lg"><Link to="/learn" className="link" data-testid="help-learn-link">Learn SaySafe: 14 illustrated step-by-step guides</Link> · <Link to="/judges" className="link">Judges’ Guide</Link></p>
         </header>
 
         {who === 'elder' && selected && (

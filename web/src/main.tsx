@@ -26,6 +26,11 @@ import { ServerStatusBanner } from './components/ServerStatus';
 const NativeInsights = lazy(() => import('./pages/insights/NativeInsights'));
 const StudioRoute = lazy(() => import('./pages/insights/StudioRoute'));
 const MyInsights = lazy(() => import('./pages/insights/MyInsights'));
+// Learn SaySafe docs (guides, Judges' Guide, Features): lazy so the app bundle doesn't grow.
+const Learn = lazy(() => import('./pages/learn/Learn'));
+const LearnGuide = lazy(() => import('./pages/learn/LearnGuide'));
+const Judges = lazy(() => import('./pages/learn/Judges'));
+const Features = lazy(() => import('./pages/learn/Features'));
 const insightsFallback = <p className="p-8">Loading…</p>;
 
 // Apply saved display preferences (bigger text, contrast, reduced motion) before first paint.
@@ -89,6 +94,10 @@ const router = createBrowserRouter(createRoutesFromElements(
     <Route path="/checkout/cancel" element={<Order />} />
     <Route path="/help" element={<Help />} />
     <Route path="/guide" element={<Guide />} />
+    <Route path="/learn" element={<Suspense fallback={insightsFallback}><Learn /></Suspense>} />
+    <Route path="/learn/:slug" element={<Suspense fallback={insightsFallback}><LearnGuide /></Suspense>} />
+    <Route path="/judges" element={<Suspense fallback={insightsFallback}><Judges /></Suspense>} />
+    <Route path="/features" element={<Suspense fallback={insightsFallback}><Features /></Suspense>} />
     <Route path="/discover" element={<Discover />} />
     <Route path="/preferences" element={<Preferences />} />
     <Route path="/family" element={<Family />} />

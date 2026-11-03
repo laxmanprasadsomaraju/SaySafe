@@ -123,7 +123,7 @@ export default function Home() {
           <ul className="divide-y divide-line">{recent.map((it) => <li key={`${it.type}-${it.id}`}><ActivityRow it={it} /></li>)}</ul>
         )}
         {recent && recent.some((i) => i.example) && <p className="mt-2 text-sm text-ink-soft">Items marked “Sample data” are illustrative examples for the demo: no PayPal record, nothing can be paid.</p>}
-        <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">See all activity</Link><Link to="/assistant?welcome=1" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">Things to try</Link></div>
+        <div className="mt-2 flex flex-wrap gap-x-5"><Link to="/activity" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">See all activity</Link><Link to="/assistant?welcome=1" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center">Things to try</Link><Link to="/learn" className="font-bold text-teal underline underline-offset-4 min-h-12 inline-flex items-center" data-testid="home-learn-link">Learn SaySafe</Link></div>
       </Card>
 
       <Link to="/assistant" className="mt-6 flex md:inline-flex items-center justify-center gap-3 min-h-14 rounded-full bg-teal text-white font-bold px-8 hover:bg-teal-deep shadow-[var(--shadow-lift)]">

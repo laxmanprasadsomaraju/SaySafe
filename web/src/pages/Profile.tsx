@@ -190,7 +190,8 @@ function DemoAndHelp({ family }: { family: boolean }) {
       <h3 id="help-h" className="text-xl flex items-center gap-2"><LifeBuoy className="size-6 text-teal shrink-0" aria-hidden />Help Centre</h3>
       <ul className="mt-1 divide-y divide-line">
         {!family && <li><Link className={linkRow} to="/help">Get trusted help<ChevronRight className="size-5" aria-hidden /></Link></li>}
-        <li><Link className={linkRow} to="/guide">How to use SaySafe<ChevronRight className="size-5" aria-hidden /></Link></li>
+        <li><Link className={linkRow} to="/learn" data-testid="profile-learn-link">Learn SaySafe: step-by-step guides<ChevronRight className="size-5" aria-hidden /></Link></li>
+        <li><Link className={linkRow} to="/judges">Judges’ Guide (test in 5 minutes)<ChevronRight className="size-5" aria-hidden /></Link></li>
         <li><Link className={linkRow} to="/" data-testid="profile-website-link">SaySafe website (you stay signed in)<ChevronRight className="size-5" aria-hidden /></Link></li>
         <li><a className={linkRow} href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Source code and docs<span className="sr-only"> (opens GitHub in a new tab)</span><ChevronRight className="size-5" aria-hidden /></a></li>
       </ul>
@@ -209,7 +210,7 @@ function DemoAndHelp({ family }: { family: boolean }) {
             </div>
             <ul className="mt-1 divide-y divide-line">
               <li><Link className={linkRow} to="/assistant?welcome=1">Things to try (welcome)<ChevronRight className="size-5" aria-hidden /></Link></li>
-              <li><Link className={linkRow} to="/help#try-as-mary">Try as Mary: walkthrough<ChevronRight className="size-5" aria-hidden /></Link></li>
+              <li><Link className={linkRow} to="/learn/getting-started">Try as Mary: walkthrough<ChevronRight className="size-5" aria-hidden /></Link></li>
             </ul>
             <div className="mt-3 flex flex-col gap-4">
               <TryAsAlex />

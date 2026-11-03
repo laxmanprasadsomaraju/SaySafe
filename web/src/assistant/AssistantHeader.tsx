@@ -4,8 +4,8 @@
  * so every control inside is an ordinary, labelled button or switch.
  */
 import { useEffect, useId, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Menu, X, RotateCcw, SlidersHorizontal, Type, Contrast } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Menu, X, RotateCcw, SlidersHorizontal, Type, Contrast, BookOpen } from 'lucide-react';
 import { VoiceSettings, MuteSwitch } from '../components/VoiceBar';
 import { useDisplay, setDisplay } from '../lib/display';
 import { useSpeech, speech } from '../lib/voice';
@@ -66,6 +66,7 @@ export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; vo
               <p className="py-2 text-sm text-ink-soft">Saved on this device. More in Profile › Accessibility.</p>
             </div>
           )}
+          <Link to="/learn" className={item} data-testid="assistant-menu-learn"><BookOpen className="size-5 text-teal" aria-hidden />Help: step-by-step guides</Link>
         </div>
       )}
     </div>

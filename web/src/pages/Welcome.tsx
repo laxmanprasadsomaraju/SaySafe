@@ -4,6 +4,15 @@ import { ShoppingBag, Users, ArrowRight, MessageSquareWarning, Mic, CheckCircle2
 import { Layout } from '../components/Layout';
 import { Button, SandboxBadge } from '../components/ui';
 import { api } from '../lib/api';
+import { Figure } from '../learn/Figure';
+import { VALUE_PROP } from '../learn/content';
+
+const FLAGSHIP = [
+  { id: 'g06/01-mary-waiting', t: 'Mary asks family', alt: 'Mary’s family review card: Pending, over her €75 limit.', cap: 'Over €75: waiting for family' },
+  { id: 'g06/02-alex-review', t: 'Alex approves', alt: 'Alex’s review card with the exact item, €120.00 EUR, Approve and Decline.', cap: 'Alex sees the exact purchase' },
+  { id: 'g06/06-mary-approved', t: 'Mary pays at PayPal', alt: 'Mary’s card: Approved, Continue to PayPal.', cap: 'Mary approves on PayPal’s page' },
+  { id: 'g07/01-receipt-card', t: 'Receipt checked', alt: 'Receipt card: Captured, checked with PayPal.', cap: '“Paid” only after PayPal confirms' },
+];
 
 /**
  * Demo video link. Leave EMPTY until a real recorded demo exists; the "Watch Demo" button only renders when set.
@@ -84,12 +93,12 @@ export default function Welcome() {
     { n: 5, t: 'A receipt checked with PayPal', d: '“Paid” only after PayPal confirms the capture, then a signed webhook is verified. Activity and Insights show it as a real sandbox transaction.', tag: 'After' },
   ];
   const features: { icon: typeof ShieldAlert; t: string; d: string; status: Status; help: string }[] = [
-    { icon: ShieldAlert, t: 'Scam Guardian', d: 'Paste a message, link, email, phone number or screenshot. You get Suspicious, Needs checking or No obvious warning signs, with the exact words that worried it. Never “safe”.', status: 'Live', help: 'checking-messages' },
+    { icon: ShieldAlert, t: 'Scam Guardian', d: 'Paste a message, link, email, phone number or screenshot. You get Suspicious, Needs checking or No obvious warning signs, with the exact words that worried it. Never “safe”.', status: 'Live', help: 'check-a-suspicious-message' },
     { icon: MessageCircle, t: 'AI Assistant', d: 'One conversation for checking, shopping and help, with purchase, family, receipt and insights cards. The AI explains and suggests; it can never pay, approve or change a record.', status: 'Live', help: 'getting-started' },
-    { icon: Search, t: 'Channel3 shopping', d: 'Real products, prices and pictures from Channel3. Buying opens the shop’s own website: SaySafe never pays a retailer.', status: 'Live', help: 'real-products' },
-    { icon: Users, t: 'Family Circle', d: 'Invite a trusted helper with a one-time code. Purchases over your limit wait for them to approve or decline the exact item and price.', status: 'Live', help: 'family-reviews' },
-    { icon: CreditCard, t: 'PayPal Sandbox checkout', d: 'Demo Shop items are paid on PayPal’s own sandbox page. SaySafe re-checks amount and currency with PayPal and captures once.', status: 'Live, sandbox', help: 'paypal-sandbox' },
-    { icon: ListChecks, t: 'Payment history', d: 'Every payment, family decision and scam check in one searchable list, with receipts and PayPal evidence.', status: 'Live', help: 'history-receipts' },
+    { icon: Search, t: 'Channel3 shopping', d: 'Real products, prices and pictures from Channel3. Buying opens the shop’s own website: SaySafe never pays a retailer.', status: 'Live', help: 'find-real-products' },
+    { icon: Users, t: 'Family Circle', d: 'Invite a trusted helper with a one-time code. Purchases over your limit wait for them to approve or decline the exact item and price.', status: 'Live', help: 'family-approval' },
+    { icon: CreditCard, t: 'PayPal Sandbox checkout', d: 'Demo Shop items are paid on PayPal’s own sandbox page. SaySafe re-checks amount and currency with PayPal and captures once.', status: 'Live, sandbox', help: 'paypal-sandbox-purchase' },
+    { icon: ListChecks, t: 'Payment history', d: 'Every payment, family decision and scam check in one searchable list, with receipts and PayPal evidence.', status: 'Live', help: 'verified-receipt' },
     { icon: BarChart3, t: 'Insights', d: 'Mary’s own insights, and a read-only dashboard for her family helper: spending confirmed by PayPal (sample data counted separately), shared scam checks and pending approvals.', status: 'Live', help: 'insights' },
     { icon: Accessibility, t: 'Voice and accessibility', d: 'Large text, high contrast, captions for everything spoken, and a big Stop. Voice is tap-to-talk and still being tested on real phones.', status: 'Beta', help: 'voice' },
   ];
@@ -110,7 +119,8 @@ export default function Welcome() {
         <div className="lg:col-span-6 fade-up">
           <SandboxBadge />
           <h1 className="mt-6 text-[2.75rem] leading-[1.04] sm:text-[3.5rem] lg:text-[4.5rem] tracking-[-0.025em] max-w-[13ch]">Ask first. Pay with confidence.</h1>
-          <p className="mt-6 text-[1.375rem] leading-relaxed text-ink-soft max-w-[36ch]">SaySafe is a payment safety companion for older adults and the family who help them. It checks the request, brings in family when it matters, and confirms with PayPal before telling you it’s paid.</p>
+          <p className="mt-6 text-[1.375rem] leading-relaxed text-ink-soft max-w-[36ch]">{VALUE_PROP}</p>
+          <p className="mt-3 text-lg leading-relaxed text-ink-soft max-w-[42ch]">A payment safety companion for older adults and the family who help them: it checks the request, brings in family when it matters, and confirms with PayPal before telling you it’s paid.</p>
           <div className="mt-9 flex flex-wrap items-center gap-x-4 gap-y-3">
             {signedIn
               ? <><Button onClick={() => nav('/home')} icon={<ArrowRight className="size-6" aria-hidden />}>Continue as {signedIn}</Button><Button variant="secondary" onClick={() => start()} busy={busy}>Start a fresh demo</Button></>
@@ -120,7 +130,7 @@ export default function Welcome() {
             <a href={REPO_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline"><Code className="size-5" aria-hidden />View Source Code<span className="sr-only"> (opens in a new tab)</span></a>
           </div>
           {err && <p role="alert" className="mt-4 text-danger font-bold">{err}</p>}
-          <p className="mt-4 text-base text-ink-soft">No sign-up. About two minutes. PayPal sandbox only: no real money. <Link to="/help" className="link">Help centre</Link></p>
+          <p className="mt-4 text-base text-ink-soft">No sign-up. About two minutes. PayPal sandbox only: no real money. <Link to="/learn" className="link">Learn SaySafe</Link> · <Link to="/judges" className="link">Judges’ Guide</Link></p>
           <ul className="mt-10 flex flex-wrap gap-x-7 gap-y-3 text-lg font-bold" aria-label="The three things SaySafe does">
             <li className="flex items-center gap-2"><MessageSquareWarning className="size-6 text-teal" aria-hidden />Check a message</li>
             <li className="flex items-center gap-2"><Mic className="size-6 text-teal" aria-hidden />Shop by voice</li>
@@ -210,6 +220,29 @@ export default function Welcome() {
         <p className="mt-8 text-lg text-ink-soft max-w-[70ch]"><b className="text-navy">The rule behind it:</b> AI explains, rules decide, the payer authorises at PayPal, and the server verifies. A family “yes” never replaces your own approval. Everything uses the PayPal sandbox: no real money.</p>
       </section>
 
+      {/* The flagship, in four real screens (Mary → Alex → PayPal → receipt) */}
+      <section aria-labelledby="flagship-h" className="bg-paper border-y border-line">
+        <div className="wrap py-16 md:py-24 reveal">
+          <p className="eyebrow">The flagship demo</p>
+          <h2 id="flagship-h" className="display-2 mt-3 max-w-[22ch]">Mary asks, Alex approves, Mary pays at PayPal, SaySafe checks the receipt.</h2>
+          <ol className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
+            {FLAGSHIP.map((f, i) => (
+              <li key={f.id} className="flex flex-col items-center text-center max-w-[16rem]">
+                <p className="mb-3 flex items-center gap-2 font-bold"><span aria-hidden className="grid size-8 place-items-center rounded-full bg-navy text-white text-sm">{i + 1}</span><span className="sr-only">Step {i + 1}: </span>{f.t}</p>
+                <Figure shot={f} compact />
+              </li>
+            ))}
+          </ol>
+          <div className="mt-10 flex flex-wrap gap-x-6 gap-y-2 text-lg">
+            <Link to="/judges" className="link inline-flex min-h-12 items-center">Judges’ Guide: test it in 5 minutes</Link>
+            <Link to="/learn" className="link inline-flex min-h-12 items-center">Learn SaySafe (14 guides)</Link>
+            <Link to="/features" className="link inline-flex min-h-12 items-center">All features and limits</Link>
+            <a href={`${REPO_URL}/blob/main/docs/ARCHITECTURE.md`} target="_blank" rel="noreferrer" className="link inline-flex min-h-12 items-center">Architecture<span className="sr-only"> (opens GitHub in a new tab)</span></a>
+            <a href={REPO_URL} target="_blank" rel="noreferrer" className="link inline-flex min-h-12 items-center">GitHub<span className="sr-only"> (opens in a new tab)</span></a>
+          </div>
+        </div>
+      </section>
+
       {/* Showcase 1: ScamLens */}
       <Showcase id="scan" eyebrow="Before you pay · Check a message" title="Even a genuine PayPal invoice can carry a fake phone number."
         screens={[{ src: '/screens/check-result.webp', alt: 'SaySafe result: Suspicious, this message may be a scam, with the reasons and a Read it to me again button.' }]}>
@@ -255,7 +288,7 @@ export default function Welcome() {
                 <h3 className="mt-4 text-2xl">{f.t}</h3>
                 <p className={`mt-2 self-start rounded-full px-3 py-1 text-sm font-bold ${statusStyle[f.status]}`}><span className="sr-only">Status: </span>{f.status}</p>
                 <p className="mt-3 text-lg leading-relaxed text-ink-soft flex-1">{f.d}</p>
-                <Link to={`/help#${f.help}`} className="link mt-4 min-h-12 inline-flex items-center">How to use it<span className="sr-only">: {f.t}</span></Link>
+                <Link to={`/learn/${f.help}`} className="link mt-4 min-h-12 inline-flex items-center">How to use it<span className="sr-only">: {f.t}</span></Link>
               </li>
             ))}
           </ul>
@@ -277,7 +310,7 @@ export default function Welcome() {
         <div className="mt-12 flex flex-wrap gap-4">
           <Button onClick={() => start()} busy={busy} icon={<ArrowRight className="size-6" aria-hidden />}>Try it free as Mary</Button>
           <Button variant="secondary" onClick={() => start('/shop', {})} disabled={busy} icon={<ShoppingBag className="size-6" aria-hidden />}>Go straight to shopping</Button>
-          <Link to="/help" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline"><BookOpen className="size-5" aria-hidden />Step-by-step help</Link>
+          <Link to="/learn" className="inline-flex items-center gap-2 min-h-14 px-2 text-[1.125rem] font-bold text-teal underline-offset-4 hover:underline"><BookOpen className="size-5" aria-hidden />Step-by-step guides</Link>
         </div>
         <p className="mt-5 text-base text-ink-soft">The free server sleeps when idle, so the first visit can take about a minute to wake up. Paying needs a PayPal sandbox personal (buyer) account.</p>
       </section>

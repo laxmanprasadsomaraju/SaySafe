@@ -35,7 +35,7 @@ export function destinations(mode: 'elder' | 'family'): Dest[] {
     { to: '/home', label: 'Home', icon: House, match: (p) => p === '/home' },
     { to: '/assistant', label: 'Assistant', icon: MessageCircle, match: (p) => p === '/assistant' || ['/check', '/shop', '/discover'].some((x) => p.startsWith(x)) },
     { to: '/activity', label: 'Activity', icon: ListChecks, match: (p) => p === '/activity' || p.startsWith('/order') },
-    { to: '/profile', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' || ['/preferences', '/help', '/guide'].includes(p) },
+    { to: '/profile', label: 'Profile', icon: UserRound, match: (p) => p === '/profile' || ['/preferences', '/help', '/guide', '/judges', '/features'].includes(p) || p.startsWith('/learn') },
     // Desktop header only: the mobile bottom bar keeps exactly four tabs (Insights is reached from Home on mobile).
     { to: '/insights', label: 'Insights', icon: BarChart3, match: (p) => p === '/insights', desktopOnly: true },
   ];
@@ -47,7 +47,8 @@ export const PRIMARY = new Set(['/home', '/assistant', '/activity', '/profile', 
 export function fallbackFor(path: string, mode: Mode): string {
   if (path.startsWith('/order') || path.startsWith('/checkout')) return mode === 'family' ? '/activity?as=family' : '/activity';
   if (['/check', '/shop', '/discover'].some((p) => path.startsWith(p))) return '/assistant';
-  if (['/help', '/guide', '/preferences'].includes(path)) return mode === 'family' ? '/profile?as=family' : '/profile';
+  if (['/help', '/guide', '/preferences', '/learn', '/judges', '/features'].includes(path)) return mode === 'family' ? '/profile?as=family' : '/profile';
+  if (path.startsWith('/learn/')) return '/learn';
   if (path.startsWith('/family/insights/')) return '/family/insights';
   if (path === '/family/insights') return '/family';
   if (path === '/insights') return '/home';
@@ -130,6 +131,8 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
             {showNav && <nav aria-label="Main" className="hidden lg:block"><NavItems mode={mode as 'elder' | 'family'} variant="top" /></nav>}
             {/* Back to the public website (the landing page) without signing out. */}
             {app && <Link to="/" className="inline-flex items-center gap-1.5 min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="website-link"><Globe className="size-5" aria-hidden />{/* With the desktop Insights item, the full label wrapped at 1024–1535 px: "Website" there. */}<span className="max-[359px]:sr-only whitespace-nowrap lg:max-2xl:hidden">SaySafe website</span><span className="hidden lg:max-2xl:inline whitespace-nowrap">Website</span></Link>}
+            {/* Public website only: the docs, without crowding the header (Judges' Guide from 640px). */}
+            {!app && <nav aria-label="Website"><ul className="flex items-center gap-1"><li><Link to="/learn" className="inline-flex items-center min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft" data-testid="nav-learn">Learn</Link></li><li className="hidden sm:block"><Link to="/judges" className="inline-flex items-center min-h-12 px-3 rounded-full font-bold text-teal underline underline-offset-4 hover:bg-teal-soft whitespace-nowrap">Judges’ Guide</Link></li></ul></nav>}
           </div>
         </div>
       </header>
@@ -143,7 +146,7 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
         <footer className="border-t border-line text-ink-soft text-base">
           <div className={`mx-auto ${width} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
             <p>SaySafe — Shop simply. Pay safely. Demo uses the PayPal sandbox; no real money moves.</p>
-            <p><Link className="underline" to="/guide">How to use SaySafe</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
+            <p><Link className="underline" to="/learn">Learn SaySafe</Link> · <Link className="underline" to="/judges">Judges’ Guide</Link> · <Link className="underline" to="/features">Features</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
           </div>
         </footer>
       )}
