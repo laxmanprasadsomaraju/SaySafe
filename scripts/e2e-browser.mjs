@@ -11,7 +11,10 @@ const axe = async (page, label) => {
 };
 const post = (page, url, body) => page.evaluate(async ([u, b]) => { const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }); return { status: r.status, body: await r.json().catch(() => ({})) }; }, [url, body]);
 
-const browser = await chromium.launch();
+const px = process.env.HTTPS_PROXY || process.env.https_proxy;
+let proxy;
+if (px && !/localhost|127\.0\.0\.1/.test(BASE)) { const u = new URL(px); proxy = { server: `${u.protocol}//${u.host}`, username: decodeURIComponent(u.username) || undefined, password: decodeURIComponent(u.password) || undefined }; }
+const browser = await chromium.launch(proxy ? { proxy } : {});
 try {
   // Landing, desktop + mobile
   const d = await (await browser.newContext({ viewport: { width: 1280, height: 900 } })).newPage();
