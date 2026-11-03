@@ -16,7 +16,7 @@ import { InsightsSummary as InsightsSummarySchema, fmtMoneyList, type InsightsSu
 import { CheckCircle2, AlertTriangle, Pencil, Trash2, Plus, ExternalLink, Phone, Mail, UserRound, Repeat, Wallet, Search, ShieldCheck, Loader2, RotateCcw, CircleSlash, Info, BarChart3 } from 'lucide-react';
 import { api } from '../lib/api';
 import { goToPayPal } from '../lib/handoff';
-import { type Tone } from '../lib/activity';
+import { TONE_CLS, type Tone } from '../lib/activity';
 import {
   PaymentSearchResult, Subscription, Contact, SubscriptionSummary, ManualPayment, DEMO_MEMBERSHIP, PAY_METHODS, FREQUENCIES,
   type PaymentMatchT, type SubscriptionT, type ContactT, type ManualPaymentT, type SubscriptionSummaryT,
