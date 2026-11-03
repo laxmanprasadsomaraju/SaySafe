@@ -46,7 +46,7 @@ Status as of 2 November 2026. Labels describe only what has actually been run.
 | Verified webhooks | 🟡 Code tested | Signature verified with PayPal before acting, unverified → 400, duplicates ignored. Webhook registered for the live URL. A live event is still to be confirmed. |
 | Spoken receipt | 🟡 Partly tested | The receipt text and "Read my receipt" button were checked in a live browser. Audio still needs a check on a real device. |
 | Microphone input | ⏳ Pending | Needs a test on a real laptop and phone. Typed input uses the same assistant path and is tested. |
-| Refunds (demo shop only) | ⏳ Built, not tested live | |
+| Refunds (demo shop only) | ✅ Merchant-admin only (`ADMIN_TOKEN`), one live sandbox refund verified | See docs/PAYMENT-RECOVERY.md |
 | Accessibility | ✅ Tested | axe WCAG 2.2 A/AA: 0 violations on all app screens at 320px and 390px in default, high-contrast and large-text modes. No horizontal overflow. |
 | Automated tests | ✅ Passing | 56 unit and security tests, 12-step browser end-to-end test, TypeScript, production build. |
 
@@ -79,7 +79,7 @@ web (React + Vite + Tailwind)  ──►  server (Express, TypeScript)
                                      └─ db/        SQLite (sessions, households, requests, approvals, webhooks, audit log)
 ```
 
-Payment states: `DRAFT → RISK_REVIEW → (BLOCKED | FAMILY_APPROVAL_PENDING → FAMILY_APPROVED | ) → PAYER_APPROVAL_PENDING → PAYER_APPROVED → CAPTURE_PENDING → CAPTURED (→ REFUNDED)`, plus `FAILED` and `CANCELLED`. Illegal transitions throw; every change is optimistic-locked and written to an audit log. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Payment states: `DRAFT → RISK_REVIEW → (BLOCKED | FAMILY_APPROVAL_PENDING → FAMILY_APPROVED | ) → PAYER_APPROVAL_PENDING → PAYER_APPROVED → CAPTURE_PENDING → CAPTURED (→ REFUND_PENDING → REFUNDED)`, plus `FAILED` and `CANCELLED`. Illegal transitions throw; every change is optimistic-locked and written to an audit log. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Family Safety Insights (native dashboard, optional AG Studio view)
 

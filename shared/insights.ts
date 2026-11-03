@@ -102,6 +102,7 @@ export const STATE_LABELS: Record<string, string> = {
   CAPTURED: 'Paid',
   FAILED: 'Failed',
   CANCELLED: 'Cancelled',
+  REFUND_PENDING: 'Refund pending',
   REFUNDED: 'Refunded',
 };
 

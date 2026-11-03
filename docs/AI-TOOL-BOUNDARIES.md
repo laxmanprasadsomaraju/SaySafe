@@ -29,7 +29,8 @@ Covered by `tests/ai-adversarial.test.ts` (hostile model outputs) and `tests/ai-
 | Change threshold | `POST /api/family/policy` | Family session | `setThreshold()`: integer 0–€500 |
 | Capture | `POST /api/payments/:id/confirm`, `POST /api/payments/:id/finish` | Elder session, explicit | `confirmAndCapture()`: order id belongs to the request, GET order from PayPal, custom_id + amount + currency match, PayPal status APPROVED, family approval re-checked, idempotent `PayPal-Request-Id` |
 | Reconcile ("Check with PayPal", lazy sweep) | `POST /api/payments/:id/reconcile`, dashboard loads | Elder / family session, own household | `server/payments/reconcile.ts`: GET only, never captures, amount/currency/custom_id checks |
-| Refund (demo merchant) | `POST /api/family/requests/:id/refund` | Family session | `merchantRefund()`: CAPTURED only |
+| Refund (demo merchant) | `POST /api/admin/payments/:id/refund` | Merchant admin token (`ADMIN_TOKEN`, header `X-Admin-Token`); disabled when unset. Family and elder: no | `adminRefund()`: CAPTURED, Demo Shop, capture/amount/currency re-checked with PayPal, full only, durable PayPal-Request-Id |
+| Ask for a refund (buyer) | `POST /api/payments/:id/refund-request` | Elder session | `requestRefund()`: records REFUND_REQUESTED only; no money moves |
 | Identity / household | session cookies | Server | `readSession()`, `requireRole()`; household id always from the session |
 
 ## Known limits

@@ -40,18 +40,18 @@ async function token(): Promise<string> {
 /** Network failure or timeout: PayPal may or may not have acted. Callers must re-read, never assume failure. */
 export function isUnknownOutcome(e: any) { return !e?.status || e.status >= 500; }
 
-async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, retried = false): Promise<any> {
+async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, retried = false, timeoutMs = 20000): Promise<any> {
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
   // A revoked or expired token: drop the cache and try once more with a fresh one (same PayPal-Request-Id, so safe).
-  if (res.status === 401 && !retried) { cached = null; return call(method, path, body, extraHeaders, true); }
+  if (res.status === 401 && !retried) { cached = null; return call(method, path, body, extraHeaders, true, timeoutMs); }
   if (!res.ok) {
     const err = new Error(`PayPal ${method} ${path} -> ${res.status} ${data?.name ?? ''} ${data?.details?.[0]?.issue ?? data?.message ?? ''}`.trim()) as Error & { status: number; data: any };
     err.status = res.status;
@@ -97,8 +97,23 @@ export const getOrder = (orderId: string) => call('GET', `/v2/checkout/orders/${
 export const captureOrder = (orderId: string, requestId: string) =>
   call('POST', `/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {}, { 'PayPal-Request-Id': `capture-${requestId}`, Prefer: 'return=representation' });
 
-export const refundCapture = (captureId: string, requestId: string) =>
-  call('POST', `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`, {}, { 'PayPal-Request-Id': `refund-${requestId}`, Prefer: 'return=representation' });
+/** Payments v2: read one capture (status COMPLETED | PENDING | REFUNDED | PARTIALLY_REFUNDED | DECLINED | FAILED). Read-only. */
+export const getCapture = (captureId: string, opts: { timeoutMs?: number } = {}) =>
+  call('GET', `/v2/payments/captures/${encodeURIComponent(captureId)}`, undefined, {}, false, opts.timeoutMs ?? 20000);
+
+/**
+ * FULL refund of a capture (no amount in the body = the whole remaining amount). `paypalRequestId` must be the
+ * durable key stored in the DB before this call: PayPal replays the same refund for the same key, so a retry after a
+ * timeout can never refund twice. A new key on an already-refunded capture gets 422 CAPTURE_FULLY_REFUNDED.
+ */
+export const refundCapture = (captureId: string, paypalRequestId: string, customId?: string) =>
+  call('POST', `/v2/payments/captures/${encodeURIComponent(captureId)}/refund`,
+    { ...(customId ? { custom_id: customId } : {}), note_to_payer: 'SaySafe Demo Shop refund (PayPal Sandbox, no real money)' },
+    { 'PayPal-Request-Id': paypalRequestId, Prefer: 'return=representation' });
+
+/** Payments v2: read one refund (status COMPLETED | PENDING | FAILED | CANCELLED). Read-only. */
+export const getRefund = (refundId: string, opts: { timeoutMs?: number } = {}) =>
+  call('GET', `/v2/payments/refunds/${encodeURIComponent(refundId)}`, undefined, {}, false, opts.timeoutMs ?? 20000);
 
 /** Verify a webhook via PayPal's verify-webhook-signature API. */
 export async function verifyWebhook(headers: Record<string, string | string[] | undefined>, rawBody: string): Promise<boolean> {

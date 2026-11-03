@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, X, ShieldAlert, Clock, Wallet, RotateCcw, BarChart3 } from 'lucide-react';
+import { Check, X, ShieldAlert, Clock, Wallet, BarChart3 } from 'lucide-react';
 import { useConfig } from '../lib/insightsApi';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
@@ -59,12 +59,6 @@ export default function Family() {
     catch (e: any) { setErr(e.message); }
     finally { setBusyId(null); }
   };
-  const refund = async (r: PaymentRequest) => {
-    setBusyId(r.id); setErr(null);
-    try { await api(`/api/family/requests/${r.id}/refund`, { body: {} }); await load(); }
-    catch (e: any) { setErr(e.message); }
-    finally { setBusyId(null); }
-  };
   const saveLimit = async (e: React.FormEvent) => {
     e.preventDefault(); setErr(null); setSaved(false);
     try { await api('/api/family/policy', { body: { thresholdEur: Number(limit) } }); setSaved(true); load(); } catch (er: any) { setErr(er.message); }
@@ -103,7 +97,7 @@ export default function Family() {
                 {history.slice(0, 10).map((r) => (
                   <li key={r.id} className="p-4 flex flex-wrap items-center gap-3 justify-between">
                     <div><p className="font-bold">{r.items.map((i) => i.name).join(', ')}</p><p className="text-ink-soft text-base">{eur(r.amountCents)} · {stateLabel(r.state)}{r.approval?.status && r.approval.status !== 'pending' ? ` · you ${r.approval.status}` : ''}</p></div>
-                    {r.state === 'CAPTURED' && <Button variant="secondary" className="!min-h-12 !text-base" onClick={() => refund(r)} busy={busyId === r.id} icon={<RotateCcw className="size-5" aria-hidden />}>Demo shop: refund</Button>}
+                    {r.refund?.status === 'REFUND_REQUESTED' && <span className="text-base font-bold text-ink-soft">Refund request sent — not refunded yet</span>}
                   </li>
                 ))}
               </ul>
