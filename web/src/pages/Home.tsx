@@ -62,14 +62,14 @@ export default function Home() {
         </Card>
       )}
 
-      <nav aria-label="Shortcuts" className="mt-6 grid grid-cols-1 min-[400px]:grid-cols-2 gap-3 md:gap-5">
+      <nav aria-label="Shortcuts" className="mt-6 grid grid-cols-1 min-[360px]:grid-cols-2 gap-3 md:gap-5">
         {SHORTCUTS.map(({ mode, icon: Icon, title, text }) => (
           <button key={mode} type="button" onClick={() => nav(`/assistant?mode=${mode}`)}
-            className="group text-left bg-paper rounded-[var(--radius-card)] border-2 border-line hover:border-teal shadow-[var(--shadow-card)] p-4 md:p-6 min-h-24 flex min-[400px]:flex-col gap-3 items-start">
+            className="group text-left bg-paper rounded-[var(--radius-card)] border-2 border-line hover:border-teal shadow-[var(--shadow-card)] p-4 md:p-6 min-h-24 flex min-[360px]:flex-col gap-3 items-start">
             <span className="size-12 md:size-14 rounded-2xl bg-teal-soft grid place-items-center shrink-0"><Icon className="size-7 md:size-8 text-teal" aria-hidden /></span>
             <span className="min-w-0">
               <span className="font-display text-[1.3rem] md:text-[1.6rem] font-semibold leading-tight block">{title}</span>
-              <span className="text-ink-soft text-base md:text-lg mt-1 block">{text}</span>
+              <span className="text-ink-soft text-base md:text-lg mt-1 hidden md:block">{text}</span>
             </span>
           </button>
         ))}

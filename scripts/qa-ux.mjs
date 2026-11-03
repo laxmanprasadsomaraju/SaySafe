@@ -228,6 +228,7 @@ if (PART === 'walk' || PART === 'all') {
   if (!(await inView(verdict))) friction.push('scam check: verdict label not in view without scrolling');
   // Task 2
   await p.locator('nav[aria-label="Main"]').getByRole('link', { name: 'Home' }).click(); steps.push({ task: 'find product', action: 'tap', target: 'Home tab' }); await p.waitForURL('**/home');
+  await p.getByRole('navigation', { name: 'Shortcuts' }).waitFor();
   await clickBest(['find', 'product', 'shop'], 'find product');
   await p.locator('#assistant-input').fill('a kettle under €40'); steps.push({ task: 'find product', action: 'type + Enter' }); await p.keyboard.press('Enter');
   const list = p.getByRole('list', { name: /Demo Shop options|Shop listings/ }).last(); await list.waitFor({ timeout: 30000 });
@@ -236,11 +237,12 @@ if (PART === 'walk' || PART === 'all') {
   await p.getByRole('dialog').waitFor();
   const primary = p.getByRole('dialog').getByRole('button', { name: /Prepare PayPal Sandbox payment/ }).or(p.getByRole('dialog').getByRole('link', { name: /View on retailer site/ }));
   if (!(await inView(primary.first()))) friction.push('find product: sheet primary action below the fold');
-  await p.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click(); steps.push({ task: 'find product', action: 'tap', target: 'Close sheet' });
+  await p.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).last().click(); steps.push({ task: 'find product', action: 'tap', target: 'Close sheet' });
   // Task 3
   await p.locator('nav[aria-label="Main"]').getByRole('link', { name: 'Home' }).click(); steps.push({ task: 'locate receipt', action: 'tap', target: 'Home tab' }); await p.waitForURL('**/home');
+  await p.getByRole('navigation', { name: 'Shortcuts' }).waitFor();
   await clickBest(['payments', 'receipt', 'activity'], 'locate receipt');
-  await p.waitForTimeout(1500);
+  await p.getByRole('link', { name: /See all in Activity|See all activity/ }).last().waitFor({ timeout: 15000 }).catch(() => {});
   const paidRow = p.getByRole('button', { name: /Paid/ }).first();
   if (await paidRow.count()) { await paidRow.click(); steps.push({ task: 'locate receipt', action: 'tap', target: 'a Paid payment' }); }
   else friction.push('locate receipt: no "Paid" row visible in the payments card');

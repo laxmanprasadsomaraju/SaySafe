@@ -70,7 +70,14 @@ export default function Assistant() {
   threadRef.current = thread;
 
   useEffect(() => { try { sessionStorage.setItem(KEY, JSON.stringify(thread)); } catch { /* full or private */ } }, [thread]);
-  useEffect(() => { endRef.current?.scrollIntoView({ block: 'end', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth' }); }, [thread.messages.length]);
+  // Show the START of the newest reply (its first line and the top of its card), not the bottom of a long card.
+  useEffect(() => {
+    const behavior: ScrollBehavior = matchMedia('(prefers-reduced-motion: reduce)').matches || document.documentElement.classList.contains('reduce-motion') ? 'auto' : 'smooth';
+    const last = document.querySelector('[role="log"] > div:last-of-type');
+    const prev = last?.previousElementSibling as HTMLElement | null;
+    // Keep the person's own message visible above a reply when there is room.
+    (prev && last?.getAttribute('data-role') === 'assistant' && prev.getAttribute('data-role') === 'user' ? prev : (last as HTMLElement | null) ?? endRef.current)?.scrollIntoView({ block: 'start', behavior });
+  }, [thread.messages.length]);
 
   const add = useCallback((role: Message['role'], text: string, blocks: unknown[] = [], lang?: string) => {
     const valid = blocks.map(parseBlock).filter((b): b is Block => b !== null);
@@ -337,7 +344,7 @@ export default function Assistant() {
       <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />Payments use the PayPal Sandbox (no real money) and always need your own approval at PayPal.</p>
       <div role="log" aria-live="polite" aria-label="Conversation" className="mt-4 flex flex-col gap-3">
         {thread.messages.map((m) => (
-          <div key={m.id} className={m.role === 'user' ? 'self-end max-w-[85%]' : 'self-start w-full max-w-2xl'}>
+          <div key={m.id} data-role={m.role} className={`scroll-mt-24 ${m.role === 'user' ? 'self-end max-w-[85%]' : 'self-start w-full max-w-2xl'}`}>
             {m.text && (
               <p lang={m.lang && m.lang !== 'en' ? m.lang : undefined} className={`rounded-3xl px-4 py-3 break-words whitespace-pre-wrap ${m.role === 'user' ? 'bg-navy text-white rounded-br-lg' : 'bg-teal-soft text-navy rounded-bl-lg'}`}>
                 <span className="sr-only">{m.role === 'user' ? 'You: ' : 'SaySafe: '}</span>{m.text}
