@@ -26,7 +26,10 @@ export function ShoppingPrefsForm({ headingLevel = 'none' }: { headingLevel?: 'n
     setForm({ colours: p.colours.join(', '), brands: p.brands.join(', '), styles: p.styles.join(', '), avoid: p.avoid.join(', '), categories: p.categories.join(', ') });
     setBudget(p.budgetMax !== null ? String(p.budgetMax) : '');
   };
-  useEffect(() => { loadProfile().then((r) => fill(r.profile)).catch(() => fill(EMPTY_PROFILE)); }, []);
+  // A failed load is shown as an error with Retry, never as an empty profile (saving would then wipe the real one).
+  const [loadErr, setLoadErr] = useState<string | null>(null);
+  const load = () => { setLoadErr(null); loadProfile().then((r) => fill(r.profile)).catch((e: any) => setLoadErr(e?.message || 'Your preferences could not be loaded.')); };
+  useEffect(load, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setStatus(null);
@@ -48,6 +51,14 @@ export function ShoppingPrefsForm({ headingLevel = 'none' }: { headingLevel?: 'n
       <Card className="p-6 md:p-8 max-w-2xl">
         {headingLevel === 'h2' && <h2 id="shopping-h" className="text-2xl mb-3">Shopping preferences</h2>}
         <p className="flex items-start gap-3 text-lg"><Lock className="size-6 text-teal shrink-0 mt-0.5" aria-hidden /><span>Private to you. Your family member can’t see these, and they aren’t shared with shops.</span></p>
+        {loadErr && (
+          <div className="mt-4" data-testid="prefs-load-error">
+            <Notice tone="danger" title="Couldn’t load your saved preferences">
+              <p>{loadErr} Nothing was changed. Saving is paused until they load.</p>
+              <Button type="button" variant="secondary" className="mt-2" onClick={load}>Retry</Button>
+            </Notice>
+          </div>
+        )}
         <form onSubmit={save} className="mt-6 space-y-5" noValidate>
           {FIELDS.map((f) => (
             <div key={f.key}>
@@ -65,7 +76,7 @@ export function ShoppingPrefsForm({ headingLevel = 'none' }: { headingLevel?: 'n
               className="mt-2 w-40 min-h-14 rounded-2xl border-2 border-line bg-paper px-5 focus:border-teal outline-none" />
           </div>
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button type="submit" busy={busy}>Save my preferences</Button>
+            <Button type="submit" busy={busy} disabled={Boolean(loadErr)}>Save my preferences</Button>
             <Button type="button" variant="danger" icon={<Trash2 className="size-6" aria-hidden />} onClick={clear} disabled={busy}>Clear my preferences</Button>
           </div>
           {status && <Notice tone={status.tone} title={status.text} />}

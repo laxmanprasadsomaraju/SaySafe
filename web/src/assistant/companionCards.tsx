@@ -940,7 +940,7 @@ function SendMoneyCard({ b, act }: { b: BlockOf<'send_money'>; act: BlockActions
           <a href={b.paypalSendUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex w-full items-center justify-between gap-3 rounded-2xl bg-teal text-white font-bold px-5 min-h-14 hover:bg-teal-deep" data-testid="paypal-send-link">
             <span>Open PayPal Send money</span><ExternalLink className="size-5 shrink-0" aria-hidden /><span className="sr-only"> (opens paypal.com in a new tab)</span>
           </a>
-          <p className="mt-1 text-sm text-ink-soft break-all">{new URL(b.paypalSendUrl).hostname} · sign in to PayPal yourself, then choose {chosen.name} by the email or number you know is theirs.</p>
+          <p className="mt-1 text-sm text-ink-soft break-words" data-testid="send-footnote"><span className="break-all">{new URL(b.paypalSendUrl).hostname}</span> · sign in to PayPal yourself, then choose {chosen.name} by the email or number you know is theirs. SaySafe hasn’t checked that this is the right person or amount, and nothing has been sent.</p>
           <p className="mt-2 rounded-2xl border-2 border-amber bg-amber-soft p-3 font-bold" data-testid="nothing-sent">Nothing is sent by SaySafe.</p>
           {chosen.sample && <p className="mt-2 text-sm text-ink-soft">This is a sample contact with a fictional email, so don’t use it in PayPal.</p>}
         </div>

@@ -2,6 +2,8 @@
  * PayPal REST (sandbox) client: OAuth, Orders v2, Payments (refund), webhook signature verification.
  * Credentials come from env only and never reach the browser.
  */
+import { count, log } from '../obs.js';
+
 const BASE = process.env.PAYPAL_API_BASE ?? 'https://api-m.sandbox.paypal.com';
 // Sandbox-only by design: refuse to start against PayPal live unless someone deliberately opts in.
 if (!/^https:\/\/api-m\.sandbox\.paypal\.com\/?$/.test(BASE) && process.env.PAYPAL_ALLOW_LIVE !== 'yes') {
@@ -41,18 +43,31 @@ async function token(): Promise<string> {
 export function isUnknownOutcome(e: any) { return !e?.status || e.status >= 500; }
 
 async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, retried = false, timeoutMs = 20000): Promise<any> {
-  const res = await fetch(`${BASE}${path}`, {
-    method,
-    headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const op = `${method} ${path.replace(/\/[A-Z0-9]{10,30}(?=\/|$)/g, '/:id')}`; // no ids in metric names
+  count('paypal.calls');
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (e: any) {
+    // Timeout or dropped connection: outcome UNKNOWN (no status). Callers re-read; they never assume failure.
+    const timeout = e?.name === 'TimeoutError' || e?.name === 'AbortError';
+    count(timeout ? 'paypal.timeouts' : 'paypal.network_errors');
+    log('warn', 'paypal.call_failed', { op, kind: timeout ? 'timeout' : 'network' });
+    throw e;
+  }
   const text = await res.text();
   let data: any = null;
   try { data = text ? JSON.parse(text) : null; } catch { data = { raw: text }; }
   // A revoked or expired token: drop the cache and try once more with a fresh one (same PayPal-Request-Id, so safe).
-  if (res.status === 401 && !retried) { cached = null; return call(method, path, body, extraHeaders, true, timeoutMs); }
+  if (res.status === 401 && !retried) { count('paypal.token_retries'); cached = null; return call(method, path, body, extraHeaders, true, timeoutMs); }
   if (!res.ok) {
+    count(res.status >= 500 ? 'paypal.http_5xx' : 'paypal.http_4xx');
+    log(res.status >= 500 ? 'warn' : 'info', 'paypal.http_error', { op, status: res.status, issue: data?.details?.[0]?.issue ?? data?.name ?? null, debugId: data?.debug_id ?? null });
     const err = new Error(`PayPal ${method} ${path} -> ${res.status} ${data?.name ?? ''} ${data?.details?.[0]?.issue ?? data?.message ?? ''}`.trim()) as Error & { status: number; data: any };
     err.status = res.status;
     err.data = data;

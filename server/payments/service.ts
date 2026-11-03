@@ -9,9 +9,16 @@ import { getProduct, DEMO_MERCHANT } from '../catalogue/products.js';
 import { assertTransition, type PaymentState } from './stateMachine.js';
 import * as paypal from '../paypal/client.js';
 import { recordEvidence } from './evidence.js';
+import { count, log } from '../obs.js';
 
 export const HARD_LIMIT_CENTS = 50000; // demo safety cap: €500
 export const APPROVAL_TTL_MS = 1000 * 60 * 30;
+/**
+ * Capture lease: only one process/request may have a PayPal capture call in flight for a request. Longer than the
+ * worst-case PayPal call (20 s timeout, plus one 401 token retry), so a crash mid-capture frees it automatically and
+ * the retry re-sends the SAME PayPal-Request-Id (PayPal replays the original capture, never a second one).
+ */
+export const CAPTURE_LEASE_MS = 45_000;
 const CURRENCY = 'EUR';
 
 export interface CartLine { productId: string; quantity: number }
@@ -19,6 +26,16 @@ export interface PricedLine { productId: string; name: string; unitCents: number
 
 export class PaymentError extends Error {
   constructor(public code: string, message: string, public status = 400) { super(message); }
+}
+
+/**
+ * Turn a PayPal client error into a structured PaymentError the UI can show truthfully. A timeout / 5xx is an
+ * UNKNOWN outcome ("PayPal did not answer"), never "failed"; a 4xx is PayPal refusing the call.
+ */
+export function paypalFailure(e: any, what: string): PaymentError {
+  if (e instanceof PaymentError) return e;
+  if (paypal.isUnknownOutcome(e)) return new PaymentError('paypal_unavailable', `PayPal did not answer while ${what}. Nothing was charged. Please try again in a moment.`, 503);
+  return new PaymentError('paypal_rejected', `PayPal refused the request while ${what}. Nothing was charged.`, 502);
 }
 
 /** Prices always come from the server catalogue, never from the client or the AI. */
@@ -158,11 +175,14 @@ function effectiveApprovalStatus(a: any) {
 export async function createRequest(householdId: string, actor: string, lines: CartLine[], idempotencyKey: string, origin: string) {
   if (!/^[A-Za-z0-9_-]{8,80}$/.test(idempotencyKey)) throw new PaymentError('bad_idempotency_key', 'Missing request key.');
   const existing = db.prepare('SELECT * FROM payment_requests WHERE idempotency_key=?').get(idempotencyKey) as any;
+  const q = priceCart(lines);
   if (existing) {
     if (existing.household_id !== householdId) throw new PaymentError('conflict', 'Request key already used.', 409);
+    // Durable idempotency: the same key replays the same request, but never for a DIFFERENT basket or amount.
+    if (existing.fingerprint !== fingerprint(q)) throw new PaymentError('idempotency_key_reused', 'This request key was already used for a different basket.', 409);
+    count('payments.idempotent_replays');
     return { request: publicView(existing), approveUrl: null as string | null };
   }
-  const q = priceCart(lines);
   const id = newId('pay');
   const fp = fingerprint(q);
   try {
@@ -173,6 +193,7 @@ export async function createRequest(householdId: string, actor: string, lines: C
     if (!isUniqueViolation(e)) throw e;
     const winner = db.prepare('SELECT * FROM payment_requests WHERE idempotency_key=?').get(idempotencyKey) as any;
     if (!winner || winner.household_id !== householdId) throw new PaymentError('conflict', 'Request key already used.', 409);
+    if (winner.fingerprint !== fp) throw new PaymentError('idempotency_key_reused', 'This request key was already used for a different basket.', 409);
     return { request: publicView(winner), approveUrl: null as string | null };
   }
   audit(householdId, actor, 'payment.created', id, { total: q.totalCents });
@@ -235,12 +256,13 @@ export async function startPayPalCheckout(householdId: string, actor: string, re
   if (r.state === 'FAMILY_APPROVED' && !hasValidApproval(r)) throw new PaymentError('approval_invalid', 'The family approval no longer matches this purchase.', 409);
   if (r.state !== 'RISK_REVIEW' && r.state !== 'FAMILY_APPROVED') {
     if (r.state === 'PAYER_APPROVAL_PENDING' && r.paypal_order_id) {
-      const order = await paypal.getOrder(r.paypal_order_id);
+      const order = await paypal.getOrder(r.paypal_order_id).catch((e) => { throw paypalFailure(e, 'opening your PayPal order'); });
       return paypal.approveLink(order);
     }
     throw new PaymentError('bad_state', `Cannot start checkout from ${r.state}.`, 409);
   }
   const items = JSON.parse(r.items_json) as PricedLine[];
+  // Same PayPal-Request-Id (create-<requestId>) on every retry: a timeout here can never create two orders.
   const order = await paypal.createOrder({
     requestId: r.id,
     currency: r.currency,
@@ -248,7 +270,7 @@ export async function startPayPalCheckout(householdId: string, actor: string, re
     items: items.map((i) => ({ name: i.name, unitAmountCents: i.unitCents, quantity: i.quantity, sku: i.productId })),
     returnUrl: `${origin}/checkout/return?rid=${encodeURIComponent(r.id)}`,
     cancelUrl: `${origin}/checkout/cancel?rid=${encodeURIComponent(r.id)}`,
-  });
+  }).catch((e) => { count('payments.create_order_failed'); throw paypalFailure(e, 'creating your PayPal order'); });
   r = transition(r, 'PAYER_APPROVAL_PENDING', actor, { paypal_order_id: order.id });
   const link = paypal.approveLink(order);
   if (!link) throw new PaymentError('paypal_no_link', 'PayPal did not return an approval link.', 502);
@@ -260,7 +282,8 @@ export async function confirmAndCapture(householdId: string, actor: string, requ
   let r = loadActionable(requestId, householdId);
   if (!r.paypal_order_id || r.paypal_order_id !== orderIdFromRedirect) throw new PaymentError('order_mismatch', 'This PayPal order does not belong to this purchase.', 409);
   if (r.state === 'CAPTURED') return publicView(r);
-  const order = await paypal.getOrder(r.paypal_order_id);
+  if (r.state === 'CAPTURE_PENDING' && leaseHeld(r)) throw captureInProgress();
+  const order = await paypal.getOrder(r.paypal_order_id).catch((e) => { throw paypalFailure(e, 'checking your PayPal approval'); });
   const pu = order?.purchase_units?.[0];
   const value = Math.round(Number(pu?.amount?.value) * 100);
   if (pu?.custom_id !== r.id || pu?.amount?.currency_code !== r.currency || value !== r.amount_cents) {
@@ -276,20 +299,43 @@ export async function confirmAndCapture(householdId: string, actor: string, requ
   if (risk.needsFamily && !hasValidApproval(r)) throw new PaymentError('approval_invalid', 'Family approval is missing or no longer valid.', 403);
   if (r.state === 'PAYER_APPROVED') r = transition(r, 'CAPTURE_PENDING', 'system');
   if (r.state !== 'CAPTURE_PENDING') throw new PaymentError('bad_state', `Cannot capture from ${r.state}.`, 409);
+  // Exactly one capture call in flight per request, across concurrent requests, reloads and instances.
+  if (!claimCaptureLease(r)) throw captureInProgress();
   try {
+    count('payments.capture_calls');
     const cap = await paypal.captureOrder(r.paypal_order_id, r.id);
-    return applyCaptureResult(r, cap);
+    return applyCaptureResult(load(requestId, householdId), cap);
   } catch (e: any) {
+    if (e instanceof PaymentError) throw e;
     // ORDER_ALREADY_CAPTURED etc: reconcile from PayPal rather than guessing.
     const latest = await paypal.getOrder(r.paypal_order_id).catch(() => null);
     if (latest?.status === 'COMPLETED') return applyCaptureResult(load(requestId, householdId), latest);
     if (e?.data?.details?.[0]?.issue === 'INSTRUMENT_DECLINED') throw new PaymentError('declined', 'PayPal declined this payment method. You can try again with another one.', 402);
     // Timeout, dropped connection or PayPal 5xx: the outcome is unknown, not failed. Stay CAPTURE_PENDING;
     // a later confirm re-sends the same PayPal-Request-Id, so PayPal can never capture twice.
-    if (paypal.isUnknownOutcome(e)) throw new PaymentError('outcome_unknown', 'PayPal has not answered yet. You will not be charged twice. Check again in a moment.', 503);
+    if (paypal.isUnknownOutcome(e)) {
+      count('payments.capture_outcome_unknown');
+      log('warn', 'payment.capture_unknown', { requestId: r.id });
+      throw new PaymentError('outcome_unknown', 'PayPal has not answered yet. You will not be charged twice. Check again in a moment.', 503);
+    }
+    count('payments.capture_failed');
     transition(load(requestId, householdId), 'FAILED', 'system', {});
     throw new PaymentError('capture_failed', 'The payment did not go through. No money was taken.', 502);
+  } finally {
+    releaseCaptureLease(r.id);
   }
+}
+
+function leaseHeld(r: any, now = Date.now()) { return Number(r.capture_lease_until ?? 0) > now; }
+const captureInProgress = () => new PaymentError('capture_in_progress', 'PayPal is already confirming this payment. You will not be charged twice. Check again in a moment.', 409);
+/** Conditional UPDATE = an atomic compare-and-set in SQLite/Turso: only one caller can win the lease. */
+export function claimCaptureLease(r: any, now = Date.now()) {
+  const info = db.prepare("UPDATE payment_requests SET capture_lease_until=? WHERE id=? AND state='CAPTURE_PENDING' AND (capture_lease_until IS NULL OR capture_lease_until < ?)").run(now + CAPTURE_LEASE_MS, r.id, now);
+  if (info.changes !== 1) { count('payments.capture_lease_denied'); return false; }
+  return true;
+}
+function releaseCaptureLease(id: string) {
+  try { db.prepare('UPDATE payment_requests SET capture_lease_until=NULL WHERE id=?').run(id); } catch { /* lease expires on its own */ }
 }
 
 function applyCaptureResult(r: any, orderOrCapture: any) {
@@ -323,6 +369,7 @@ export function reconcileFromWebhook(event: any) {
   if (!requestId) return 'ignored';
   const r = db.prepare('SELECT * FROM payment_requests WHERE id=?').get(requestId) as any;
   if (!r) return 'unknown_request';
+  if (isSample(r)) return 'sample_ignored'; // sample rows never change from PayPal events (and must not loop retries)
   // Correlate: a capture event must belong to the PayPal order we created for this request.
   const orderId = res?.supplementary_data?.related_ids?.order_id;
   if (type?.startsWith('PAYMENT.CAPTURE.') && orderId && r.paypal_order_id && orderId !== r.paypal_order_id) return 'order_mismatch';

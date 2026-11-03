@@ -29,8 +29,15 @@ export async function answerCompanion(action: CompanionAction, p: CompanionInten
     if (p.date_hint && !win) result.notes.unshift(`I couldn't read the date "${p.date_hint}", so I searched all dates.`);
     const top = result.matches[0];
     const n = result.matches.length;
-    const dup = result.matches.some((m) => m.caveats.some((c) => c.startsWith('Possible duplicate')));
-    const more = n > 1 ? ` I found ${n} records in total${dup ? ', and two look like a possible duplicate payment' : ''}.` : '';
+    // Wording depends on WHY two records look alike (classifyRepeat): ask, warn gently, or just mention.
+    const reps = result.repeats ?? [];
+    const dupRep = reps.find((x) => x.kind === 'possible_duplicate');
+    const identical = reps.find((x) => x.kind === 'identical_entries');
+    const separate = reps.find((x) => x.kind === 'separate_payments');
+    const repeatNote = identical ? ` Two of them are identical entries (same day, amount and note): they may be one payment typed in twice. Check before treating them as two.`
+      : dupRep ? ` Two look like a possible duplicate: the same amount to ${dupRep.recipient}, ${dupRep.daysApart} day${dupRep.daysApart === 1 ? '' : 's'} apart. Ask ${dupRep.recipient} before paying again.`
+      : separate ? ` You paid ${separate.recipient} the same amount more than once, but they look like separate payments (${separate.daysApart} days apart${/different things/.test(separate.message) ? ', for different work' : ''}).` : '';
+    const more = n > 1 ? ` I found ${n} records in total.${repeatNote}` : '';
     const reply = !top
       ? result.guidance
       : top.sample

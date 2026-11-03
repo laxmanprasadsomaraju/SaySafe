@@ -37,3 +37,26 @@ export function vouchesOrInstructs(text: string | null | undefined): boolean {
 export function guardModelText(text: string | null | undefined, fallback: string): string {
   return !text || vouchesOrInstructs(text) ? fallback : text;
 }
+
+/**
+ * Claims of an EFFECT the assistant never performs (it has no write tools): approving, paying, capturing, refunding,
+ * cancelling a subscription, sending/transferring money, or marking/recording something. Model replies that make
+ * such a claim are replaced server-side (server/app.ts /api/assistant), whatever the prompt said.
+ */
+const EFFECT_CLAIM = [
+  /\b(I|we|SaySafe)\s+(have\s+|'ve\s+|has\s+|just\s+)?(approved|paid|captured|refunded|cancell?ed|sent|transferred|marked|recorded|confirmed|completed|unsubscribed)\b/i,
+  /\b(has|have|is|was|were|are)\s+(now\s+|been\s+|already\s+)*(approved|paid|captured|refunded|cancell?ed|sent|transferred|marked as paid|recorded|unsubscribed)\b/i,
+  /\b(approval|payment|purchase|refund|transfer|cancellation|subscription)\s+(is\s+|has been\s+|was\s+)?(done|complete|completed|granted|processed|confirmed|approved|cancell?ed)\b/i,
+  /\bmarked\s+(\w+\s+)?as\s+paid\b/i,
+  /\b(done|all set)[.!]/i,
+];
+export const NO_EFFECT_REPLY = 'I can’t approve, pay, cancel or record anything from here. Those steps need your own tap on the card, and PayPal’s own page.';
+export function claimsEffect(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const t = text.replace(/(\bnot|n['’]t|\bnever|\bnothing)\s+(\w+\s+){0,3}/gi, ' ');
+  return EFFECT_CLAIM.some((re) => re.test(t));
+}
+/** Model reply for a non-template action: dropped if it vouches, instructs, or claims an effect. */
+export function guardAssistantReply(text: string | null | undefined, fallback = NO_EFFECT_REPLY): string {
+  return !text || claimsEffect(text) || vouchesOrInstructs(text) ? fallback : text;
+}

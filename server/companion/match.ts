@@ -9,7 +9,7 @@
  *
  * The result never says a person was paid. It says what records exist, how well they match, and what is uncertain.
  */
-import { DEMO_SHOP_RECIPIENT, DATE_TOLERANCE_DAYS, COMPANION_LABELS, type PaymentMatchT, type PaymentSearchResultT } from '../../shared/companion.js';
+import { DEMO_SHOP_RECIPIENT, DATE_TOLERANCE_DAYS, DUPLICATE_WINDOW_DAYS, COMPANION_LABELS, type PaymentMatchT, type PaymentSearchResultT, type RepeatGroupT } from '../../shared/companion.js';
 import { editDistance } from '../scam/rules.js';
 
 export interface Candidate {
@@ -85,7 +85,37 @@ export function queryIsAboutShop(q: string, c: Candidate): boolean {
   return qt.every((t) => SHOP_WORDS.has(t) || desc.some((d) => tokenSimilarity(t, d) >= 0.85));
 }
 
-export function searchPayments(cands: Candidate[], input: SearchInput): PaymentSearchResultT {
+/** Words that say nothing about WHAT was paid for ("Fence repair (paid again?)" is still a fence repair). */
+const NOTE_NOISE = new Set(['paid', 'again', 'pay', 'payment', 'same', 'maybe', 'twice', 'second', 'another', 'not', 'sure', 'check', 'the', 'for', 'and']);
+const noteTokens = (s: string | null) => tokens(s ?? '').filter((t) => t.length >= 3 && !NOTE_NOISE.has(t));
+const sameNote = (a: string | null, b: string | null) => normName(a ?? '') === normName(b ?? '');
+
+/**
+ * Classify two records with the same payee, amount and currency (see RepeatGroup in shared/companion.ts).
+ * Returns null when they are not a same-payee/same-amount pair. Never says a person was paid.
+ */
+export function classifyRepeat(a: Candidate, b: Candidate): RepeatGroupT | null {
+  if (a.id === b.id || a.source !== 'manual' || b.source !== 'manual') return null;
+  if (a.currency !== b.currency || a.amountCents !== b.amountCents || normName(a.recipient) !== normName(b.recipient)) return null;
+  const [first, second] = a.date <= b.date ? [a, b] : [b, a];
+  const daysApart = Math.abs(toDay(second.date) - toDay(first.date));
+  const ta = noteTokens(first.description); const tb = noteTokens(second.description);
+  const differentWork = ta.length > 0 && tb.length > 0 && !ta.some((x) => tb.some((y) => tokenSimilarity(x, y) >= 0.85));
+  const base = { ids: [first.id, second.id], recipient: first.recipient, amountCents: first.amountCents, currency: first.currency, daysApart };
+  const amt = fmtMoney(first.amountCents, first.currency);
+  if (daysApart === 0 && sameNote(first.description, second.description)) {
+    return { ...base, kind: 'identical_entries', message: `Two identical entries: ${amt} to ${first.recipient} on ${fmtDate(first.date)}${first.description ? ` (“${first.description}”)` : ''}. They may be one payment typed in twice, or two payments. Check with ${first.recipient} or your bank before deleting one or paying again.` };
+  }
+  if (!differentWork && daysApart <= DUPLICATE_WINDOW_DAYS) {
+    return { ...base, kind: 'possible_duplicate', message: `Possible duplicate: two payments of ${amt} to ${first.recipient}, ${daysApart} day${daysApart === 1 ? '' : 's'} apart (${fmtDate(first.date)} and ${fmtDate(second.date)})${first.description || second.description ? ` for the same kind of work` : ''}. Ask ${first.recipient} before paying again.` };
+  }
+  const why = differentWork ? `for different things (“${first.description}” and “${second.description}”)` : `${daysApart} days apart`;
+  return { ...base, kind: 'separate_payments', message: `You recorded ${amt} to ${first.recipient} twice, ${why}. That looks like two separate payments, not a duplicate.` };
+}
+
+export function searchPayments(candsIn: Candidate[], input: SearchInput): PaymentSearchResultT {
+  // The same record must never be counted twice, whichever surface or query reached it.
+  const cands = [...new Map(candsIn.map((c) => [c.id, c])).values()];
   const q = input.q?.trim() || null;
   const amount = input.amountCents ?? null;
   const from = input.from ?? null;
@@ -169,9 +199,13 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
       score *= 0.9;
     }
     if (c.source === 'manual') {
-      const dup = cands.find((o) => o.id !== c.id && o.source === 'manual' && o.currency === c.currency && o.amountCents === c.amountCents
-        && normName(o.recipient) === normName(c.recipient) && Math.abs(toDay(o.date) - toDay(c.date)) <= DATE_TOLERANCE_DAYS);
-      if (dup) caveats.push(`Possible duplicate: you recorded a similar payment on ${fmtDate(dup.date)}.`);
+      for (const o of cands) {
+        const rep = o.id !== c.id ? classifyRepeat(c, o) : null;
+        if (!rep) continue;
+        if (rep.kind === 'possible_duplicate') caveats.push(`Possible duplicate: you recorded a similar payment on ${fmtDate(o.date)} (${rep.daysApart} day${rep.daysApart === 1 ? '' : 's'} apart).`);
+        else if (rep.kind === 'identical_entries') caveats.push(`Identical entry on the same day: this may be the same payment typed in twice.`);
+        else caveats.push(`Separate payment: you also recorded ${fmtMoney(o.amountCents, o.currency)} to ${o.recipient} on ${fmtDate(o.date)}${o.description ? ` (${o.description})` : ''}.`);
+      }
       caveats.push(c.sample ? 'Sample data: an illustrative record, not a real payment.' : `${COMPANION_LABELS.manual}. SaySafe can't see whether the money arrived.`);
     } else if (c.sample) {
       caveats.push('Sample data: illustrative, there is no PayPal record for it.');
@@ -181,6 +215,15 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
   }
   out.sort((a, b) => b.score - a.score || b.date.localeCompare(a.date));
   const matches = out.slice(0, 10);
+  // Same-payee / same-amount pairs among the matches, each pair once.
+  const repeats: RepeatGroupT[] = [];
+  const byId = new Map(cands.map((c) => [c.id, c]));
+  for (let i = 0; i < matches.length; i++) for (let j = i + 1; j < matches.length; j++) {
+    const a = byId.get(matches[i].id); const b = byId.get(matches[j].id);
+    const rep = a && b ? classifyRepeat(a, b) : null;
+    if (rep) repeats.push(rep);
+  }
+  for (const rep of repeats) notes.push(rep.message); // the card shows notes; the reply wording uses `repeats`
 
   // Several different people behind one first name.
   if (hasName) {
@@ -200,7 +243,7 @@ export function searchPayments(cands: Candidate[], input: SearchInput): PaymentS
   else if (matches.every((m) => m.source === 'paypal_sandbox')) guidance = `These are ${DEMO_SHOP_RECIPIENT} payments made in this app (PayPal sandbox). They are shop purchases, not payments to a person.`;
   else guidance = `I found ${matches.length === 1 ? 'a record' : 'records'} that may match. A record you typed is not proof the money arrived. Don't pay again until you've checked with ${who}.`;
 
-  return { query: { q, amountCents: amount, from, to: input.to ?? null }, matches, guidance, notes };
+  return { query: { q, amountCents: amount, from, to: input.to ?? null }, matches, repeats, guidance, notes };
 }
 
 /** Parse a spoken date hint into a window. Returns null when it can't be read (then no date filter is used). */

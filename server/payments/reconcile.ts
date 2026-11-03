@@ -22,6 +22,7 @@ import { load, loadActionable, assertNotSample, transition, publicView, PaymentE
 import { recordEvidence } from './evidence.js';
 import { checkCapture } from './captureCheck.js';
 import { reconcileRefund } from './refund.js';
+import { count } from '../obs.js';
 import type { PaymentState } from './stateMachine.js';
 
 export type ReconcileOutcome =
@@ -54,6 +55,12 @@ function stepTo(r: any, path: PaymentState[], extraForLast: Record<string, unkno
 }
 
 export async function reconcile(requestId: string, opts: { householdId?: string } = {}): Promise<{ outcome: ReconcileOutcome; state: PaymentState }> {
+  const out = await reconcileOnce(requestId, opts);
+  count(`reconcile.${out.outcome}`); // mismatch / unknown show up in /api/health as reconcile failures
+  return out;
+}
+
+async function reconcileOnce(requestId: string, opts: { householdId?: string }): Promise<{ outcome: ReconcileOutcome; state: PaymentState }> {
   const r = opts.householdId ? load(requestId, opts.householdId) : (db.prepare('SELECT * FROM payment_requests WHERE id=?').get(requestId) as any);
   if (!r) throw new PaymentError('not_found', 'Payment request not found.', 404);
   assertNotSample(r);
