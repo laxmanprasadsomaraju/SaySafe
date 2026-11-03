@@ -105,9 +105,19 @@ Server-side prices; family approval bound to the exact basket, single use, 30-mi
 
 Counts, dates and commits: [docs/TEST-EVIDENCE.md](docs/TEST-EVIDENCE.md).
 
-## Known limitations
+## Security & limitations
 
-Sandbox only. English is the only verified language (other reply languages are beta). Voice is tap-to-talk, tested in Chromium with a simulated microphone; voice on iPhone Safari is not verified. No physical-phone, screen-reader or older-adult testing yet, and SaySafe doesn’t claim to have prevented any fraud. Scam checks make mistakes (42 unseen messages: 2 false alarms, 1 missed scam). Payment memory covers only SaySafe and what you type (no bank or wallet import). Demo Membership cancel is unverified through the app. Refunds are admin-only and off on the hosted demo. Render Free sleeps when idle.
+- **PayPal Sandbox only.** Every payment uses fake test money; nothing real is bought, charged or delivered.
+- **No real PayPal accounts.** Only PayPal Sandbox test accounts work. Never enter a real PayPal login.
+- **The AI never pays and never approves.** It suggests; the person approves at PayPal themselves, and purchases over the family limit need the family member's approval first. The amount always comes from the server catalogue, never from the AI.
+- **English only is verified.** Other reply languages are beta and unverified.
+- **Voice tested in Chromium only** (headless, simulated microphone); voice on iPhone Safari is not verified, and real phones are untested. Spoken replies are **off until the person turns them on** (consent); the microphone works either way.
+- **Scam detection is not independently verified.** Held-out set of 42 messages: 2 false alarms, 1 missed scam. Nothing about the sender is verified, and links are never opened.
+- **Sample data is fictional from this release** (made-up company names, drama-range phone numbers, example.com emails) and labelled "Sample data". Channel3 listings are real products from real retailers, bought on the retailer's own site.
+- **Free hosting:** the hosted demo sleeps when idle; the first visit can take about **60 seconds** to wake up.
+- **Judges' PayPal Sandbox buyer login is shared only via Devpost**, never in the app or this repository.
+
+**Also:** no physical-phone, screen-reader or older-adult testing yet, and SaySafe doesn’t claim to have prevented any fraud. Payment memory covers only SaySafe and what you type (no bank or wallet import). Demo Membership cancel is proven by API script, not yet through the app. Refunds are admin-only and off on the hosted demo.
 
 **Roadmap:** real-phone and real-person testing; verified languages; reminders before charges; read-only MCP server (future): let other assistants ask SaySafe “have I paid this?” or “is this message a scam?” with household-scoped OAuth, audit log and no money actions. Not built.
 

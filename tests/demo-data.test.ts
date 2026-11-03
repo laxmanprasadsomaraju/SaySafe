@@ -94,11 +94,11 @@ describe('seed on Try as Mary', () => {
     const { a } = await mary();
     await a.post('/api/companion/payments').set(H).send({ recipient: 'Window cleaner', amountCents: 2500, currency: 'EUR', paidOn: '2026-10-30', method: 'cash' }).expect(201);
     const subs = (await a.get('/api/companion/subscriptions').expect(200)).body.subscriptions;
-    const netflix = subs.find((s: any) => s.merchant === 'Netflix');
+    const netflix = subs.find((s: any) => s.merchant === 'StreamBox Plus');
     await a.post(`/api/companion/subscriptions/${netflix.id}/status`).set(H).send({ to: 'instructions_opened' }).expect(200);
     await a.post('/api/demo/reset').set(H).send({}).expect(200);
     const after = (await a.get('/api/companion/subscriptions').expect(200)).body.subscriptions;
-    expect(after.find((s: any) => s.merchant === 'Netflix').status).toBe('tracking');
+    expect(after.find((s: any) => s.merchant === 'StreamBox Plus').status).toBe('tracking');
     const recs = (await a.get('/api/companion/payments').expect(200)).body.payments;
     expect(recs.some((p: any) => p.recipient === 'Window cleaner' && !p.sample)).toBe(true);
     expect(recs.filter((p: any) => p.sample).length).toBe(SAMPLE_RECORDS.length);
@@ -187,24 +187,27 @@ describe('Assistant answers from the data (AI unavailable: rules only), typed an
     const last = await t('Show my last payment', 'last_payment');
     expect(last.companion.payment.sample).toBe(true); expect(last.companion.guidance).toMatch(/Sample data/);
     const mw = await t('Did I already pay for the microwave?', 'payment_matches');
-    expect(mw.companion.result.matches.map((m: any) => m.recipient).sort()).toEqual(['Currys', 'SaySafe Demo Shop']);
+    expect(mw.companion.result.matches.map((m: any) => m.recipient).sort()).toEqual(['Hearthside Appliances', 'SaySafe Demo Shop']);
     expect(mw.companion.result.notes.join(' ')).toMatch(/separate purchases/);
     const john = await t('Did I already pay John €80?', 'payment_matches');
     expect(john.companion.result.matches).toHaveLength(2);
     expect(john.companion.result.matches.flatMap((m: any) => m.caveats).join(' ')).toMatch(/Possible duplicate/);
     expect(john.companion.result.matches.every((m: any) => m.recipient === 'John Smith')).toBe(true); // never a Demo Shop payment for a person
     const subs = await t('Show my subscriptions', 'subscriptions_list');
-    expect(subs.companion.subscriptions.map((s: any) => s.merchant)).toEqual(['Netflix', 'Spotify Premium', 'The Irish Times digital', 'Amazon Prime']);
+    expect(subs.companion.subscriptions.map((s: any) => s.merchant)).toEqual(['StreamBox Plus', 'TuneWave Premium', 'The Daily Ledger digital', 'ParcelPass yearly']);
     expect(subs.companion.subscriptions.every((s: any) => s.sample && s.managementMethod)).toBe(true);
     expect(subs.companion.demoOffer).toBe(true);
     const most = await t('Which costs the most?', 'subscriptions_list');
-    expect(most.reply).toMatch(/Netflix costs the most/); expect(most.reply).toMatch(/Amazon Prime/);
+    expect(most.reply).toMatch(/StreamBox Plus costs the most/); expect(most.reply).toMatch(/ParcelPass yearly/);
     const next = await t("What's coming out next?", 'subscriptions_list');
-    expect(next.reply).toMatch(/Next to come out is Netflix/);
+    expect(next.reply).toMatch(/Next to come out is StreamBox Plus/);
     const cancel = await t('Cancel my streaming subscription', 'subscription_help');
-    expect(cancel.companion.subscription.merchant).toBe('Netflix');
-    expect(cancel.companion.guide.url).toBe('https://help.netflix.com/en/node/407');
-    expect(cancel.reply).toMatch(/can't cancel/);
+    expect(cancel.companion.subscription.merchant).toBe('StreamBox Plus');
+    // Sample = fictional company: no real company page, an in-app "this is sample data" explanation instead.
+    expect(cancel.companion.guide).toBeNull();
+    expect(cancel.companion.genericSteps).toEqual([]);
+    expect(cancel.reply).toMatch(/^Sample data: StreamBox Plus/); expect(cancel.reply).toMatch(/no real cancellation page/);
+    expect(JSON.stringify(cancel.companion)).not.toMatch(/netflix|spotify|amazon|irishtimes|currys/i);
     const demoM = await t('Cancel my demo membership', 'subscriptions_list');
     expect(demoM.reply).toMatch(/nothing to cancel/);
     const alex = await t('Find Alex', 'contact_card');

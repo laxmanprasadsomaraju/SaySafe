@@ -39,7 +39,7 @@ const TOPICS: Topic[] = [
       'Choose “Try as Mary” on the SaySafe website. You get your own private copy of Mary’s account, with sample data. Other visitors can’t see it, and it is kept in the database, so it is still there after the server restarts.',
       'The welcome card in the Assistant has six questions to tap: check a suspicious message, show my last payment, did I already pay for the microwave, show my subscriptions, find Alex, and buy a demo item.',
       'Payments: try “Did I already pay John €80?”. Two sample bank transfers to John Smith, two days apart, show a possible duplicate. “Show my payments” lists everything in Activity.',
-      'Subscriptions: “Show my subscriptions”, “Which costs the most?”, “What’s coming out next?” and “Cancel my streaming subscription” (Netflix: its official cancel page, because SaySafe can’t cancel other companies). The SaySafe Demo Membership is a real PayPal Sandbox subscription you can start and then cancel inside the chat.',
+      'Subscriptions: “Show my subscriptions”, “Which costs the most?”, “What’s coming out next?” and “Cancel my streaming subscription”. The sample subscriptions (StreamBox Plus, TuneWave Premium, The Daily Ledger, ParcelPass) are made-up companies, so instead of a cancellation link you see a “This is sample data” note. For a subscription you add yourself, SaySafe shows the company’s own cancellation steps; it can’t cancel other companies for you. The SaySafe Demo Membership is a real PayPal Sandbox subscription you can start and then cancel inside the chat.',
       'Contacts: “Find Alex”, “Show my contacts”, “Who is my gardener?”. “Send Alex €50” finds Alex, lets you check the details, then opens PayPal’s own Send money page. Nothing is sent by SaySafe.',
       'Scam training: the three “Training example” messages (a PayPal invoice with a phone number, “Hi Mum, new number”, and an ordinary order notice) show a warning, a contact mismatch, and no obvious warning signs.',
       'Family: Profile › Trusted family › “Try as Alex too” opens Alex’s view for the same account in this browser. Buy something above €75 as Mary, then approve or decline it as Alex. Mary can’t approve her own purchase.',
@@ -220,7 +220,9 @@ const TOPICS: Topic[] = [
   {
     id: 'voice', title: 'Voice commands and Stop', summary: 'Tap to talk, tap again to cancel, and Stop at any time.',
     steps: [
-      'Tap the microphone and allow microphone access when your browser asks.',
+      'Spoken replies are off until you turn them on: SaySafe never plays sound by itself on a first visit. Press “Turn on spoken replies” at the top of the Assistant or in Profile › Voice & conversation. Your choice is remembered on this device.',
+      'If your browser holds sound back until you tap the page, SaySafe shows “Tap to enable sound”.',
+      'Tap the microphone and allow microphone access when your browser asks. The microphone works the same whether spoken replies are on or off.',
       'Say what you need, for example “find me a microwave under 150 euro”, then stop talking. SaySafe sends it after a short pause.',
       'To cancel while it is listening, tap the microphone again. Nothing is sent.',
       'While SaySafe is speaking, tap the microphone to interrupt and speak, or press Stop. On a keyboard, Escape also stops it.',
@@ -234,7 +236,7 @@ const TOPICS: Topic[] = [
     id: 'accessibility', title: 'Accessibility controls', summary: 'Bigger text, high contrast, captions and keyboard use.',
     steps: [
       'Use “Bigger text” and “Contrast” to make the screen easier to read. They are in Profile › Accessibility, and in the Assistant under Menu › Display.',
-      'Voice settings (mute, read replies automatically, speed, read everything) are in Profile.',
+      'Voice settings (spoken replies on or off, read replies automatically, speed, read everything) are in Profile. Spoken replies start off.',
       'Animations switch off when your device asks for reduced motion.',
       'Everything works with a keyboard. Press Tab to move, and use “Skip to main content” at the top.',
     ],
@@ -270,22 +272,25 @@ const TOPICS: Topic[] = [
     bodyText: FAQ.map((f) => `${f.q} ${f.a}`).join(' '),
   },
   {
-    id: 'limitations', title: 'Limitations', summary: 'What SaySafe cannot do, and what is not tested yet.',
+    id: 'limitations', title: 'Security & limitations', summary: 'Sandbox only, what the AI can never do, and what is not tested yet.',
     body: (
       <ul className="mt-4 grid gap-3 text-lg list-disc pl-6">
-        <li>Sandbox only: no real money, no real deliveries.</li>
-        <li>Scam checks make mistakes. On 42 unseen test messages: 2 false alarms and 1 missed scam.</li>
-        <li>Nothing about the sender is independently verified. Links are never opened.</li>
+        <li>PayPal Sandbox only: every payment uses fake test money. No real money moves and nothing is delivered.</li>
+        <li>No real PayPal accounts: only PayPal Sandbox test accounts work. Never enter your real PayPal login.</li>
+        <li>The AI never pays and never approves. It only suggests; you approve at PayPal yourself, and your family member approves purchases over your limit.</li>
+        <li>Only English is verified. Other reply languages are beta and unverified.</li>
+        <li>Voice is tap-to-talk and tested only in Chromium (Chrome) with a simulated microphone. Real phones and other browsers are not tested. Spoken replies are off until you turn them on.</li>
+        <li>Scam detection is not independently verified. It makes mistakes: on 42 unseen test messages, 2 false alarms and 1 missed scam. Nothing about the sender is verified, and links are never opened.</li>
+        <li>Sample subscriptions and records use made-up company names and are labelled “Sample”. They are not real accounts.</li>
+        <li>The hosted demo runs on free hosting: after a quiet spell the first visit can take about 60 seconds to wake up.</li>
+        <li>Judges’ PayPal Sandbox buyer login is shared only through Devpost, never in the app.</li>
         <li>SaySafe cannot stop payments made outside SaySafe, read your PayPal account, open disputes or promise refunds.</li>
         <li>Channel3 purchases happen on other websites and are not covered by SaySafe’s checks.</li>
         <li>Shop refunds are switched off on the hosted demo; you can request one, but it will not be completed there.</li>
-        <li>Voice is tap-to-talk and tested only in Chrome with a simulated microphone. Real phones are not tested yet.</li>
-        <li>Reply languages other than English are beta and unverified.</li>
         <li>Not yet tested with older adults; only scripted walkthroughs. Android sharing is untested on a device.</li>
-        <li>The Assistant’s interactive cards are still being finished.</li>
       </ul>
     ),
-    bodyText: 'sandbox mistakes false alarms missed scam not verified refunds voice languages not tested Android cards',
+    bodyText: 'security sandbox fake money test accounts real paypal AI never pays approves english only voice chromium spoken replies scam detection not independently verified false alarms missed scam sample cold start 60 seconds free hosting judges login devpost refunds languages not tested Android',
   },
 ];
 

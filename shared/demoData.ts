@@ -6,7 +6,20 @@
  * Contact details are deliberately non-routable: phone numbers are in Ofcom's ranges reserved for TV/radio drama
  * (07700 900000–900999 mobile, 020 7946 0000–0999 London) and emails use example.com (RFC 2606).
  */
-export const DEMO_SEED_VERSION = 2;
+export const DEMO_SEED_VERSION = 3;
+/**
+ * v3: sample company names are FICTIONAL (no real brands in sample data). Households seeded before v3 are migrated in
+ * place at server start (server/demo/seed.ts migrateSampleData): only example=1 rows with the old names are renamed.
+ */
+export const SAMPLE_RENAMES_V3: { table: 'companion_subscriptions' | 'companion_payments'; column: 'merchant' | 'recipient'; from: string; to: string }[] = [
+  { table: 'companion_subscriptions', column: 'merchant', from: 'Netflix', to: 'StreamBox Plus' },
+  { table: 'companion_subscriptions', column: 'merchant', from: 'Spotify Premium', to: 'TuneWave Premium' },
+  { table: 'companion_subscriptions', column: 'merchant', from: 'The Irish Times digital', to: 'The Daily Ledger digital' },
+  { table: 'companion_subscriptions', column: 'merchant', from: 'Amazon Prime', to: 'ParcelPass yearly' },
+  { table: 'companion_payments', column: 'recipient', from: 'Currys', to: 'Hearthside Appliances' },
+];
+/** Shown instead of a cancellation link for a sample subscription (fictional company: there is no real page). */
+export const SAMPLE_CANCEL_NOTICE = 'This is sample data: a made-up company for the demo, so there is no real cancellation page. For a subscription you add yourself, SaySafe shows the company’s own cancellation steps.';
 
 export const SAMPLE_BADGE = 'Sample data';
 export const SAMPLE_EVIDENCE = 'Illustrative — no PayPal record';
@@ -25,7 +38,7 @@ export interface SampleRecord { key: string; recipient: string; amountCents: num
 export const SAMPLE_RECORDS: SampleRecord[] = [
   { key: 'john1', recipient: 'John Smith', amountCents: 8000, method: 'bank_transfer', daysAgo: 12, note: 'Fence repair' },
   { key: 'john2', recipient: 'John Smith', amountCents: 8000, method: 'bank_transfer', daysAgo: 10, note: 'Fence repair (paid again?)' },
-  { key: 'currys', recipient: 'Currys', amountCents: 8900, method: 'card', daysAgo: 24, note: 'Microwave' },
+  { key: 'currys', recipient: 'Hearthside Appliances', amountCents: 8900, method: 'card', daysAgo: 24, note: 'Microwave' },
   { key: 'pat', recipient: 'Pat Doyle', amountCents: 4000, method: 'cash', daysAgo: 5, note: 'Hedge trimming' },
   { key: 'pharmacy', recipient: 'Riverside Pharmacy', amountCents: 1850, method: 'card', daysAgo: 2, note: 'Prescription' },
   // Flagship story ("a message says I owe €120"): an illustrative record Mary typed, a POSSIBLE match only. v2.
@@ -33,12 +46,12 @@ export const SAMPLE_RECORDS: SampleRecord[] = [
 ];
 
 export interface SampleSub { key: string; merchant: string; amountCents: number; frequency: 'weekly' | 'monthly' | 'yearly'; nextInDays: number; note: string }
-/** Illustrative amounts, not the companies' current prices. */
+/** Fictional companies (v3) with illustrative amounts. The keys stay the same so sample ids don't change. */
 export const SAMPLE_SUBS: SampleSub[] = [
-  { key: 'netflix', merchant: 'Netflix', amountCents: 1299, frequency: 'monthly', nextInDays: 6, note: 'Illustrative amount' },
-  { key: 'spotify', merchant: 'Spotify Premium', amountCents: 1199, frequency: 'monthly', nextInDays: 13, note: 'Illustrative amount' },
-  { key: 'irishtimes', merchant: 'The Irish Times digital', amountCents: 999, frequency: 'monthly', nextInDays: 20, note: 'Illustrative amount' },
-  { key: 'prime', merchant: 'Amazon Prime', amountCents: 9500, frequency: 'yearly', nextInDays: 41, note: 'Illustrative amount' },
+  { key: 'netflix', merchant: 'StreamBox Plus', amountCents: 1299, frequency: 'monthly', nextInDays: 6, note: 'Fictional streaming service (sample)' },
+  { key: 'spotify', merchant: 'TuneWave Premium', amountCents: 1199, frequency: 'monthly', nextInDays: 13, note: 'Fictional music service (sample)' },
+  { key: 'irishtimes', merchant: 'The Daily Ledger digital', amountCents: 999, frequency: 'monthly', nextInDays: 20, note: 'Fictional newspaper (sample)' },
+  { key: 'prime', merchant: 'ParcelPass yearly', amountCents: 9500, frequency: 'yearly', nextInDays: 41, note: 'Fictional delivery membership (sample)' },
 ];
 
 export type SampleApproval = 'pending' | 'approved' | 'declined' | 'expired' | null;

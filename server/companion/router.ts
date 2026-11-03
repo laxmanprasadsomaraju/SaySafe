@@ -6,6 +6,7 @@
  */
 import type { IntentT } from '../ai/agent.js';
 import { categoryIn } from '../../shared/companion.js';
+import { isPaymentStatusQuestion } from '../../shared/paymentStatus.js';
 
 const AMOUNT = /(?:€|eur\s?|euro\s?)\s*(\d+(?:[.,]\d{1,2})?)|(\d+(?:[.,]\d{1,2})?)\s*(?:euros?|eur)\b/i;
 const RELATIONS = 'son|daughter|grandson|granddaughter|brother|sister|nephew|niece|husband|wife|friend|neighbou?r|carer|doctor|gardener|pharmacy|pharmacist|plumber|electrician|cleaner|boiler (?:man|service|engineer)|family helper|helper';
@@ -22,8 +23,7 @@ export function routeCompanion(said: string): IntentT | null {
 
   // ----- "Did my payment go through?" — status of a purchase made in this app. Never a scam check, never a list.
   // The app answers with the receipt card read from the server (GET only: it can't capture or charge again).
-  if (/\b(did|has|have|is|was)\b.{0,12}\b(my|the|that|this|it)\b.{0,14}\b(payment|purchase|order|it)?\b.{0,6}\b(go(ne)? through|work(ed)?|succeed(ed)?|complete(d)?|finish(ed)?|done|paid|been paid)\b/.test(s)
-    && /\b(payment|purchase|order|it|through)\b/.test(s) && !/\b(to|for)\s+(?!the shop|demo|it\b)[a-z]+\b.{0,3}$/.test(s.replace(/[?.!]+$/, ''))) {
+  if (isPaymentStatusQuestion(raw)) {
     return { action: 'payment_status', reply: "I'll check that payment." };
   }
   // ----- Insights (Mary's own summary; answered from the database, never by the AI) -----
@@ -65,7 +65,7 @@ export function routeCompanion(said: string): IntentT | null {
   const subWord = /\b(subscriptions?|memberships?|direct debits?|regular payments?|standing orders?)\b/.test(s);
   if (/\b(cancel|stop|end|get rid of|unsubscribe)\b/.test(s) && !/^(no|stop|cancel|not now)[.!]*$/.test(s.trim())) {
     const cat = categoryIn(s);
-    const named = s.match(/\b(netflix|spotify|disney\+?|amazon prime|prime|irish times|apple|google one|now tv|sky|demo membership|saysafe demo membership|membership)\b/)?.[1] ?? null;
+    const named = s.match(/\b(streambox(?: plus)?|tunewave(?: premium)?|daily ledger|parcelpass|netflix|spotify|disney\+?|amazon prime|prime|irish times|apple|google one|now tv|sky|demo membership|saysafe demo membership|membership)\b/)?.[1] ?? null;
     if (named || cat || subWord) {
       const merchant = named === 'membership' ? 'demo membership' : named;
       return { action: 'subscription_help', merchant, category: merchant ? null : cat, reply: "Here's how to cancel." };

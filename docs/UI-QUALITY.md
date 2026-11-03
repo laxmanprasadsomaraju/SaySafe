@@ -16,7 +16,9 @@ node scripts/a11y-audit.mjs               # axe + keyboard order + focus + zoom 
 OUT=shots node scripts/ui-shots.mjs       # every page at 320/375/390/768/1024/1280/1440 → shots/<page>-<width>.png + layout.json
 ```
 
-Restart the stack between runs if you hit the "Try as Alex" rate limit (10 per 15 minutes per IP).
+Restart the stack between runs if you hit the "Try as Alex" rate limit (10 per 15 minutes per IP). The flagship e2e makes
+more than 120 API calls a minute from one IP; start its stack with `API_LIMIT_PER_MIN=1000` (local only) so the API
+rate limit doesn't stall it.
 
 If something else already listens on :8787 (another checkout's server), the stack's API cannot bind and the scripts
 silently test that other build. Check with `curl -s localhost:8787/ | grep -o 'assets/index-[^"]*'` against your
@@ -30,8 +32,8 @@ silently test that other build. Check with `curl -s localhost:8787/ | grep -o 'a
 - Widths: 390 px (phone) and 1440 px (desktop). Baselines are committed in `tests/visual/`.
 - Comparator: Playwright's own screenshot comparator (the one behind `expect(page).toHaveScreenshot()`,
   pixelmatch, threshold 0.2), allowing at most 0.2 % differing pixels for anti-aliasing noise.
-- Determinism: fixed browser clock (3 Nov 2026 10:00 Europe/Dublin), `en-IE`, reduced motion, voice muted (saved with
-  `mutedByUser: true`, because the app only keeps a mute the person chose),
+- Determinism: fixed browser clock (3 Nov 2026 10:00 Europe/Dublin), `en-IE`, reduced motion, spoken replies off (the default for
+  every visitor: SaySafe only speaks after the person presses “Turn on spoken replies”, saved as `spokenOptIn`),
   lazy images forced to load, and dates/times/ids that come from server timestamps replaced with fixed text
   before capture. Layout is under test, not the clock.
 - On a difference it writes `<page>-<width>.actual.png` and `.diff.png` next to the baseline (git-ignored).

@@ -13,7 +13,11 @@ Cause, as found in `origin/main` (6e66af0):
 No Web Speech `SpeechRecognition` is used anywhere, so there are no late `onresult` events; the equivalent late callbacks were `MediaRecorder.onstop` and the transcription/assistant responses, which now all check a session token.
 
 ## One controller
-`web/src/lib/speech.ts` (`speech` singleton) owns mic capture, transcription, the AI turn and speech. States: Ready (idle), Listening…, Thinking… (transcribing or waiting for the AI), Speaking…, Paused, Cancelled, Error/Muted/Unavailable.
+`web/src/lib/speech.ts` (`speech` singleton) owns mic capture, transcription, the AI turn and speech. States: Ready (idle), Listening…, Thinking… (transcribing or waiting for the AI), Speaking…, Paused, Cancelled, Error/Spoken replies off/Unavailable.
+
+**Consent (3 Nov 2026):** spoken replies are **off for every fresh visitor**; nothing plays automatically until the person presses **Turn on spoken replies** (a toggle button with `aria-pressed`, at the top of the Assistant and in Profile › Voice & conversation; state text "Spoken replies off / on", never "Muted"). The choice is saved on the device (`ss-voice-prefs.spokenOptIn`); older saved prefs without the opt-in start off. If the browser blocks audio until a first tap, the Assistant shows **Tap to enable sound**. A "Read aloud" / "Replay" button the person presses still plays once. Voice input (the mic) is unchanged.
+
+**Turn token:** the Assistant's turn token is a separate counter from the utterance generation, so speaking (or pausing) a reply no longer makes the rest of that same turn stale. Before this, with spoken replies on, the Channel3 listings after a "not in the Demo Shop" reply were silently dropped.
 - Mic: tap = start; tap while listening = **cancel silently** (nothing is uploaded); tap while speaking = stop speech at once (cancel + clear queue) and start listening. Only one recorder exists at a time.
 - End of speech is detected locally (Web Audio RMS, `web/src/lib/mic.ts`): it sends after ~1.3 s of quiet following speech. No speech for 6 s -> "I didn't hear anything. Tap to try again." (shown, never spoken). Clips under 0.6 s or with under 250 ms of voice are never uploaded.
 - Transcripts that are empty, punctuation-only, a known silence hallucination ("thank you", "you're welcome", "thanks for watching", ".", …) with little measured voice, or a repeat within 10 s are dropped. The server repeats the same check (`shared/voice.ts`) and also drops uploads under 2 KB.

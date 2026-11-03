@@ -14,6 +14,9 @@ import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
 import { spokenScam, spokenFamily } from '../lib/spoken';
 import { AssistantHeader } from '../assistant/AssistantHeader';
+import { SpokenRepliesBar } from '../components/VoiceBar';
+import { pickStatusPayment, NO_SANDBOX_PAYMENT_REPLY } from '../../../shared/paymentStatus';
+import { realShopSearch, NOT_IN_DEMO, NOT_IN_DEMO_SPOKEN, NOT_IN_DEMO_FOUND_SPOKEN } from '../../../shared/realShops';
 import { THREAD_KEY, markPayPalReturn, pendingPayPalReturn, clearPayPalReturn, hasBlockFor, conversationPaymentId } from '../assistant/thread';
 import { fetchPayment } from '../assistant/blocks';
 import { localProfileForRequest } from '../lib/prefs';
@@ -133,21 +136,48 @@ export default function Assistant() {
     if (!items.length) return;
     add('assistant', 'Want to see the safe purchase steps instead? The SaySafe Demo Shop has a similar item. It is paid with PayPal Sandbox, so no real money moves, and you can say “let’s buy the demo ' + query.replace(/^(a|an|the)\s+/i, '') + '”.', [{ kind: 'product_cards', source: 'demo', query, items, fetchedAt: null, note: null }]);
   };
-  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[]) => {
+  /** Channel3 search. Returns what happened, so a caller never claims listings that aren't on screen. With `quiet`,
+   *  a miss or an error adds nothing (the caller says it, honestly) and listings are shown without being spoken. */
+  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[], quiet = false): Promise<{ status: 'shown' | 'none' | 'error' | 'stale'; message?: string }> => {
     try {
       const r = await api<{ products: ShopItem[]; recommendation: Recommendation; reply: string; fetchedAt: string; searchQuery: string }>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest() } });
-      if (!speech.isCurrent(turn)) return;
+      if (!speech.isCurrent(turn)) return { status: 'stale' };
       const items = productItems(r.products.map((p) => fromChannel3(p, r.recommendation)));
-      if (!items.length) { const msg = label ? `${label}, I found no other listings for ${r.searchQuery}.` : r.reply || 'I found no matching listings.'; add('assistant', msg); say(msg, turn); return; }
-      const reply = demo ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
+      if (!items.length) { const msg = label ? `${label}, I found no other listings for ${r.searchQuery}.` : r.reply || 'I found no matching listings.'; if (!quiet) { add('assistant', msg); say(msg, turn); } return { status: 'none', message: msg }; }
+      const reply = demo || quiet ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
       add('assistant', reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: null }]);
       setThread((t) => ({ ...t, focusId: null }));
-      say(r.reply, turn);
+      if (!quiet) say(r.reply, turn);
       if (demo?.length) offerDemo(demo, text);
+      return { status: 'shown' };
     } catch (e: any) {
-      if (speech.isCurrent(turn)) { add('assistant', e.message || 'I couldn’t search the shops right now. The SaySafe Demo Shop still works.'); if (demo?.length) offerDemo(demo, text); }
+      const msg = String(e?.message || 'I couldn’t search the shops right now.');
+      if (speech.isCurrent(turn) && !quiet) { add('assistant', e.message || 'I couldn’t search the shops right now. The SaySafe Demo Shop still works.'); if (demo?.length) offerDemo(demo, text); }
+      return { status: speech.isCurrent(turn) ? 'error' : 'stale', message: msg };
     }
   };
+  /**
+   * Not in the Demo Shop: run the real-shop search FIRST (Channel3), show any real listings, then the Demo Shop chips,
+   * and say only what actually happened. No listings / an error → said plainly, with a "Search real shops" chip.
+   */
+  const notInDemoShop = async (catalogue: any[], realQuery: string | null, channel3: boolean, turn: number) => {
+    const chips = (realFound?: boolean) => [{ kind: 'shop_catalogue' as const, items: catalogue, channel3, ...(realQuery ? { realQuery: realQuery.slice(0, 120) } : {}), ...(realFound !== undefined ? { realFound } : {}) }];
+    if (!channel3 || !realQuery) {
+      const t = `${NOT_IN_DEMO} Pick a demo item below: it is paid with PayPal Sandbox, so no real money.`;
+      add('assistant', t, chips()); return say(`${NOT_IN_DEMO} Pick a demo item.`, turn);
+    }
+    const r = await discover(realQuery, turn, undefined, undefined, undefined, true);
+    if (r.status === 'stale' || !speech.isCurrent(turn)) return;
+    if (r.status === 'shown') {
+      add('assistant', `${NOT_IN_DEMO} The real listings above are bought on the retailer’s own website. Or pick a demo item below (PayPal Sandbox, no real money).`, chips(true));
+      return say(NOT_IN_DEMO_FOUND_SPOKEN, turn);
+    }
+    const why = r.status === 'error' ? `I couldn’t reach the real-shop search just now (${(r.message ?? '').replace(/\s*The SaySafe Demo Shop still works\.?/, '').slice(0, 160)})` : `I searched real shops for “${realQuery}” and found no matching listings`;
+    add('assistant', `${NOT_IN_DEMO} ${why}. Tap “Search real shops” to try again, or pick a demo item below.`, chips(false));
+    say(NOT_IN_DEMO_SPOKEN, turn);
+  };
+  /** The product the last "not in the Demo Shop" answer was about. */
+  const lastRealQuery = (): string | null => lastBlock('shop_catalogue')?.realQuery ?? null;
 
   const showDemo = (products: any[], query: string, reply: string, turn: number, lang?: string) => {
     const items = productItems(products.map(fromDemo));
@@ -232,11 +262,19 @@ export default function Assistant() {
     let p: ServerPayment | null = id ? await fetchPayment(id).catch(() => null) : null;
     if (!p) {
       const list = await api<unknown[]>('/api/payments');
-      const rows = (Array.isArray(list) ? list : []).map((x) => ServerPayment.safeParse(x)).filter((x) => x.success).map((x) => x.data!).filter((x) => !(x as any).sample);
-      p = rows[0] ? await fetchPayment(rows[0].id) : null;
+      const rows = (Array.isArray(list) ? list : []).map((x) => ServerPayment.safeParse(x)).filter((x) => x.success).map((x) => x.data!);
+      const pick = pickStatusPayment(rows as (ServerPayment & { sample?: boolean })[]);
+      p = pick ? await fetchPayment(pick.id) : null;
     }
     if (!speech.isCurrent(turn)) return;
-    if (!p) { const t = 'I can’t see a purchase made in this app yet, so there is nothing to check. Records you typed are not payments SaySafe can confirm.'; add('assistant', t); return say(t, turn); }
+    if (!p) {
+      // Nothing to check: a plain answer plus the Demo Shop chips (server catalogue). Never "paid".
+      const ps = await api<any[]>('/api/products').catch(() => []);
+      if (!speech.isCurrent(turn)) return;
+      const items = (Array.isArray(ps) ? ps : []).map((x) => ({ productId: x.id, name: x.name, category: x.category, priceCents: x.priceCents, currency: x.currency }));
+      add('assistant', NO_SANDBOX_PAYMENT_REPLY, items.length ? [{ kind: 'shop_catalogue', items, channel3: false }] : []);
+      return say(NO_SANDBOX_PAYMENT_REPLY.split('. You can')[0] + '.', turn);
+    }
     const block = receiptFrom(p);
     const amt = new Intl.NumberFormat('en-IE', { style: 'currency', currency: p.currency }).format(p.amountCents / 100);
     if (block) {
@@ -295,6 +333,19 @@ export default function Assistant() {
       const f = parseFollowup(text, Boolean(ctx));
       if (f.kind === 'refund') return await showRefund(turn);
       if (f.kind === 'payment_status') return await showPaymentStatus(turn);
+      // "Search real shops" / "real product search" (chip, typed or spoken): Channel3 for the product named, or the
+      // one the last "not in the Demo Shop" answer was about.
+      const rs = realShopSearch(text);
+      if (rs) {
+        const q = rs.query ?? lastRealQuery();
+        if (!q) { const t = 'What would you like me to look for in real shops? For example “search real shops for a kettle”.'; add('assistant', t); return say(t, turn); }
+        setMode('find');
+        const out = await discover(q, turn, undefined, undefined, undefined, true);
+        if (out.status === 'stale' || !speech.isCurrent(turn)) return;
+        if (out.status === 'shown') return say('Here are real listings. You’d buy them on the retailer’s own website.', turn);
+        const t = out.status === 'error' ? `I couldn’t reach the real-shop search just now. ${(out.message ?? '').slice(0, 200)}` : `I searched real shops for “${q}” and found no matching listings. Try other words.`;
+        add('assistant', t); return say(t, turn);
+      }
       if (f.kind === 'search') return await showHistory(turn, f.q);
       // "Show my last payment" is answered by the server from every source (Demo Shop, records, sample data).
       if (f.kind === 'last_payment' && /\breceipt\b/i.test(text)) return await showLastPayment(turn);
@@ -346,10 +397,7 @@ export default function Assistant() {
         setMode('find');
         // Not in the Demo Shop: say so and list what it sells (server catalogue), then look in real shops if available.
         if (Array.isArray(r.catalogue) && r.catalogue.length) {
-          add('assistant', r.reply, [{ kind: 'shop_catalogue', items: r.catalogue, channel3: Boolean(r.discover) }]);
-          say(r.reply.split('. Tap')[0] + '.', turn);
-          if (r.discover) return await discover(r.discover.query ?? text, turn);
-          return;
+          return await notInDemoShop(r.catalogue, typeof r.realQuery === 'string' ? r.realQuery : r.discover?.query ?? null, Boolean(r.discover), turn);
         }
         if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined);
         if (r.buyNow && Array.isArray(r.products) && r.products.length === 1) {
@@ -524,6 +572,7 @@ export default function Assistant() {
         detail={prepReady.length ? 'Nothing has been paid.' : 'Your purchase is waiting for their answer.'} />
       <AssistantHeader onNew={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} />
       <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />PayPal Sandbox only: no real money. You always approve at PayPal.</p>
+      <SpokenRepliesBar />
       <div role="log" aria-live="polite" aria-label="Conversation" className="mt-4 flex flex-col gap-3">
         {thread.messages.map((m) => (
           <div key={m.id} data-role={m.role} className={`scroll-mt-24 ${m.role === 'user' ? 'self-end max-w-[85%]' : 'self-start w-full max-w-2xl'}`}>

@@ -30,7 +30,7 @@ fs.mkdirSync(DIR, { recursive: true });
 
 const b = await chromium.launch();
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce', locale: 'en-IE', timezoneId: 'Europe/Dublin', deviceScaleFactor: 1 });
-await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
+await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
 const p = await ctx.newPage();
 await p.clock.setFixedTime(new Date('2026-11-03T10:00:00Z'));
 const post = (u, body) => p.evaluate(async ([url, x]) => { const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(x) }); return r.json().catch(() => ({})); }, [u, body]);
@@ -68,7 +68,7 @@ async function check(name) {
     await p.setViewportSize({ width: w, height: w < 768 ? 844 : 900 });
     await p.waitForTimeout(300);
     await normalise();
-    const st = await p.addStyleTag({ content: 'header.sticky{position:static!important}[data-testid="bottom-stack"]{position:static!important}div[style*="--stack-h"]{padding-bottom:0!important}*{caret-color:transparent!important}' });
+    const st = await p.addStyleTag({ content: 'header.sticky{position:static!important}.assistant-bar.sticky{position:static!important}[data-testid="bottom-stack"]{position:static!important}div[style*="--stack-h"]{padding-bottom:0!important}*{caret-color:transparent!important}' });
     const h = await p.evaluate(() => document.documentElement.scrollHeight);
     const shot = await p.screenshot({ fullPage: true, animations: 'disabled', clip: { x: 0, y: 0, width: w, height: Math.min(h, MAX_H) } });
     await st.evaluate((e) => e.remove());

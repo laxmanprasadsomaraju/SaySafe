@@ -212,6 +212,33 @@ try {
     const capIds = sql(`SELECT count(DISTINCT paypal_capture_id) FROM payment_requests WHERE id='${id}'`);
     const mockCaps = await (await fetch(`${MOCK}/mock/captures`).catch(() => null))?.json?.().catch(() => null);
     ok('19 repeated question + reload: same receipt, no second capture', caps0 === '1' && caps1 === '1' && capIds === '1', `CAPTURED transitions ${caps0}→${caps1}; capture ids ${capIds}${mockCaps ? `; mock captures ${JSON.stringify(mockCaps).slice(0, 60)}` : ''}`);
+    // ---------- 8b. The same question from EVERY Assistant context (read-only receipt, never a scam check) ----------
+    const receipts = () => m.locator('[data-card="receipt"]').count();
+    const scams = () => m.locator('[data-card="scam_result"]').count();
+    const pickMode = async (label) => { await m.getByRole('button', { name: 'More: choose what to do' }).click(); await m.locator('#mode-menu').getByRole('button', { name: label, exact: true }).click(); await m.waitForTimeout(600); };
+    const statusFrom = async (ctxName, question) => {
+      const r0 = await receipts(); const s0 = await scams();
+      await ask(m, question);
+      await m.waitForFunction((n) => document.querySelectorAll('[data-card="receipt"]').length > n, r0, { timeout: 20000 }).catch(() => {});
+      const reply = (await m.locator('[data-role="assistant"]').last().innerText()).replace(/\s+/g, ' ');
+      ok(`payment status from ${ctxName}: “${question}” → receipt card, no scam check`, (await receipts()) === r0 + 1 && (await scams()) === s0 && /PayPal confirmed/.test(reply), reply.slice(0, 140));
+    };
+    await pickMode('Check a message'); await statusFrom('Check a message mode', 'Did my payment go through?');
+    await pickMode('Check a message'); await statusFrom('Check a message mode', 'Was I charged?');
+    await pickMode('My payments'); await m.waitForTimeout(1500); await statusFrom('My payments mode', "Where's my receipt?");
+    await ask(m, 'Help me buy a microwave'); await m.getByRole('list', { name: 'Shop listings' }).last().waitFor({ timeout: 40000 });
+    await statusFrom('the shopping flow (Channel3 listings on screen)', 'did it go through');
+    await m.reload(); await m.waitForSelector('#assistant-input'); await m.waitForTimeout(1200);
+    await statusFrom('default chat after reload', 'Have I been charged?');
+    // Exception: a long pasted message with a link, being checked, stays a scam check.
+    await pickMode('Check a message');
+    const s0 = await scams(); const r0 = await receipts();
+    await ask(m, 'Dear customer, your payment did not go through and your account will be suspended today. To avoid a penalty fee, verify your card details now at http://secure-paypa1-verify.xyz/login or call +44 20 7946 0999 before midnight.');
+    await m.waitForFunction((n) => document.querySelectorAll('[data-card="scam_result"]').length > n, s0, { timeout: 30000 }).catch(() => {});
+    ok('Check a message: a long pasted message with a link/phone (“payment did not go through”) is still scam-checked', (await scams()) === s0 + 1 && (await receipts()) === r0);
+    const capsAfter = sql(`SELECT count(*) FROM audit_log WHERE target='${id}' AND action LIKE '%->CAPTURED'`);
+    ok('asking from every context never captured again', capsAfter === '1', `CAPTURED transitions ${capsAfter}`);
+
     // Webhook signature validation (live endpoint): an unsigned notice is refused and not stored.
     const wh = await post(m, '/api/paypal/webhook', { id: 'WH-FAKE-1', event_type: 'PAYMENT.CAPTURE.COMPLETED', resource: { id: 'FAKE' } });
     ok('16 unsigned/forged webhook refused, not stored', wh.status === 400 && sql("SELECT count(*) FROM webhook_events WHERE id='WH-FAKE-1'") === '0', String(wh.status));
@@ -246,13 +273,97 @@ try {
   ok('Assistant insights card with an Open Insights button (rules, no AI)', await lastCard(m, 'insights_summary').getByTestId('view-full-insights').isVisible());
   await shot(m, '10-assistant-insights-card', '[data-card="insights_summary"]');
 
-  // ---------- 10b. Fresh visitor: voice playback On (not Muted) ----------
-  const vc = await b.newContext({ viewport: { width: 390, height: 844 } }); const v = await vc.newPage(); // no saved prefs
-  await v.goto(BASE + '/'); await v.locator('button:visible', { hasText: 'Try as Mary' }).first().click(); await v.waitForURL(/\/assistant/);
+  // ---------- 10b. Fresh visitor: spoken replies OFF until they opt in (consent), then remembered ----------
+  const vc = await b.newContext({ viewport: { width: 390, height: 844 } }); // no saved prefs
+  // Record every speechSynthesis.speak() call (a fake synth when the headless browser has none), so "no audio" is measured.
+  await vc.addInitScript(() => {
+    window.__speaks = [];
+    const fake = { speak: (u) => { window.__speaks.push(u.text); setTimeout(() => u.onend?.({}), 5); }, cancel() {}, getVoices: () => [], addEventListener() {}, paused: false, resume() {} };
+    try { if (window.speechSynthesis) { const real = window.speechSynthesis; const orig = real.speak.bind(real); real.speak = (u) => { window.__speaks.push(u.text); try { orig(u); } catch {} }; } else Object.defineProperty(window, 'speechSynthesis', { value: fake }); } catch { Object.defineProperty(window, 'speechSynthesis', { value: fake }); }
+    if (!window.SpeechSynthesisUtterance) window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+  });
+  const v = await vc.newPage();
+  await v.goto(BASE + '/'); await v.locator('button:visible', { hasText: 'Try as Mary' }).first().click(); await v.waitForURL(/\/assistant/); await v.waitForSelector('#assistant-input');
+  await lastCard(v, 'shop_catalogue').waitFor({ timeout: 15000 }).catch(() => {});
+  await ask(v, 'Did my payment go through?'); await v.waitForTimeout(1500);
+  const noPay = (await v.locator('[data-role="assistant"]').last().innerText()).replace(/\s+/g, ' ');
+  ok('A: no purchase yet → plain "No PayPal Sandbox payment yet" + Demo Shop chips (never "paid")', /^SaySafe: No PayPal Sandbox payment yet\./.test(noPay) && await lastCard(v, 'shop_catalogue').isVisible() && !/PayPal confirmed/.test(noPay), noPay.slice(0, 140));
+  const bar = v.getByTestId('spoken-replies-assistant');
+  const spokenFresh = await v.evaluate(() => window.__speaks.length);
+  ok('fresh visitor: spoken replies OFF in the Assistant ("Spoken replies off", aria-pressed=false) and no audio played', (await v.getByTestId('spoken-state-assistant').innerText()).trim() === 'Spoken replies off' && (await bar.getAttribute('aria-pressed')) === 'false' && spokenFresh === 0 && (await bar.innerText()).trim() === 'Turn on spoken replies', `speak() calls: ${spokenFresh}`);
+  ok('never labelled "Muted" anywhere on the Assistant', !/\bMuted\b/.test(await v.locator('body').innerText()));
   await v.goto(BASE + '/profile'); const vp = v.getByTestId('voice-playback').first(); await vp.waitFor({ timeout: 15000 });
-  const vpText = (await vp.innerText()).trim();
-  ok('fresh profile: Voice playback is On (never shown as Muted by default)', vpText === 'On' && (await vp.getAttribute('aria-checked')) === 'true', vpText);
+  ok('fresh profile: "Turn on spoken replies" button, aria-pressed=false, state "Spoken replies off" (not Muted)', (await vp.innerText()).trim() === 'Turn on spoken replies' && (await vp.getAttribute('aria-pressed')) === 'false' && (await v.getByTestId('spoken-state').first().innerText()).trim() === 'Spoken replies off' && !/\bMuted\b/.test(await v.locator('main').innerText()));
+  await vp.click();
+  ok('turning it on: aria-pressed=true, "Spoken replies on"', (await vp.getAttribute('aria-pressed')) === 'true' && (await v.getByTestId('spoken-state').first().innerText()).trim() === 'Spoken replies on');
+  await v.goto(BASE + '/assistant'); await v.waitForSelector('#assistant-input');
+  ok('opt-in is remembered after navigation/reload', (await v.getByTestId('spoken-replies-assistant').getAttribute('aria-pressed')) === 'true' && JSON.parse(await v.evaluate(() => localStorage.getItem('ss-voice-prefs'))).spokenOptIn === true);
+  await v.getByTestId('spoken-replies-assistant').click(); // the tap also satisfies the autoplay rule
+  await v.getByTestId('spoken-replies-assistant').click();
+  const n0 = await v.evaluate(() => window.__speaks.length);
+  await ask(v, 'What can I buy?'); await v.waitForTimeout(2500);
+  ok('after opting in, a short reply is spoken', (await v.evaluate(() => window.__speaks.length)) > n0, `speak() calls ${n0}→${await v.evaluate(() => window.__speaks.length)}`);
   await vc.close();
+
+  // ---------- 10c. Not in the Demo Shop → real listings first, then Demo Shop chips (spoken replies ON) ----------
+  {
+    const gc = await b.newContext({ viewport: { width: 2000, height: 1300 } });
+    await gc.addInitScript(() => {
+      localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: false, spokenOptIn: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' }));
+      window.__speaks = [];
+      const fake = { speak: (u) => { window.__speaks.push(u.text); setTimeout(() => u.onend?.({}), 30); }, cancel() {}, getVoices: () => [], addEventListener() {}, paused: false, resume() {} };
+      Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true });
+      window.SpeechSynthesisUtterance = class { constructor(t) { this.text = t; } };
+    });
+    const g = await gc.newPage();
+    g.on('response', (r) => { if (r.status() === 429) console.log('429 on', r.url()); });
+    await g.goto(BASE + '/'); await g.locator('button:visible', { hasText: 'Try as Mary' }).first().click(); await g.waitForURL(/\/assistant/, { timeout: 60000 }); await g.waitForSelector('#assistant-input', { timeout: 30000 }).catch(async (e) => { await g.screenshot({ path: `${OUT}/10c-fail.png` }); throw e; });
+    await lastCard(g, 'shop_catalogue').waitFor({ timeout: 15000 });
+    await g.mouse.click(5, 5); // first tap (autoplay rule)
+    const cat0 = await g.locator('[data-card="shop_catalogue"]').count();
+    await ask(g, 'I want to buy a Nike t-shirt');
+    const list = g.getByRole('list', { name: 'Shop listings' }).last(); await list.waitFor({ timeout: 40000 }).catch(() => {});
+    await g.waitForFunction((n) => document.querySelectorAll('[data-card="shop_catalogue"]').length > n, cat0, { timeout: 20000 }).catch(() => {});
+    const order = await g.evaluate(() => { const els = [...document.querySelectorAll('[data-card]')]; const li = els.map((e) => e.querySelector('[aria-label="Shop listings"]') ? 'listings' : e.getAttribute('data-card')); return li.slice(-2); });
+    const gTxt = (await g.locator('[data-role="assistant"]').last().innerText()).replace(/\s+/g, ' ');
+    const spoken = await g.evaluate(() => window.__speaks.join(' | '));
+    ok(`G: "I want to buy a Nike t-shirt" (${HOSTED ? 'LIVE Channel3' : 'recorded Channel3 response for "nike t-shirt"'}) → real listing cards, THEN Demo Shop chips (spoken replies on)`, order.join() === 'listings,shop_catalogue' && /T-?Shirt/i.test(await list.innerText().catch(() => '')), order.join());
+    ok('G: reply never promises a search that did not happen; says not in the Demo Shop', /not in the Demo Shop/.test(gTxt) && !/I'll also look/.test(await g.locator('main').innerText()), gTxt.slice(0, 160));
+    ok('G: spoken reply says it plainly', /That's not in the Demo Shop/.test(spoken), spoken.slice(0, 200));
+    // Nothing found (the recorded microwave response has no match for a garden gnome) → honest + "Search real shops" chip.
+    if (!HOSTED) {
+      await ask(g, 'I want to buy a garden gnome');
+      const chip = g.getByTestId('search-real-shops').last(); await chip.waitFor({ timeout: 30000 }).catch(() => {});
+      const nTxt = (await g.locator('[data-role="assistant"]').last().innerText()).replace(/\s+/g, ' ');
+      ok('G: no real listings → says so honestly + tappable "Search real shops"', await chip.isVisible().catch(() => false) && /found no matching listings|couldn’t reach/.test(nTxt), nTxt.slice(0, 160));
+      ok('G: spoken: "Say \'search real shops\' … or pick a demo item"', (await g.evaluate(() => window.__speaks.join(' | '))).includes("Say 'search real shops' to find real products, or pick a demo item."));
+      const before = await g.locator('[data-role="assistant"]').count();
+      await chip.click(); await g.waitForFunction((n) => document.querySelectorAll('[data-role="assistant"]').length > n, before, { timeout: 30000 }).catch(() => {});
+      ok('G: the chip runs the real-shop search again (and says the result)', /garden gnome/i.test(await g.locator('[data-role="assistant"]').last().innerText()));
+      // Spoken/typed variant re-runs the search for the remembered product.
+      await ask(g, 'I want to buy a Nike t-shirt'); await g.waitForTimeout(3000);
+      const l0 = await g.getByRole('list', { name: 'Shop listings' }).count();
+      await ask(g, 'real product search');
+      await g.waitForFunction((n) => document.querySelectorAll('[aria-label="Shop listings"]').length > n, l0, { timeout: 30000 }).catch(() => {});
+      ok('G: "real product search" (spoken variant) searches real shops for the remembered product', (await g.getByRole('list', { name: 'Shop listings' }).count()) > l0);
+    }
+    // ---------- H. Header + Assistant Menu stay visible while scrolling a long conversation ----------
+    for (const [w, h] of [[1280, 720], [1440, 900], [2000, 1300], [390, 844]]) {
+      await g.setViewportSize({ width: w, height: h }); await g.waitForTimeout(300);
+      await g.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await g.waitForTimeout(400);
+      const r = await g.evaluate(() => { const hd = document.querySelector('header').getBoundingClientRect(); const menu = [...document.querySelectorAll('button')].find((x) => /^Menu/.test(x.textContent.trim())).getBoundingClientRect(); const stack = document.querySelector('[data-testid="bottom-stack"]').getBoundingClientRect(); return { top: Math.round(hd.top), menuTop: Math.round(menu.top), menuBottom: Math.round(menu.bottom), y: Math.round(scrollY), stackBottom: Math.round(stack.bottom), vh: innerHeight }; });
+      const nav = w >= 1024 ? await g.locator('header nav[aria-label="Main"]').isVisible() : await g.locator('[data-testid="bottom-stack"] nav[aria-label="Main"]').isVisible();
+      ok(`H: ${w}×${h} scrolled to the bottom of a long conversation: header at top 0, nav + Assistant Menu visible, composer pinned at bottom`, r.top === 0 && r.y > 300 && nav && r.menuTop >= 0 && r.menuBottom < r.vh / 2 && r.stackBottom === r.vh, JSON.stringify(r));
+    }
+    await g.goto(BASE + '/activity'); await g.waitForTimeout(1500); await g.setViewportSize({ width: 2000, height: 1300 });
+    for (const path of ['/activity', '/profile']) {
+      await g.goto(BASE + path); await g.waitForTimeout(1200); await g.setViewportSize({ width: 1280, height: 720 });
+      await g.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight)); await g.waitForTimeout(300);
+      const t = await g.evaluate(() => [Math.round(document.querySelector('header').getBoundingClientRect().top), Math.round(scrollY)]);
+      ok(`H: ${path} at 1280×720 scrolled to the bottom: header stays at top 0`, t[0] === 0 && t[1] > 50, JSON.stringify(t));
+    }
+    await gc.close();
+  }
 
   // ---------- 11. Desktop 1440 ----------
   const dc = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce', storageState: await m.context().storageState() });

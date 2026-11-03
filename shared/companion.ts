@@ -345,10 +345,10 @@ export type CompanionCardT = z.infer<typeof CompanionCard>;
 
 // ---------- Subscription kinds (for "cancel my streaming subscription") ----------
 export const SUB_CATEGORIES: { id: string; words: RegExp; merchants: RegExp }[] = [
-  { id: 'streaming', words: /\b(streaming|tv|television|films?|movies?|box ?sets?|video)\b/i, merchants: /\b(netflix|disney|now ?tv|^now$|apple tv|prime video|paramount|sky)\b/i },
-  { id: 'music', words: /\b(music|songs?|spotify)\b/i, merchants: /\b(spotify|apple music|deezer|tidal|youtube music)\b/i },
-  { id: 'news', words: /\b(news|newspaper|paper)\b/i, merchants: /\b(irish times|irish independent|guardian|times|telegraph|examiner)\b/i },
-  { id: 'shopping', words: /\b(shopping|delivery)\b/i, merchants: /\b(amazon|prime)\b/i },
+  { id: 'streaming', words: /\b(streaming|tv|television|films?|movies?|box ?sets?|video)\b/i, merchants: /\b(netflix|disney|now ?tv|^now$|apple tv|prime video|paramount|sky|streambox)\b/i },
+  { id: 'music', words: /\b(music|songs?|spotify)\b/i, merchants: /\b(spotify|apple music|deezer|tidal|youtube music|tunewave)\b/i },
+  { id: 'news', words: /\b(news|newspaper|paper)\b/i, merchants: /\b(irish times|irish independent|guardian|times|telegraph|examiner|daily ledger|ledger)\b/i },
+  { id: 'shopping', words: /\b(shopping|delivery)\b/i, merchants: /\b(amazon|prime|parcelpass)\b/i },
 ];
 /** The kind of a merchant's subscription, from its name only. */
 export function categoryOf(merchant: string): string | null {

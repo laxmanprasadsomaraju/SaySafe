@@ -232,6 +232,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
           {checkMsg && <Notice tone={checkMsg.startsWith('PayPal’s details') ? 'danger' : 'info'} title={checkMsg} />}
           {r.state === 'PAYER_APPROVED' && <Notice tone="info" title="Approved at PayPal, not paid yet.">Nothing is taken until you tap “Finish payment”. I check the amount and any family approval again first.</Notice>}
           {r.state === 'PAYER_APPROVED' && <Button className="w-full" onClick={finish} busy={busy}>Finish payment</Button>}
+          {r.state === 'FAILED' && <Notice tone="danger" title="This payment did not go through.">Nothing was charged. If PayPal declined the payment method, start again from the Demo Shop and choose another one at PayPal.</Notice>}
           {r.state === 'BLOCKED' && <Notice tone="danger" title="Stopped for your safety">{r.risk?.reasons.join(' ')}</Notice>}
           {r.state === 'CANCELLED' && r.approval?.status === 'declined' && <Notice tone="info" title="Your family member said no this time.">{r.approval.reason ?? 'Maybe talk it over together.'}</Notice>}
           {(r.state === 'FAMILY_APPROVED' || r.state === 'PAYER_APPROVAL_PENDING') && <Button className="w-full" onClick={checkout} busy={busy}>Continue to PayPal</Button>}

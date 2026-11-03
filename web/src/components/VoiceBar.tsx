@@ -53,13 +53,13 @@ export function VoiceBar({ scope = 'other' }: { scope?: 'assistant' | 'other' })
 }
 
 
-/** Shown under an automatic option that is ticked but held back by muted playback. */
-const Held = () => <span className="mt-1 inline-flex items-center gap-1 rounded-xl border border-amber/40 bg-amber-soft px-2.5 py-0.5 text-sm font-bold text-amber">Saved · won’t play while muted</span>;
+/** Shown under an automatic option that is ticked but held back because spoken replies are off. */
+const Held = () => <span className="mt-1 inline-flex items-center gap-1 rounded-xl border border-amber/40 bg-amber-soft px-2.5 py-0.5 text-sm font-bold text-amber">Saved · off for now</span>;
 
 /**
- * Voice settings, shared by the Assistant menu and Profile. Voice playback (MuteSwitch) is the master switch;
- * these are the automatic-speaking preferences. While playback is muted they stay saved and editable, and the
- * group says plainly that they won't play until playback is turned on (voiceEffect() in speech.ts is the one
+ * Voice settings, shared by the Assistant menu and Profile. Spoken replies (MuteSwitch) is the master switch;
+ * these are the automatic-speaking preferences. While spoken replies are off they stay saved and editable, and the
+ * group says plainly that they won't play until spoken replies are turned on (voiceEffect() in speech.ts is the one
  * source for that wording and for what speakNow() actually does).
  */
 export function VoiceSettings({ className = '', parts = 'all' }: { className?: string; parts?: 'all' | 'voice' | 'language' }) {
@@ -121,16 +121,47 @@ export function LanguageSetting({ className = '', bare = false }: { className?: 
   );
   return bare ? body : <div className={`flex flex-wrap gap-x-6 gap-y-2 items-center ${className}`}>{body}</div>;
 }
-/** Voice playback: the master On / Muted switch (was "Spoken replies"). */
+/** What the spoken-replies state reads as, everywhere (never "Muted"). */
+export function spokenState(s: { supported: boolean; prefs: { muted: boolean }; needsTap: boolean }): { on: boolean; label: string; detail: string } {
+  if (!s.supported) return { on: false, label: 'Spoken replies off', detail: 'This browser can’t speak aloud. Replies are shown as text.' };
+  if (s.prefs.muted) return { on: false, label: 'Spoken replies off', detail: 'SaySafe won’t speak on its own. Turn them on to hear short answers and safety warnings.' };
+  if (s.needsTap) return { on: true, label: 'Spoken replies on', detail: 'Tap to enable sound: your browser waits for a first tap before SaySafe can speak.' };
+  return { on: true, label: 'Spoken replies on', detail: 'SaySafe reads short answers and safety warnings aloud.' };
+}
+
+/**
+ * Spoken replies: the master switch for SaySafe speaking (consent). Off for every fresh visitor; once the person
+ * turns it on it is remembered on this device. A toggle button (aria-pressed) with a fixed name, plus a visible
+ * state line ("Spoken replies off / on"). Voice input (the mic) is separate and unchanged.
+ */
 export function MuteSwitch() {
   const s = useSpeech();
   const id = useId();
-  const on = !s.prefs.muted && s.supported;
+  const st = spokenState(s);
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <span className="min-w-0"><span className="block font-bold" id={`${id}-l`}>Voice playback</span><span className="block text-base text-ink-soft" id={`${id}-h`}>{!s.supported ? 'Not available in this browser.' : on && s.needsTap ? 'On. Tap to enable sound: your browser waits for a first tap before SaySafe can speak.' : on ? 'SaySafe can speak to you.' : 'Muted: SaySafe won’t speak on its own.'}</span></span>
-      <button type="button" role="switch" aria-checked={on} aria-labelledby={`${id}-l`} aria-describedby={`${id}-h`} disabled={!s.supported} onClick={() => speech.toggleMute()}
-        className={switchBtn(on)} data-testid="voice-playback">{on ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}{!s.supported ? 'Off' : on ? 'On' : 'Muted'}</button>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+      <span className="min-w-0"><span className="block font-bold" id={`${id}-l`} data-testid="spoken-state">{st.label}</span><span className="block text-base text-ink-soft" id={`${id}-h`}>{st.detail}</span></span>
+      <button type="button" aria-pressed={st.on} aria-describedby={`${id}-l ${id}-h`} disabled={!s.supported} onClick={() => speech.setPrefs({ muted: st.on })}
+        className={switchBtn(st.on)} data-testid="voice-playback">{st.on ? <Volume2 className="size-5" aria-hidden /> : <VolumeX className="size-5" aria-hidden />}Turn on spoken replies</button>
+    </div>
+  );
+}
+export const SpokenRepliesSwitch = MuteSwitch;
+
+/** The same control in the Assistant itself (always visible, one compact line), plus "Tap to enable sound". */
+export function SpokenRepliesBar() {
+  const s = useSpeech();
+  const id = useId();
+  if (!s.supported) return null;
+  const st = spokenState(s);
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-base" data-testid="spoken-replies-bar">
+      <span className="inline-flex items-center gap-2 text-ink-soft" id={`${id}-l`}>{st.on ? <Volume2 className="size-5 text-teal shrink-0" aria-hidden /> : <VolumeX className="size-5 text-teal shrink-0" aria-hidden />}<span data-testid="spoken-state-assistant">{st.label}</span></span>
+      <button type="button" aria-pressed={st.on} aria-describedby={`${id}-l`} onClick={() => speech.setPrefs({ muted: st.on })}
+        className={`inline-flex items-center min-h-11 px-3 rounded-full border-2 font-bold ${st.on ? 'bg-navy text-white border-navy' : 'bg-paper text-navy border-line hover:border-teal'}`} data-testid="spoken-replies-assistant">Turn on spoken replies</button>
+      {st.on && s.needsTap && (
+        <button type="button" onClick={() => { speech.activate(); if (s.canReplay) speech.replay(); }} className="inline-flex items-center min-h-11 px-3 rounded-full border-2 border-amber/60 bg-amber-soft text-navy font-bold" data-testid="tap-to-enable-sound">Tap to enable sound</button>
+      )}
     </div>
   );
 }

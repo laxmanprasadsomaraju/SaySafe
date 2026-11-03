@@ -4,6 +4,7 @@
  */
 import type { ProductItem } from './schemas';
 import type { ShopItem } from '../../../shared/shopping';
+import { isPaymentStatusQuestion } from '../../../shared/paymentStatus';
 
 export type Followup =
   | { kind: 'cheaper' }
@@ -35,7 +36,7 @@ export function parseFollowup(text: string, hasProducts: boolean): Followup {
   const sm = s.match(/^(?:search|find|look for)\s+(?:my\s+)?(?:payments?|purchases?|orders?|history|activity)\s+(?:for\s+)?(.{2,60})$/) ?? s.match(/^(?:search|find)\s+(?:my\s+)?(.{2,40}?)\s+(?:payment|purchase|order|receipt)s?$/);
   if (sm) return { kind: 'search', q: sm[1].replace(/[?.!]+$/, '').trim() };
   // "Did my payment go through?": the status of the purchase in this conversation (or the newest one), read from the server.
-  if (/\b(did|has|have|is)\b.{0,12}\b(my|the|that|this|it)\b.{0,14}\b(payment|purchase|order|it)?\b.{0,6}\b(go(ne)? through|work(ed)?|succeed(ed)?|complete(d)?|finish(ed)?|done|paid|been paid)\b/.test(s) && /\b(payment|purchase|order|it|through)\b/.test(s) && !/\b(john|pay [a-z]+ back)\b/.test(s) && !/\b(to|for)\s+(?!the shop|demo|it\b)[a-z]+\b.{0,3}$/.test(s.replace(/[?.!]+$/, ''))) return { kind: 'payment_status' };
+  if (isPaymentStatusQuestion(text)) return { kind: 'payment_status' };
   // "my last payment to John" is about Mary's own records (the companion), not the Demo Shop receipt.
   const toPerson = /\b(payment|paid)\s+(to|for)\s+(?!the shop|demo)[a-z]/.test(s);
   if (!toPerson && (/\b(last|latest|most recent|previous)\b.{0,20}\b(payment|purchase|order|receipt)\b/.test(s) || /^(show )?(my )?receipt\b/.test(s))) return { kind: 'last_payment' };

@@ -19,6 +19,7 @@ import { useDisplay, setDisplay, type DisplayKey } from '../lib/display';
 import { api } from '../lib/api';
 import { loadProfile, clearProfile } from '../lib/prefs';
 import { useConfig } from '../lib/insightsApi';
+import { agStudioLicenseKey } from '../lib/insightsChoice';
 import { THREAD_KEY, FAMILY_THREAD_KEY } from '../assistant/thread';
 import type { ShoppingProfile } from '../../../shared/shopping';
 
@@ -292,7 +293,7 @@ export default function Profile() {
             <li><Link className={linkRow} to="/family">Waiting for you and limits<ChevronRight className="size-5" aria-hidden /></Link></li>
             <li><Link className={linkRow} to="/family/assistant"><span className="inline-flex items-center gap-2"><MessageCircle className="size-5 text-teal" aria-hidden />Assistant</span><ChevronRight className="size-5" aria-hidden /></Link></li>
             {cfg?.insights !== false && <li><Link className={linkRow} to="/family/insights"><span className="inline-flex items-center gap-2"><BarChart3 className="size-5 text-teal" aria-hidden />Safety insights</span><ChevronRight className="size-5" aria-hidden /></Link></li>}
-            {cfg?.insightsDashboard && <li><Link className={linkRow} to="/family/insights/studio">Insights: AG Studio view<ChevronRight className="size-5" aria-hidden /></Link></li>}
+            {cfg?.insightsDashboard === 'agstudio' && agStudioLicenseKey(import.meta.env) && <li><Link className={linkRow} to="/family/insights/studio">Insights: AG Studio view<ChevronRight className="size-5" aria-hidden /></Link></li>}
             <li><Link className={linkRow} to="/home">Back to Mary (if you’re trying the demo)<ChevronRight className="size-5" aria-hidden /></Link></li>
           </ul>
         </>
