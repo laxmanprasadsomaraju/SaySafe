@@ -12,6 +12,7 @@ import Guide from './pages/Guide';
 import Discover from './pages/Discover';
 import ReturnGate from './pages/ReturnGate';
 import Family, { FamilyPair } from './pages/Family';
+import { ServerStatusBanner } from './components/ServerStatus';
 
 // Apply saved display preferences before first paint.
 if (localStorage.getItem('ss-large') === 'on') document.documentElement.classList.add('large-text');
@@ -20,6 +21,7 @@ if (localStorage.getItem('ss-contrast') === 'on') document.documentElement.class
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <ServerStatusBanner />
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/home" element={<Home />} />

@@ -41,7 +41,7 @@ export default function Shop() {
     finally { setBusy(false); }
   }, [products, quote]); // eslint-disable-line
 
-  useEffect(() => { if (loc.state?.result) applyAssistant(loc.state.result); else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))); }, []); // eslint-disable-line
+  useEffect(() => { if (loc.state?.result) applyAssistant(loc.state.result); else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))).catch((e) => setErr(e.message)); }, []); // eslint-disable-line
   const voice = useVoiceInput(ask);
 
   const choose = async (p: Product) => {
@@ -60,7 +60,7 @@ export default function Shop() {
     if (!quote) return;
     setPaying(true); setErr(null);
     try {
-      const r = await api('/api/payments', { body: { items: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: key.current } });
+      const r = await api('/api/payments', { body: { items: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: key.current }, idempotent: true });
       if (r.approveUrl) { speak('Taking you to PayPal to approve the payment.'); window.location.assign(r.approveUrl); return; }
       nav(`/order/${r.request.id}`);
     } catch (e: any) { setErr(e.message); setPaying(false); }

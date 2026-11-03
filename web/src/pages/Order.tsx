@@ -41,7 +41,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
       const token = sp.get('token');
       if (!token) { setErr('PayPal did not send back an order reference. Nothing was charged.'); load(); return; }
       setBusy(true);
-      api<PaymentRequest>(`/api/payments/${id}/confirm`, { body: { orderId: token } })
+      api<PaymentRequest>(`/api/payments/${id}/confirm`, { body: { orderId: token }, idempotent: true })
         .then((x) => { setR(x); nav(`/order/${id}`, { replace: true }); })
         .catch((e) => { setErr(e.message); load(); })
         .finally(() => setBusy(false));

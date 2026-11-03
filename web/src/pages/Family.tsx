@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Check, X, ShieldAlert, Clock, Wallet, RotateCcw } from 'lucide-react';
 import { Layout } from '../components/Layout';
@@ -43,7 +43,12 @@ export default function Family() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
-  const load = () => api<Overview>('/api/family/overview').then((x) => { setO(x); setLimit((x.policy.thresholdCents / 100).toString()); }).catch((e) => { if (e.status === 401) nav('/family/pair', { replace: true }); else setErr(e.message); });
+  const inFlight = useRef(false);
+  const load = () => {
+    if (inFlight.current) return Promise.resolve(); // polling: never stack requests while the server is waking up
+    inFlight.current = true;
+    return api<Overview>('/api/family/overview').then((x) => { setO(x); setErr((p) => (p?.startsWith('We could not reach') ? null : p)); setLimit((x.policy.thresholdCents / 100).toString()); }).catch((e) => { if (e.status === 401) nav('/family/pair', { replace: true }); else setErr(e.message); }).finally(() => { inFlight.current = false; });
+  };
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []); // eslint-disable-line
 
   const decide = async (r: PaymentRequest, decision: 'approve' | 'decline') => {

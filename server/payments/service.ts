@@ -3,7 +3,7 @@
  * -> backend verifies with PayPal and captures. Every state change is server-side, versioned and audited.
  */
 import crypto from 'node:crypto';
-import { db, audit } from '../db/index.js';
+import { db, audit, isUniqueViolation } from '../db/index.js';
 import { newId } from '../auth.js';
 import { getProduct, DEMO_MERCHANT } from '../catalogue/products.js';
 import { assertTransition, type PaymentState } from './stateMachine.js';
@@ -60,7 +60,14 @@ function load(id: string, householdId: string) {
 function transition(r: any, to: PaymentState, actor: string, extra: Record<string, unknown> = {}) {
   assertTransition(r.state, to);
   const sets = ['state=?', 'version=version+1', "updated_at=datetime('now')", ...Object.keys(extra).map((k) => `${k}=?`)];
-  const info = db.prepare(`UPDATE payment_requests SET ${sets.join(', ')} WHERE id=? AND version=? AND state=?`).run(to, ...Object.values(extra), r.id, r.version, r.state);
+  let info;
+  try {
+    info = db.prepare(`UPDATE payment_requests SET ${sets.join(', ')} WHERE id=? AND version=? AND state=?`).run(to, ...Object.values(extra), r.id, r.version, r.state);
+  } catch (e) {
+    // paypal_order_id / paypal_capture_id are UNIQUE: the same PayPal id can never be attached to two requests.
+    if (isUniqueViolation(e)) throw new PaymentError('conflict', 'This PayPal payment is already linked to another purchase.', 409);
+    throw e;
+  }
   if (info.changes !== 1) throw new PaymentError('conflict', 'This payment changed while we were working. Please refresh.', 409);
   audit(r.household_id, actor, `payment.${r.state}->${to}`, r.id, extra);
   return { ...r, ...extra, state: to, version: r.version + 1 };
@@ -114,8 +121,16 @@ export async function createRequest(householdId: string, actor: string, lines: C
   const q = priceCart(lines);
   const id = newId('pay');
   const fp = fingerprint(q);
-  db.prepare('INSERT INTO payment_requests (id, household_id, state, items_json, merchant, amount_cents, currency, fingerprint, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?)')
-    .run(id, householdId, 'DRAFT', JSON.stringify(q.lines), q.merchant, q.totalCents, q.currency, fp, idempotencyKey);
+  try {
+    db.prepare('INSERT INTO payment_requests (id, household_id, state, items_json, merchant, amount_cents, currency, fingerprint, idempotency_key) VALUES (?,?,?,?,?,?,?,?,?)')
+      .run(id, householdId, 'DRAFT', JSON.stringify(q.lines), q.merchant, q.totalCents, q.currency, fp, idempotencyKey);
+  } catch (e) {
+    // Lost a race on the same idempotency key (e.g. two instances, or a retried request): return the winner.
+    if (!isUniqueViolation(e)) throw e;
+    const winner = db.prepare('SELECT * FROM payment_requests WHERE idempotency_key=?').get(idempotencyKey) as any;
+    if (!winner || winner.household_id !== householdId) throw new PaymentError('conflict', 'Request key already used.', 409);
+    return { request: publicView(winner), approveUrl: null as string | null };
+  }
   audit(householdId, actor, 'payment.created', id, { total: q.totalCents });
   let r = load(id, householdId);
   r = transition(r, 'RISK_REVIEW', actor);
