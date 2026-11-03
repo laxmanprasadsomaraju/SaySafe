@@ -54,7 +54,7 @@ export default function Home() {
   const [err, setErr] = useState<string | null>(null);
   const loadAll = () => {
     setErr(null);
-    fetchActivity({ status: 'pending', limit: 10 }).then((r) => { setPending(r.items.filter((i) => !i.example)); setCount(r.items.filter((i) => !i.example).length); }).catch(() => {});
+    fetchActivity({ status: 'pending', limit: 10 }).then((r) => { setPending(r.items.filter((i) => !i.example)); setCount(r.items.filter((i) => !i.example).length); }).catch((e) => setErr(e.message)); // an error, never "nothing pending"
     fetchActivity({ limit: 4 }).then((r) => setRecent(r.items)).catch((e) => setErr(e.message));
   };
   useEffect(() => { if (me) loadAll(); }, [me]); // eslint-disable-line react-hooks/exhaustive-deps

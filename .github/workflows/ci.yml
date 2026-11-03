@@ -1,0 +1,38 @@
+name: CI
+
+# Free GitHub-hosted runner. No secrets are used: PayPal, Groq and Channel3 are test doubles in the test suite,
+# and the database is in-memory SQLite (vitest.config.ts). Real-sandbox checks are run by hand (docs/TEST-EVIDENCE.md).
+on:
+  push:
+    branches: [main, arch-hardening]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Type check
+        run: npm run typecheck
+      - name: Tests (mocked PayPal / AI / Channel3)
+        run: npx vitest run --reporter=default
+      - name: Production build
+        run: npm run build

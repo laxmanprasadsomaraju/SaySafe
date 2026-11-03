@@ -1,3 +1,4 @@
+import { count } from '../obs.js';
 /**
  * AI provider abstraction. Groq is primary (OpenAI-compatible API).
  * Any OpenAI-compatible endpoint (e.g. Gemini's OpenAI endpoint, OpenRouter) can be the fallback
@@ -147,8 +148,10 @@ export async function chat(messages: ChatMessage[], opts: ChatOptions = {}): Pro
       if (model.startsWith('openai/gpt-oss')) body.reasoning_effort = 'low';
       const data = await withRetry(() => postJSON(ep, '/chat/completions', body, opts.vision ? AI_TIMEOUTS.vision : AI_TIMEOUTS.text));
       const text = data?.choices?.[0]?.message?.content ?? '';
+      count('ai.calls');
       return { text, provider: ep.name, model };
-    } catch (e) {
+    } catch (e: any) {
+      count(e?.name === 'AbortError' || e?.name === 'TimeoutError' ? 'ai.timeouts' : e?.status === 429 ? 'ai.rate_limited' : 'ai.errors');
       lastErr = e;
     }
   }
@@ -182,7 +185,7 @@ export async function chatJSON<T>(schema: z.ZodType<T>, messages: ChatMessage[],
   const fix = `That JSON did not match the required format. Problems: ${p1.issues.join('; ')}. Reply with only the corrected JSON object, with every required field and no other fields.`;
   const second = await chat([...messages, { role: 'assistant', content: first.text.slice(0, 4000) }, { role: 'user', content: fix }], { ...opts, json: true });
   const p2 = parse(second.text);
-  if (!p2.ok) throw new AIInvalidOutputError([...new Set([...p1.issues, ...p2.issues])]);
+  if (!p2.ok) { count('ai.invalid_output'); throw new AIInvalidOutputError([...new Set([...p1.issues, ...p2.issues])]); }
   return { data: p2.data, provider: second.provider, model: second.model, attempts: 2 };
 }
 
@@ -209,7 +212,18 @@ export async function transcribe(audio: Buffer, mime: string, filename = 'speech
   return String(data.text ?? '').trim();
 }
 
-export async function health() {
+/** Cached for HEALTH_TTL_MS so /api/health never calls Groq on every request (uptime pingers use /api/ping). */
+export const HEALTH_TTL_MS = Number(env.AI_HEALTH_TTL_MS ?? 5 * 60_000);
+let healthCache: { at: number; value: Awaited<ReturnType<typeof liveHealth>> } | null = null;
+export async function health(now = Date.now()) {
+  if (healthCache && now - healthCache.at < HEALTH_TTL_MS) return { ...healthCache.value, cachedAt: new Date(healthCache.at).toISOString() };
+  const value = await liveHealth();
+  healthCache = { at: now, value };
+  return { ...value, cachedAt: new Date(now).toISOString() };
+}
+export function __resetHealthCache() { healthCache = null; }
+
+async function liveHealth() {
   const out: Record<string, { configured: boolean; ok?: boolean; error?: string }> = {};
   for (const ep of [PRIMARY, FALLBACK].filter(Boolean) as Endpoint[]) {
     out[ep.name] = { configured: Boolean(ep.apiKey) };
@@ -220,7 +234,7 @@ export async function health() {
       if (!res.ok) out[ep.name].error = `HTTP ${res.status}`;
     } catch (e: any) {
       out[ep.name].ok = false;
-      out[ep.name].error = e.message;
+      out[ep.name].error = e?.name === 'TimeoutError' ? 'timeout' : 'unreachable'; // never echo upstream text
     }
   }
   return out;

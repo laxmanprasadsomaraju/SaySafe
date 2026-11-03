@@ -219,15 +219,26 @@ export const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [
   ['companion_payments', 'example', 'INTEGER NOT NULL DEFAULT 0'],
   ['companion_subscriptions', 'example', 'INTEGER NOT NULL DEFAULT 0'],
   ['companion_contacts', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+  // Capture lease (epoch ms): one PayPal capture call in flight per payment request (server/payments/service.ts).
+  ['payment_requests', 'capture_lease_until', 'INTEGER'],
+  // Webhook processing status: an event is stored first, then processed; a failed/crashed processing is retried
+  // when PayPal redelivers the same event id (instead of being swallowed as a duplicate).
+  ['webhook_events', 'processed_at', 'TEXT'],
+  ['webhook_events', 'outcome', 'TEXT'],
+  ['webhook_events', 'attempts', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 export function migrateSchema(db: Db) {
+  let backfillWebhooks = false;
   for (const [table, column, ddl] of ADDED_COLUMNS) {
     const cols = (db.prepare(`PRAGMA table_info(${table})`).all() as { name?: string; NAME?: string }[]).map((c) => String(c.name ?? c.NAME ?? '').toLowerCase());
-    if (cols.includes(column)) continue;
+    if (!cols.length || cols.includes(column)) continue; // table not created here (partial schema) or already has it
     try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`); }
     catch (e) { if (!/duplicate column/i.test(String((e as Error)?.message))) throw e; }
+    if (table === 'webhook_events' && column === 'processed_at') backfillWebhooks = true;
   }
+  // Events stored before processing status existed were processed inline at the time: mark them, never re-run them.
+  if (backfillWebhooks) db.exec("UPDATE webhook_events SET processed_at=received_at, outcome='legacy' WHERE processed_at IS NULL");
 }
 
 export function initSchema(db: Db) {

@@ -27,7 +27,7 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
 
   const rows = db.prepare(
     `SELECT id, created_at, state, items_json, merchant, amount_cents, currency, paypal_order_id, paypal_capture_id,
-            captured_amount, captured_currency, idempotency_key
+            captured_amount, captured_currency, idempotency_key, example
        FROM payment_requests WHERE household_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500`,
   ).all(householdId) as any[];
 

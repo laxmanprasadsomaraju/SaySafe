@@ -35,6 +35,13 @@ export interface ActivityItem {
   sourceLabel: string;
   /** What backs it: PayPal evidence, or "Illustrative — no PayPal record" for samples. */
   evidence: string | null;
+  /**
+   * Machine-readable verification level (one per record, see docs/ARCHITECTURE.md "Evidence model"). A record the
+   * user typed is ALWAYS user_entered_unverified: it is never described as independently verified.
+   */
+  verification: 'illustrative' | 'paypal_webhook_verified' | 'paypal_capture_recorded' | 'paypal_order_only' | 'no_paypal_record' | 'user_entered_unverified' | 'not_applicable';
+  /** Authoritative external ids (PayPal Sandbox) where they exist; never for samples or typed records. */
+  externalIds: { paypalOrderId: string | null; paypalCaptureId: string | null } | null;
   approval: { status: string; decidedAt: string | null; reason: string | null } | null;
   verdict: string | null;
   sharedWithFamily?: boolean;
@@ -89,6 +96,8 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
       source: Number(r.example ?? 0) === 1 ? 'sample' : 'paypal_sandbox',
       sourceLabel: Number(r.example ?? 0) === 1 ? 'Sample data' : 'Real PayPal Sandbox transaction',
       evidence: Number(r.example ?? 0) === 1 ? 'Illustrative — no PayPal record' : r.paypal_capture_id ? (webhook ? 'PayPal capture + signed webhook verified' : 'PayPal capture recorded') : r.paypal_order_id ? 'PayPal order created, not captured' : 'No PayPal order yet',
+      verification: Number(r.example ?? 0) === 1 ? 'illustrative' : r.paypal_capture_id ? (webhook ? 'paypal_webhook_verified' : 'paypal_capture_recorded') : r.paypal_order_id ? 'paypal_order_only' : 'no_paypal_record',
+      externalIds: Number(r.example ?? 0) === 1 ? null : { paypalOrderId: r.paypal_order_id ?? null, paypalCaptureId: r.paypal_capture_id ?? null },
       approval: a ? { status: a.status === 'pending' && a.expires_at < Date.now() ? 'expired' : a.status, decidedAt: a.decided_at ? iso(a.decided_at) : null, reason: a.reason ?? null } : null,
       verdict: null, href: `/order/${r.id}`,
     };
@@ -98,7 +107,7 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
   for (const s of scans) {
     items.push({
       id: s.id, type: 'scan', at: iso(s.created_at), updatedAt: iso(s.created_at), title: String(s.summary), status: String(s.verdict), statusGroup: 'scan', section: 'scans',
-      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, source: 'scan', sourceLabel: 'Scam check', evidence: null, approval: null,
+      amountCents: null, currency: null, merchant: null, captured: false, webhookConfirmed: false, sandbox: false, example: false, source: 'scan', sourceLabel: 'Scam check', evidence: null, verification: 'not_applicable', externalIds: null, approval: null,
       verdict: String(s.verdict), sharedWithFamily: Boolean(s.shared_with_family), href: null,
     });
   }
@@ -112,7 +121,8 @@ export function listActivity(householdId: string, role: 'elder' | 'family', quer
         id: m.id, type: 'record', at: `${m.paid_on}T12:00:00Z`, updatedAt: iso(m.updated_at), title: `${m.recipient}${m.memo ? ` · ${m.memo}` : ''}`,
         status: 'RECORDED', statusGroup: 'other', section: 'purchases', amountCents: Number(m.amount_cents), currency: m.currency, merchant: m.recipient,
         captured: false, webhookConfirmed: false, sandbox: false, example: sample, source: sample ? 'sample' : 'user_entered',
-        sourceLabel: sample ? 'Sample data' : 'Recorded by you — not verified', evidence: sample ? 'Illustrative — no PayPal record' : 'Only what you typed — SaySafe can’t see your bank', approval: null, verdict: null, href: null,
+        sourceLabel: sample ? 'Sample data' : 'Recorded by you — not verified', evidence: sample ? 'Illustrative — no PayPal record' : 'Only what you typed — SaySafe can’t see your bank',
+        verification: sample ? 'illustrative' : 'user_entered_unverified', externalIds: null, approval: null, verdict: null, href: null,
       });
     }
   }

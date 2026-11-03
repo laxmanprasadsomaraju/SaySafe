@@ -79,18 +79,16 @@ Free keys: PayPal sandbox app at [developer.paypal.com](https://developer.paypal
 
 ## 8. Architecture
 
-```
-web (React + Vite + Tailwind)  ──►  server (Express, TypeScript)
-                                     ├─ ai/        Groq provider (text, vision, Whisper), output guard, optional fallback endpoint
-                                     ├─ scam/      deterministic rules, evidence-gated AI layer, trusted directory
-                                     ├─ catalogue/ Demo Shop (server prices) + Channel3 discovery
-                                     ├─ payments/  state machine, risk + policy, family approvals, capture, reconcile, refunds
-                                     ├─ paypal/    OAuth, Orders v2, Payments v2, webhook verification
-                                     ├─ insights/  Family Safety Insights model + read-only agent
-                                     └─ db/        libSQL: Turso embedded replica in production, local file in dev
-```
+One Express (TypeScript) server and one React app, Turso for persistence, PayPal Sandbox as the source of truth for
+money. **AI interprets → server rules decide → the user taps → PayPal processes → the server verifies.**
 
-Principle: **AI interprets → rules evaluate → the payer authorises at PayPal → the server verifies.** Payment states: `DRAFT → RISK_REVIEW → (BLOCKED | FAMILY_APPROVAL_PENDING → FAMILY_APPROVED) → PAYER_APPROVAL_PENDING → PAYER_APPROVED → CAPTURE_PENDING → CAPTURED (→ REFUND_PENDING → REFUNDED)`, plus `FAILED`/`CANCELLED`. Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PAYMENT-RECOVERY.md](docs/PAYMENT-RECOVERY.md).
+| Document | What it covers |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagram of the actual code, components, evidence model, double-counting rules, persistence, observability, limitations |
+| [docs/PAYMENT-LIFECYCLE.md](docs/PAYMENT-LIFECYCLE.md) | State machine (every edge tested), PayPal and family-approval sequences, failure and recovery behaviour |
+| [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md) | Trust boundaries, AI tool permission matrix, prompt-injection tests, household isolation, privacy, secrets |
+| [docs/TEST-EVIDENCE.md](docs/TEST-EVIDENCE.md) | Test matrix: mocked vs real PayPal Sandbox vs untested, dated and tied to commits |
+| [docs/PAYMENT-RECOVERY.md](docs/PAYMENT-RECOVERY.md), [docs/DATABASE.md](docs/DATABASE.md) | Recovery details, schema, backups |
 
 ## 9. PayPal APIs used (sandbox)
 
@@ -115,7 +113,7 @@ All via **Groq** (defaults in `server/ai/provider.ts`, overridable by env var):
 | `qwen/qwen3.8-27b` | Reading screenshots (vision) |
 | `whisper-large-v3-turbo` | Speech-to-text |
 
-Models return schema-validated intents and text only: no tools, no database or PayPal access. The AI can raise a scam verdict by one step with an exact quoted reason, never lower it, never call anything safe. Boundaries: [docs/AI-TOOL-BOUNDARIES.md](docs/AI-TOOL-BOUNDARIES.md). Spoken output uses the browser's speech synthesis. Product images in the Demo Shop were generated with an AI image model; AI coding assistance was used during development.
+Models return schema-validated intents and text only: no tools, no database or PayPal access. The AI can raise a scam verdict by one step with an exact quoted reason, never lower it, never call anything safe. Boundaries and the full tool matrix: [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md). Spoken output uses the browser's speech synthesis. Product images in the Demo Shop were generated with an AI image model; AI coding assistance was used during development.
 
 ## 11. Channel3
 
@@ -135,13 +133,10 @@ Production uses **Turso (free plan)** as an embedded replica through libSQL; rec
 
 ## 15. Security and approval controls
 
-- Prices always come from the server; the client and the AI cannot set them.
-- Family approval is bound to a SHA-256 fingerprint of items, prices, total, currency and merchant; single use; expires after 30 minutes; household-scoped.
-- Family approval never replaces the payer's own approval at PayPal; a family member can never pay.
-- Capture only after re-reading the order from PayPal and matching `custom_id`, amount and currency; idempotent; duplicate confirms return the same capture.
-- Webhooks are acted on only after PayPal's signature verification; duplicates ignored.
-- Helmet + strict CSP, SameSite cookies, origin checks, rate limits, zod validation, no open redirects, secrets only in environment variables.
-- SaySafe never opens links found in messages and never says "safe".
+Server-side prices, transaction-bound single-use family approvals, payer approval at PayPal, one capture in flight per
+payment, durable idempotency, verified and deduplicated webhooks, refunds only with a merchant admin token, sample data
+never actionable, per-visitor household isolation. Details and tests: [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md)
+and [docs/PAYMENT-LIFECYCLE.md](docs/PAYMENT-LIFECYCLE.md). SaySafe never opens links found in messages and never says "safe".
 
 ## 16. Accessibility
 
@@ -151,16 +146,20 @@ WCAG 2.2 AA target: large text, 48 px+ touch targets, Atkinson Hyperlegible, vis
 
 | | Status |
 |---|---|
-| English | Verified |
+| English | **The only verified language** |
 | Reply language (beta): Spanish, Polish, French, German, Portuguese | Implemented, not verified. Screens, EUR and product search stay English |
 | Chromium desktop (headless) | Automated tests, including voice with a simulated microphone |
 | iPhone 13 viewport (Playwright emulation) | Hosted e2e |
-| Real phones (iOS Safari, Android Chrome), real microphone | Not yet tested |
+| Voice: tap to talk, tap to interrupt | Verified in Chromium only (headless, simulated microphone). No hands-free interruption |
+| iOS (Safari, any iPhone browser) | **Unsupported / untested** |
+| Real phones (Android Chrome), real microphone | Not yet tested |
 | Android share target | Not tested on a device |
 
 ## 18. Automated testing
 
-376/376 vitest (mocked PayPal and AI), TypeScript clean, production build, hosted Playwright e2e 14/14 with axe 0 on 6 screens. Each result with its date, commit, command and environment, and whether it is mocked, a real browser or the real PayPal sandbox: [docs/TEST-EVIDENCE.md](docs/TEST-EVIDENCE.md).
+Vitest (mocked PayPal, AI and Channel3; in-memory SQLite), TypeScript and the production build run on every push in
+GitHub Actions (`.github/workflows/ci.yml`). Real PayPal Sandbox and hosted-browser runs are done by hand. Counts, dates,
+commits and the mocked / real-sandbox / untested split: [docs/TEST-EVIDENCE.md](docs/TEST-EVIDENCE.md).
 
 ## 19. Real sandbox payment evidence
 
@@ -173,9 +172,20 @@ On the hosted demo, 3 November 2026 (ids truncated):
 - Payments v2 capture lookup shown on the timeline.
 - Sandbox refund …3901 made through the PayPal API (the in-app admin refund is disabled on the hosted demo).
 
+## Judges: sandbox buyer login
+
+To complete a purchase yourself you need a **PayPal Sandbox personal (buyer) account**. The login is provided
+privately in the Devpost submission's testing instructions, never in this repository.
+
+- Sandbox buyer email: _provided in the Devpost testing instructions_
+- Sandbox buyer password: _provided in the Devpost testing instructions_
+
+Payments are PayPal Sandbox only; no real money moves. Without the login you can still try everything up to PayPal's
+approval page, and the sample data ("Try as Mary").
+
 ## 20. Limitations and roadmap
 
-**Limitations:** sandbox only; scam checks make mistakes (held-out set of 42: 2 false positives, 1 false negative) and nothing about the sender is independently verified; voice is tap-to-interrupt only and tested in Chromium only; non-English replies are beta; no real-person usability testing yet (scripted walkthroughs only); Android share target untested on a device; Channel3 purchases happen off SaySafe; refunds are admin-only and off on the hosted demo; Render's free plan sleeps when idle.
+**Limitations:** sandbox only; English is the only verified language; voice interruption is tap-only and verified in Chromium only; iOS is unsupported/untested; scam checks make mistakes (held-out set of 42: 2 false positives, 1 false negative) and nothing about the sender is independently verified; voice is tap-to-interrupt only and tested in Chromium only; non-English replies are beta; no real-person usability testing yet (scripted walkthroughs only); Android share target untested on a device; Channel3 purchases happen off SaySafe; refunds are admin-only and off on the hosted demo; Render's free plan sleeps when idle.
 
 **Roadmap:** finish Assistant interactive cards; real-phone and real-person testing; screen-reader testing; verified non-English replies; independent URL reputation lists.
 

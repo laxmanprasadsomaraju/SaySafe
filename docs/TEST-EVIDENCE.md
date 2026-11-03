@@ -10,6 +10,38 @@ _What was run, on which build, where, and what kind of test it is. Times are GMT
 
 Nothing below is a test on a physical phone or with a real person. Those are listed under [Not yet done](#not-yet-done).
 
+## Release-hardening test matrix (3 November 2026, branch `arch-hardening`)
+
+Code commit **`922641c`** (merged to `main`; the merge commit and the GitHub Actions run are listed in
+[§ CI](#ci-github-actions)). Local run 2026-11-03 ~15:20 GMT, Node 22.23.3, vitest 5.1, in-memory SQLite:
+**713 passed, 0 failed (40 files)**; `tsc --noEmit` 0 errors; `vite build` built. Previous baseline on `7cf3b1e`:
+485/485 (35 files).
+
+Labels: **Real sandbox** = real calls to PayPal Sandbox · **Hosted** = the deployed demo · **Mocked** = PayPal / Groq /
+Channel3 replaced by test doubles · **Untested** = not done.
+
+| Area | What is proven | Kind | Where | Date / commit |
+|---|---|---|---|---|
+| Unit | rules, matching, money, language, speech filters, John €80 classification, wording fixes | Mocked | `scam-*.test.ts`, `companion-match`, `small-fixes`, `authz-isolation-evidence` (pure §) | 3 Nov, `922641c` |
+| Contract / API | zod inputs, error bodies carry `error` + `requestId`, empty list ≠ error, `/api/ping` makes no external call, `/api/health` cached + no secrets | Mocked | `observability.test.ts`, `companion-api`, `security` | 3 Nov, `922641c` |
+| DB integration | schema migrations (added columns, partial schemas, webhook backfill), transitions committed with version + audit, restart (file closed and reopened) | Mocked (real libsql, local file / memory) | `payment-engine` (DB matrix), `db`, `demo-data`, `restart`, `payment-restart` | 3 Nov, `922641c` |
+| Payment state machine | all 169 ordered pairs, pure + database: 22 allowed edges commit, 147 forbidden edges change nothing; stale version refused; sample rows refused for every target | Mocked | `payment-engine.test.ts` | 3 Nov, `922641c` |
+| Payment failure injection | create timeout/5xx/4xx/no link; capture timeout (before/after PayPal acted), 5xx, 4xx, unknown body, PENDING, wrong amount; getOrder failure → structured error | Mocked | `payment-engine.test.ts` | 3 Nov, `922641c` |
+| Concurrency + idempotency | 10 concurrent confirms (approved and CAPTURE_PENDING) → exactly 1 PayPal capture call; callback retry + reload + finish → 1 call; restart mid-capture → lease, same `PayPal-Request-Id`, 1 capture; idempotency key reuse with another basket → 409 | Mocked (PayPal double mirrors `PayPal-Request-Id` replay) | `payment-engine.test.ts`; mutation check: removing the lease fails 2 tests | 3 Nov, `922641c` |
+| Webhooks | bad signature / verify API error → 400, not stored; verified → stored then processed; duplicate → one row; out of order (COMPLETED before capture response, DENIED after COMPLETED, second capture id); amount/order mismatch; crash during processing → 500, redelivery processed once; no payer PII stored | Mocked | `webhook-intake.test.ts`, `refund.test.ts`, `restart.test.ts` | 3 Nov, `922641c` |
+| Webhooks live | signed `PAYMENT.CAPTURE.COMPLETED` received, verified with PayPal and persisted (receipt shows webhook verified from the DB row); PayPal resend did not change state | **Real sandbox + Hosted** | §6 below | 3 Nov 01:28–01:35, `7344e59` |
+| Role + household isolation | every id of visitor A unreachable by visitor B (elder and family) for read and every mutation, before and after Reset demo, both directions; family 403 on private records; refunds need admin token | Mocked | `authz-isolation-evidence.test.ts` §2, `security.test.ts` | 3 Nov, `922641c` |
+| AI tool authorisation + prompt injection | bypass approval, change amount, unapproved payment, other household, fabricated receipt, cancel without tap, effect claims replaced, no contacts/records sent to the model, Channel3 receives no user id | Mocked model (hostile outputs) | `authz-isolation-evidence.test.ts` §1, §4; `ai-adversarial.test.ts` | 3 Nov, `922641c` |
+| Evidence / double counting | each record once per surface (Activity, Assistant search, Insights); typed records always `user_entered_unverified`; Insights sample totals separate (bug fixed) | Mocked | `authz-isolation-evidence.test.ts` §3 | 3 Nov, `922641c` |
+| Real PayPal Sandbox happy path | buyer logs in on PayPal's hosted page, approves; SaySafe captures once; duplicate confirm same capture | **Real sandbox** | §7 (local server), §6 (hosted) | 2 Nov 22:04; 3 Nov 01:25–01:57 |
+| Full Assistant → card → family approval → buyer approval → capture → receipt → Activity, on the hosted app | in progress by a separate hosted run; **not claimed here** (H5: stopped at PayPal's guest-checkout page) | Hosted + real sandbox | H5 | not complete at `922641c` |
+| Browser reload / restart recovery | hosted Render restart: data and session persisted; lost redirect recovered with reconcile + Finish, one capture | **Real sandbox + Hosted** | §6 | 3 Nov 01:39 |
+| Mobile accessibility | axe 0 violations on hosted screens at an iPhone 13 viewport (emulated); one open `label-content-name-mismatch` on product buttons (H5) | Real browser (emulated mobile) | H4, H5 | 3 Nov |
+| Real-device tests (iOS Safari, Android Chrome, microphone, two-device family approval) | — | **Untested — NOT DONE** | — | — |
+| Languages | English only verified; other reply languages beta | — | — | — |
+| Voice | tap-to-talk and tap-to-interrupt verified in headless Chromium with a simulated microphone only; **iOS unsupported/untested** | Real browser, simulated mic | §10 | 3 Nov |
+| Scam held-out v2 | 2 false positives, 1 false negative (root causes in SCAM-DETECTION.md); **not tuned on v2; no v3 set yet → open** | Live AI | §9 | 3 Nov, `9ecb41e` |
+
 ## Summary
 
 | # | Suite | Date (GMT) | Commit | Result | Kind | Environment |
@@ -122,3 +154,10 @@ Held-out set v2: 42 messages not used during calibration, run live through rules
 - Usability testing with older adults (only scripted walkthroughs so far) and screen-reader testing.
 - Non-English reply languages (beta, English only verified).
 - Hosted in-app refund (disabled until `ADMIN_TOKEN` is set).
+
+
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml` (free GitHub-hosted runner, no secrets): `npm ci` → `npm run typecheck` → `vitest run` →
+`npm run build`, on pushes to `main` and `arch-hardening` and on pull requests. Run results are recorded in the release
+report for the commit they ran on.

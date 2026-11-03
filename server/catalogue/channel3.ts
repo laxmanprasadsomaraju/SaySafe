@@ -124,7 +124,7 @@ const TTL = 10 * 60 * 1000;
 
 export async function searchChannel3(
   query: string,
-  opts: { maxPrice?: number | null; country?: string; currency?: string; limit?: number; userId?: string; fetchImpl?: typeof fetch } = {},
+  opts: { maxPrice?: number | null; country?: string; currency?: string; limit?: number; fetchImpl?: typeof fetch } = {},
 ): Promise<DiscoveryResult> {
   const key = process.env.CHANNEL3_API_KEY;
   if (!key) throw new Channel3Error('not_configured', 'Real product search is not set up on this server.');
@@ -143,7 +143,9 @@ export async function searchChannel3(
   try {
     res = await f(`${CHANNEL3_BASE}/v1/search`, {
       method: 'POST',
-      headers: { 'x-api-key': key, 'content-type': 'application/json', ...(opts.userId ? { 'x-user-id': opts.userId } : {}) },
+      // Deliberately NO x-user-id: it is optional (attribution only) and Channel3 appends it to buy URLs, which would
+      // expose an internal household id to retailers and, through this shared cache, to other visitors.
+      headers: { 'x-api-key': key, 'content-type': 'application/json' },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(12_000),
     });

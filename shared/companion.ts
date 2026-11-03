@@ -98,9 +98,30 @@ export const PaymentMatch = z.object({
 });
 export type PaymentMatchT = z.infer<typeof PaymentMatch>;
 
+/**
+ * Two records with the same payee, amount and currency, classified (server/companion/match.ts classifyRepeat):
+ *  - identical_entries: same day AND same note -> may be ONE payment typed in twice (or two; ask before deleting).
+ *  - possible_duplicate: close dates (<= DUPLICATE_WINDOW_DAYS) and the same kind of work -> ask before paying again.
+ *  - separate_payments: far apart, or clearly different work -> mentioned calmly, no warning.
+ * (The same record reached twice is never a pair: candidates are de-duplicated by id first.)
+ */
+export const REPEAT_KINDS = ['identical_entries', 'possible_duplicate', 'separate_payments'] as const;
+export const DUPLICATE_WINDOW_DAYS = 14;
+export const RepeatGroup = z.object({
+  kind: z.enum(REPEAT_KINDS),
+  ids: z.array(z.string()).length(2),
+  recipient: z.string(),
+  amountCents: z.number().int(),
+  currency: z.string(),
+  daysApart: z.number().int().min(0),
+  message: z.string(),
+});
+export type RepeatGroupT = z.infer<typeof RepeatGroup>;
+
 export const PaymentSearchResult = z.object({
   query: z.object({ q: z.string().nullable(), amountCents: z.number().int().nullable(), from: z.string().nullable(), to: z.string().nullable() }),
   matches: z.array(PaymentMatch),
+  repeats: z.array(RepeatGroup).optional(),
   /** Plain, calm uncertainty text: what this does and does not prove. */
   guidance: z.string(),
   notes: z.array(z.string()),

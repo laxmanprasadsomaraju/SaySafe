@@ -93,13 +93,23 @@ export function contactMismatchSummary(name: string, mismatch: { title: string; 
   return [lead, detail && /[.!?]$/.test(detail) ? detail : detail ? `${detail}.` : '', sentence(rest)].filter(Boolean).join(' ').slice(0, 900);
 }
 
+/**
+ * Signal titles are either clauses ("It asks you to pay…") or noun phrases ("A phone number next to an unexpected
+ * charge"). Only clauses can follow "It"; noun phrases get their own sentence (fixes "It a phone number…").
+ */
+export function asSentence(titleLower: string): string {
+  const t = titleLower.trim().replace(/[.!?]+$/, '');
+  if (/^it\s/.test(t)) return `It ${t.slice(3)}.`;
+  return `Warning sign: ${t}.`;
+}
+
 function fallbackSpoken(name: string, v: Verdict, r: RuleResult) {
   const top = r.signals.filter((s) => s.severity !== 'info').slice(0, 2).map((s) => s.title.toLowerCase());
   if (v === 'suspicious')
-    return `${name}, this message looks suspicious. ${top.length ? 'It ' + top.join(', and ').replace(/^it /, '') + '.' : ''} Please don't click any links or call any numbers in it. Would you like to open PayPal's official help page?`;
+    return `${name}, this message looks suspicious. ${top.length ? top.map(asSentence).join(' ') : ''} Please don't click any links or call any numbers in it. Would you like to open PayPal's official help page?`.replace(/\s{2,}/g, ' ');
   if (v === 'no_obvious_warning_signs')
     return `${name}, no concerning signs were found in what you shared. This isn't a guarantee it's safe. If it asks you for money or details, check in the official PayPal app yourself.`;
-  const why = top.length ? ` It ${top[0].replace(/^it /, '')}.` : '';
+  const why = top.length ? ` ${asSentence(top[0])}` : '';
   return `${name}, this needs checking.${why} Please don't use its links or call any number in it. Open the PayPal app yourself, or ask your family member.`;
 }
 

@@ -25,13 +25,15 @@ import { PRODUCTS, searchProducts, getProduct } from './catalogue/products.js';
 import { interpret, describeOptions, eur } from './ai/agent.js';
 import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from './ai/provider.js';
 import * as pay from './payments/service.js';
-import { paypalConfigured, verifyWebhook, getOrder as getPayPalOrder } from './paypal/client.js';
+import { paypalConfigured, getOrder as getPayPalOrder } from './paypal/client.js';
+import { handleWebhook, webhookStatus } from './payments/webhooks.js';
+import { correlation, count, log, metrics, startedAt } from './obs.js';
 import { SAMPLE_MESSAGES } from './scam/samples.js';
 import { reconcileForUser, sweepWithin, finishApproved } from './payments/reconcile.js';
 import { buildTimeline } from './payments/timeline.js';
-import { adminRefund, checkAdminToken, refundFromWebhook, requestRefund, ensureCaptureVerified, ADMIN_HEADER, REFUNDS_DISABLED_MESSAGE } from './payments/refund.js';
+import { adminRefund, checkAdminToken, requestRefund, ensureCaptureVerified, ADMIN_HEADER, REFUNDS_DISABLED_MESSAGE } from './payments/refund.js';
 import { reconcile as reconcilePayment } from './payments/reconcile.js';
-import { guardModelText } from './ai/outputGuard.js';
+import { guardModelText, guardAssistantReply } from './ai/outputGuard.js';
 import { buildInsights } from './insights/model.js';
 import { answerInsightsQuestion } from './insights/agent.js';
 import { insightsConfig } from './insights/config.js';
@@ -39,10 +41,11 @@ import { listActivity, ActivityQuery } from './activity.js';
 import { registerCompanion } from './companion/routes.js';
 import { answerCompanion, isCompanionAction } from './companion/assistant.js';
 import { listContacts } from './companion/store.js';
-import { demoFromWebhook } from './companion/demoMembership.js';
 import type { SavedContact } from './scam/contactMismatch.js';
 
 export const AI_RULES_ONLY = 'AI unavailable — rule checks only';
+
+const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
 
 export function createApp() {
   const app = express();
@@ -66,33 +69,16 @@ export function createApp() {
   }));
   app.use(cookieParser());
 
-  // Webhook needs the raw body for signature verification: register before json parser.
-  app.post('/api/paypal/webhook', express.raw({ type: 'application/json', limit: '200kb' }), async (req, res) => {
+  // Correlation id for every request (X-Request-Id header, error bodies, structured logs).
+  app.use(correlation);
+
+  // Webhook needs the raw body for signature verification: register before json parser. Flow: server/payments/webhooks.ts.
+  const webhookLimiter = rateLimit({ windowMs: 60_000, limit: Number(process.env.WEBHOOK_LIMIT_PER_MIN ?? 120), standardHeaders: true, legacyHeaders: false });
+  app.post('/api/paypal/webhook', webhookLimiter, express.raw({ type: 'application/json', limit: '200kb' }), wrap(async (req, res) => {
     const raw = req.body instanceof Buffer ? req.body.toString('utf8') : '';
-    let event: any;
-    try { event = JSON.parse(raw); } catch { return res.status(400).end(); }
-    let verified = false;
-    try { verified = await verifyWebhook(req.headers as any, raw); } catch { verified = false; }
-    const id = String(event?.id ?? '');
-    if (!id) return res.status(400).end();
-    if (!verified) return res.status(400).json({ error: 'unverified' }); // never act on (or store) unverified events
-    // Store only what reconciliation and the receipt timeline need: no payer name, email or address.
-    const resource = event?.resource ?? {};
-    const minimal = {
-      id, event_type: String(event.event_type ?? ''), resource_type: event.resource_type ?? null, resource_id: String(resource.id ?? ''),
-      status: resource.status ?? null, amount: resource.amount?.value ?? null, currency: resource.amount?.currency_code ?? null,
-      custom_id: resource.custom_id ?? resource.purchase_units?.[0]?.custom_id ?? null, order_id: resource.supplementary_data?.related_ids?.order_id ?? null,
-      // Refund events: the capture this refund belongs to (from the refund's `up` link).
-      capture_id: (resource.links ?? []).find((l: any) => l?.rel === 'up')?.href?.match(/\/v2\/payments\/captures\/([A-Z0-9]+)$/)?.[1] ?? null,
-      create_time: event.create_time ?? null, resource_create_time: resource.create_time ?? null,
-    };
-    const ins = db.prepare('INSERT OR IGNORE INTO webhook_events (id, event_type, resource_id, verified, payload_json) VALUES (?,?,?,1,?)').run(id, minimal.event_type, minimal.resource_id, JSON.stringify(minimal));
-    if (ins.changes === 0) return res.status(200).json({ ok: true, duplicate: true });
-    // Signed BILLING.SUBSCRIPTION.* events only ever touch the SaySafe Demo Membership row they name (id + custom_id).
-    const outcome = minimal.event_type.startsWith('BILLING.SUBSCRIPTION.') ? demoFromWebhook(event)
-      : minimal.event_type === 'PAYMENT.CAPTURE.REFUNDED' ? refundFromWebhook(event) : pay.reconcileFromWebhook(event);
-    res.json({ ok: true, outcome });
-  });
+    const out = await handleWebhook(raw, req.headers as Record<string, unknown>);
+    res.status(out.status).json(out.body);
+  }));
 
   app.use(express.json({ limit: '100kb' }));
 
@@ -131,11 +117,30 @@ export function createApp() {
   const originOf = (req: Request) => process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`;
   /** The signed-in elder's own saved contacts, for the scam check only. Never sent to the AI provider. */
   const contactsFor = (s: { householdId: string } | null): SavedContact[] => (s ? listContacts(s.householdId).map((c) => ({ name: c.name, relation: c.relation, phone: c.phone, email: c.email })) : []);
-  const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
 
   // ---------- Status ----------
+  // Cheap liveness for uptime pingers: no database, AI, PayPal or Channel3 call.
+  app.get('/api/ping', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ ok: true, time: new Date().toISOString() }); });
+  // Readiness + lightweight metrics. External AI check is cached (AI_HEALTH_TTL_MS, default 5 min). No secrets, no PII.
   app.get('/api/health', wrap(async (_req, res) => {
-    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, db: { mode: dbConfig.mode, persistent: dbConfig.mode !== 'local' }, time: new Date().toISOString() });
+    let dbOk = false;
+    try { dbOk = Boolean(db.prepare('SELECT 1 AS ok').get()); } catch { dbOk = false; }
+    const m = metrics();
+    const pick = (prefix: string) => Object.fromEntries(Object.entries(m).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => [k.slice(prefix.length), v]));
+    let webhooks: ReturnType<typeof webhookStatus> | { error: string };
+    try { webhooks = webhookStatus(); } catch { webhooks = { error: 'unavailable' }; }
+    res.set('Cache-Control', 'no-store');
+    res.status(dbOk ? 200 : 503).json({
+      ok: dbOk, startedAt,
+      db: { ok: dbOk, mode: dbConfig.mode, persistent: dbConfig.mode !== 'local' },
+      paypal: { configured: paypalConfigured(), env: 'sandbox', counters: pick('paypal.'), payments: pick('payments.') },
+      webhooks: { ...webhooks, counters: pick('webhook.') },
+      reconcile: pick('reconcile.'),
+      ai: { ...(await aiHealth()), counters: pick('ai.') },
+      channel3: { configured: channel3Configured(), counters: pick('channel3.') },
+      insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard,
+      time: new Date().toISOString(),
+    });
   }));
   app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), channel3Configured: channel3Configured(), insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, demo: true }));
 
@@ -285,7 +290,9 @@ export function createApp() {
         if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }
       }
     }
-    res.json({ intent, products, reply, replyLang, ai, discover });
+    // Free model text (chat / confirm / cancel / help…) never claims an effect: the assistant has no write tools.
+    if (ai && reply === intent.reply) reply = guardAssistantReply(reply);
+    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover });
   }));
 
   // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------
@@ -328,7 +335,10 @@ export function createApp() {
     }
     const maxPrice = overrideMax ?? parsed.budget.max;
     try {
-      const result = await searchChannel3(query, { maxPrice, userId: s?.householdId });
+      // No user id is sent to Channel3: its optional x-user-id is only for click/commission attribution and is
+      // appended to every buy URL, so it would leak an internal id to retailers (docs.trychannel3.com/api-reference/v1/search).
+      const result = await searchChannel3(query, { maxPrice });
+      count('channel3.searches');
       const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
       const byId = new Map(result.products.map((p) => [p.id, p]));
       const products = rec.rankedIds.map((id) => byId.get(id)!);
@@ -337,6 +347,7 @@ export function createApp() {
       res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
+      count(`channel3.errors.${e.code}`);
       const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
       if (e.retryAfter) res.setHeader('Retry-After', String(e.retryAfter));
       res.status(status).json({ error: `channel3_${e.code}`, products: [], message: `I couldn't get recommendations right now. ${e.message} The SaySafe Demo Shop still works.` });
@@ -545,13 +556,21 @@ export function createApp() {
   }
 
   // ---------- Errors ----------
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof z.ZodError) return res.status(400).json({ error: 'invalid_input', message: 'Some details were missing or not valid.' });
-    if (err instanceof pay.PaymentError) return res.status(err.status).json({ error: err.code, message: err.message });
-    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'too_large', message: 'That file is too large (max 4 MB).' });
-    const ref = crypto.randomBytes(4).toString('hex');
-    console.error(`[${ref}]`, err?.message ?? err, err?.stack ? `\n${String(err.stack).split("\n").slice(1, 6).join("\n")}` : "");
-    res.status(500).json({ error: 'server_error', message: 'Something went wrong on our side. Nothing was charged.', ref });
+  // Every error body carries a stable `error` code and the request's correlation id (`requestId`), so the UI can show
+  // a truthful error card with Retry instead of an empty list, and a report can be matched to the server log.
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    const requestId = (req as any).requestId as string | undefined;
+    if (err instanceof z.ZodError) return res.status(400).json({ error: 'invalid_input', message: 'Some details were missing or not valid.', requestId });
+    if (err instanceof pay.PaymentError) {
+      if (err.status >= 500) log('warn', 'api.payment_error', { code: err.code, status: err.status, path: req.path });
+      return res.status(err.status).json({ error: err.code, message: err.message, requestId });
+    }
+    if (err?.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: 'too_large', message: 'That file is too large (max 4 MB).', requestId });
+    if (err?.type === 'entity.too.large') return res.status(413).json({ error: 'too_large', message: 'That request is too large.', requestId });
+    if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid_json', message: 'That request was not valid.', requestId });
+    count('api.server_errors');
+    log('error', 'api.server_error', { path: req.path, method: req.method, message: String(err?.message ?? err).slice(0, 300), stack: err?.stack ? String(err.stack).split('\n').slice(1, 4).join(' | ') : undefined });
+    res.status(500).json({ error: 'server_error', message: 'Something went wrong on our side. Nothing was charged.', requestId, ref: requestId });
   });
   return app;
 }
