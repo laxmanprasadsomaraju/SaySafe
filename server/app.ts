@@ -47,7 +47,7 @@ import { listActivity, ActivityQuery } from './activity.js';
 import { registerCompanion } from './companion/routes.js';
 import { registerMemory, assistantHook, discoverHook } from './memory/http.js';
 import { effectiveProfile, personalisedQuery, personalisationLine } from './memory/personalise.js';
-import { clearAll as clearMemory } from './memory/store.js';
+import { clearAll as clearMemory, seedSampleMemory, wantsShortReplies } from './memory/store.js';
 import { answerCompanion, isCompanionAction } from './companion/assistant.js';
 import { listContacts } from './companion/store.js';
 import type { SavedContact } from './scam/contactMismatch.js';
@@ -168,13 +168,19 @@ export function createApp() {
     // Each visitor's household gets its own labelled copy of the sample set (stored in the database, never shared).
     // DEMO_SEED=off only in the unit tests that need an empty household (vitest.config.ts); always on in the app.
     const seeded = process.env.DEMO_SEED === 'off' ? null : seedDemoHousehold(householdId, elderId);
+    // Two labelled sample preferences ("Prefers black (sample)", "Budget up to €150 (sample)") so memory is visible; removable.
+    if (seeded) seedSampleMemory(householdId, elderId);
     res.json({ ok: true, householdId: householdId.slice(0, 6), seeded });
   });
   // "Reset Mary's demo": replaces this household's SAMPLE rows only. Real PayPal Sandbox payments and records you typed are kept.
   app.post('/api/demo/reset', requireRole('elder'), (req, res) => {
     const s = sessionOf(req);
-    clearMemory(s.householdId, s.userId, { turnOff: true }); // demo reset also clears what SaySafe remembered (and turns memory off)
-    res.json({ ok: true, seeded: seedDemoHousehold(s.householdId, s.userId) });
+    // Demo reset also clears what SaySafe remembered and the conversation context, and returns memory to its default (ON),
+    // with the two labelled sample preferences back.
+    clearMemory(s.householdId, s.userId, { resetSetting: true });
+    const seeded = seedDemoHousehold(s.householdId, s.userId);
+    seedSampleMemory(s.householdId, s.userId);
+    res.json({ ok: true, seeded });
   });
   app.get('/api/demo/info', requireRole('elder'), (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -415,16 +421,18 @@ export function createApp() {
       // No user id is sent to Channel3: its optional x-user-id is only for click/commission attribution and is
       // appended to every buy URL, so it would leak an internal id to retailers (docs.trychannel3.com/api-reference/v1/search).
       // Only product terms go to Channel3: at most a remembered colour is added to the query, never anything personal.
-      let result = await searchChannel3(personal ? personalisedQuery(query, personal) : query, { maxPrice });
+      let result = await searchChannel3(personal ? personalisedQuery(query, personal) : query, { maxPrice, relevanceQuery: query });
       if (personal && !result.products.length && personalisedQuery(query, personal) !== query) result = await searchChannel3(query, { maxPrice });
       count('channel3.searches');
       const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
       const byId = new Map(result.products.map((p) => [p.id, p]));
       const products = rec.rankedIds.map((id) => byId.get(id)!);
       const best = rec.picks.find((p) => p.role === 'best');
-      const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice) : null;
+      // "Keep answers short" (remembered, memory on): one-sentence explanation and a short spoken reply.
+      const short = s ? wantsShortReplies(s.householdId, s.userId) : false;
+      const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice, { short }) : null;
       const personalisation = personal ? personalisationLine(rec, products, personal) : null;
-      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), personalisation, channel3Query: result.query, reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
+      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), personalisation, channel3Query: result.query, reply: spokenRecommendation(products, rec, query, { short }), shortReplies: short, ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
       count(`channel3.errors.${e.code}`);

@@ -15,6 +15,7 @@ import { useMe } from '../lib/session';
 import { spokenScam, spokenFamily } from '../lib/spoken';
 import { AssistantHeader } from '../assistant/AssistantHeader';
 import { SpokenRepliesBar } from '../components/VoiceBar';
+import { MemoryNotice } from '../components/MemoryNotice';
 import { pickStatusPayment, NO_SANDBOX_PAYMENT_REPLY } from '../../../shared/paymentStatus';
 import { realShopSearch, NOT_IN_DEMO, NOT_IN_DEMO_SPOKEN, NOT_IN_DEMO_FOUND_SPOKEN } from '../../../shared/realShops';
 import { THREAD_KEY, markPayPalReturn, pendingPayPalReturn, clearPayPalReturn, hasBlockFor, conversationPaymentId } from '../assistant/thread';
@@ -575,6 +576,7 @@ export default function Assistant() {
       <AssistantHeader onNew={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} />
       <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />PayPal Sandbox only: no real money. You always approve at PayPal.</p>
       <SpokenRepliesBar />
+      <MemoryNotice />
       <div role="log" aria-live="polite" aria-label="Conversation" className="mt-4 flex flex-col gap-3">
         {thread.messages.map((m) => (
           <div key={m.id} data-role={m.role} className={`scroll-mt-24 ${m.role === 'user' ? 'self-end max-w-[85%]' : 'self-start w-full max-w-2xl'}`}>

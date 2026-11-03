@@ -1,5 +1,5 @@
 /**
- * Long-term memory (memory-lite): opt-in, deterministic extraction (voice and text through the same path),
+ * Long-term memory (memory-lite): ON by default (disclosed; Mary can turn it off), deterministic extraction (voice and text through the same path),
  * contradictions replace, forget, server-side product context across reloads/new sessions/days, clarification,
  * household + role isolation (family gets 404), payment status never inferred from conversation, the current
  * request overrides memory, demo reset, and the Channel3 request body carrying no personal information.
@@ -76,9 +76,11 @@ describe('extraction (deterministic, explicit statements only)', () => {
   });
 });
 
-describe('opt-in and saving', () => {
-  it('is OFF by default: offers to turn it on and saves nothing', async () => {
+describe('default ON and saving', () => {
+  it('is ON by default (disclosed); once turned off it offers to turn it on and saves nothing', async () => {
     const { a } = await elder();
+    expect((await a.get('/api/memory').expect(200)).body).toMatchObject({ enabled: true, items: [] });
+    await a.put('/api/memory/settings').set(H).send({ enabled: false }).expect(200);
     const r = await say(a, 'I prefer black').expect(200);
     expect(r.body.memory).toMatchObject({ saved: false, reason: 'memory_off', offer: true });
     expect(r.body.reply).toMatch(/memory is off/i);
@@ -333,14 +335,17 @@ describe('isolation and reset', () => {
     for (const leak of ['Zorblex', 'prefer black', '€137', 'H25MOBS7HUK', 'NN-ST64QWBPQ', 'Prefers the colour', 'I prefer', 'mem_']) expect(all).not.toContain(leak);
   });
 
-  it('demo reset clears memory and context and turns memory off', async () => {
+  it('demo reset clears memory and context and returns memory to its default (ON) with the labelled samples', async () => {
     const { a } = await elder();
     await on(a);
     await say(a, 'I prefer red');
     await discover(a, 'find me a microwave' + uniq()).expect(200);
+    await a.put('/api/memory/settings').set(H).send({ enabled: false }).expect(200);
     await a.post('/api/demo/reset').set(H).send({}).expect(200);
     const { body } = await a.get('/api/memory');
-    expect(body).toMatchObject({ enabled: false, items: [] });
+    expect(body.enabled).toBe(true);
+    expect(body.items.map((i: any) => i.label).sort()).toEqual(['Prefers the colour black (sample)', 'Usual budget: up to €150 (sample)']);
+    expect(body.items.some((i: any) => i.value === 'red')).toBe(false);
     expect(body.context.products).toEqual([]);
   });
 

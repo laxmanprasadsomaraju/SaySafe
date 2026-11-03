@@ -124,7 +124,9 @@ const TTL = 10 * 60 * 1000;
 
 export async function searchChannel3(
   query: string,
-  opts: { maxPrice?: number | null; country?: string; currency?: string; limit?: number; fetchImpl?: typeof fetch } = {},
+  // relevanceQuery: the words the person actually asked for. A remembered colour added to the query text must never make
+  // an unrelated listing "relevant" (e.g. a black microwave for "garden gnome").
+  opts: { maxPrice?: number | null; country?: string; currency?: string; limit?: number; fetchImpl?: typeof fetch; relevanceQuery?: string } = {},
 ): Promise<DiscoveryResult> {
   const key = process.env.CHANNEL3_API_KEY;
   if (!key) throw new Channel3Error('not_configured', 'Real product search is not set up on this server.');
@@ -132,7 +134,8 @@ export async function searchChannel3(
   const currency = opts.currency ?? 'EUR';
   const maxPrice = opts.maxPrice ?? null;
   const q = query.trim().slice(0, 200);
-  const cacheKey = JSON.stringify([q.toLowerCase(), maxPrice, country, currency]);
+  const rq = (opts.relevanceQuery ?? q).trim().slice(0, 200);
+  const cacheKey = JSON.stringify([q.toLowerCase(), maxPrice, country, currency, rq.toLowerCase()]);
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < TTL && !opts.fetchImpl) return hit.value;
 
@@ -158,7 +161,7 @@ export async function searchChannel3(
   if (res.status === 422 || res.status === 400) throw new Channel3Error('bad_request', 'That search could not be run.');
   if (!res.ok) throw new Channel3Error('upstream', `Product search failed (${res.status}).`);
   const raw = await res.json().catch(() => null);
-  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: relevant(normaliseProducts(raw, currency, maxPrice), q, new Map(((raw as any)?.products ?? []).filter((p: any) => typeof p?.id === 'string').map((p: any) => [p.id, String(p?.category?.title ?? '')]))).slice(0, 10) };
+  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: relevant(normaliseProducts(raw, currency, maxPrice), rq, new Map(((raw as any)?.products ?? []).filter((p: any) => typeof p?.id === 'string').map((p: any) => [p.id, String(p?.category?.title ?? '')]))).slice(0, 10) };
   if (!opts.fetchImpl) cache.set(cacheKey, { at: Date.now(), value });
   return value;
 }

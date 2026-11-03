@@ -204,7 +204,7 @@ CREATE TABLE IF NOT EXISTS demo_seeds (
 );
 -- Long-term memory (server/memory). PRIVATE to the elder who said it: every read/write is scoped by household_id AND
 -- user_id from the session; family sessions get 404. Only explicit statements are saved, and only after the user
--- turned memory on (memory_settings.enabled, default 0). Column names avoid SQL keywords (mem_key, mem_value, mem_status).
+-- memory is on (memory_settings.enabled; no row = ON by default, see MEMORY_DEFAULT_ON). Column names avoid SQL keywords (mem_key, mem_value, mem_status).
 CREATE TABLE IF NOT EXISTS user_memory (
   id TEXT PRIMARY KEY,
   household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,

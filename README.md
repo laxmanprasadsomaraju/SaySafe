@@ -89,6 +89,17 @@ SaySafe’s PayPal connection is a merchant account: it can’t read a buyer’s
 - **Channel3:** real products, prices, images and retailer links. Discovery only: those purchases happen on the retailer’s site.
 - **Insights:** the public site uses SaySafe’s own **native React dashboard**. An optional AG Studio view exists for evaluation only and is **not enabled** publicly ([docs/AG-STUDIO.md](docs/AG-STUDIO.md)).
 
+## Memory: what's on and off by default
+
+| Feature | Default | Why | Where it's explained |
+|---|---|---|---|
+| Long-term memory (“What SaySafe remembers”: shopping preferences Mary clearly states) | **On** | Saves repeating “black, under €150” every time. Disclosed by a one-time notice in the Assistant; Mary can see, change, remove, clear or turn it off, and off stops saving at once. The demo starts with two labelled **Sample** preferences. | Assistant notice · Profile › What SaySafe remembers · Help › Privacy and data · [docs/MEMORY.md](docs/MEMORY.md) |
+| Recent conversation (last 10 messages + 20 products shown, 14 days) | On, even with memory off | Only so “that one” / “the cheaper one” works after a reload; never proof of payment. “Clear conversation” deletes it. | Profile › What SaySafe remembers · Help › Privacy and data |
+| Family sharing: spending summaries / purchase history | **Off** | Alex sees only purchases above Mary’s limit unless she chooses to share more. | Profile › Family sharing · Help › What Alex can see |
+| Spoken replies (voice) | **Off** | Never plays sound without consent. | Assistant · Profile › Voice & conversation |
+
+Alex can never see memory or conversation context, and memory never pays or approves anything. Earlier messages are not shown again in a new tab (the context is used, not displayed).
+
 ## Security boundaries
 
 Server-side prices; family approval bound to the exact basket, single use, 30-minute expiry; Mary can’t approve her own request; payer approval at PayPal; one capture in flight; durable idempotency; verified, deduplicated webhooks; sample data never actionable; per-visitor household isolation; never opens links in messages.
@@ -123,7 +134,7 @@ Counts, dates and commits: [docs/TEST-EVIDENCE.md](docs/TEST-EVIDENCE.md).
 
 ## More documentation
 
-[ARCHITECTURE](docs/ARCHITECTURE.md) · [PAYMENT-LIFECYCLE](docs/PAYMENT-LIFECYCLE.md) · [SECURITY-BOUNDARIES](docs/SECURITY-BOUNDARIES.md) · [TEST-EVIDENCE](docs/TEST-EVIDENCE.md) · [MANUAL-ACCEPTANCE](docs/MANUAL-ACCEPTANCE.md) · [PRODUCT-OVERVIEW](docs/PRODUCT-OVERVIEW.md) · [DEMO-DATA](docs/DEMO-DATA.md) · [SCAM-DETECTION](docs/SCAM-DETECTION.md) · [VOICE](docs/VOICE.md) · [DATABASE](docs/DATABASE.md) · [UI-QUALITY](docs/UI-QUALITY.md) · [DOCS-SITE](docs/DOCS-SITE.md)
+[ARCHITECTURE](docs/ARCHITECTURE.md) · [PAYMENT-LIFECYCLE](docs/PAYMENT-LIFECYCLE.md) · [SECURITY-BOUNDARIES](docs/SECURITY-BOUNDARIES.md) · [TEST-EVIDENCE](docs/TEST-EVIDENCE.md) · [MANUAL-ACCEPTANCE](docs/MANUAL-ACCEPTANCE.md) · [PRODUCT-OVERVIEW](docs/PRODUCT-OVERVIEW.md) · [DEMO-DATA](docs/DEMO-DATA.md) · [SCAM-DETECTION](docs/SCAM-DETECTION.md) · [VOICE](docs/VOICE.md) · [DATABASE](docs/DATABASE.md) · [UI-QUALITY](docs/UI-QUALITY.md) · [DOCS-SITE](docs/DOCS-SITE.md) · [MEMORY](docs/MEMORY.md)
 
 ## Licence
 

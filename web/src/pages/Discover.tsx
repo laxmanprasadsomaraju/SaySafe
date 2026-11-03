@@ -15,7 +15,7 @@ import {
 
 interface Result {
   source: 'channel3'; query: string; searchQuery: string; maxPrice: number | null; currency: string; fetchedAt: string;
-  products: ShopItem[]; recommendation: Recommendation; explanation: string | null; profileApplied: boolean; reply: string;
+  products: ShopItem[]; recommendation: Recommendation; explanation: string | null; profileApplied: boolean; reply: string; personalisation?: { line: string } | null;
 }
 
 const money = (n: number, c: string) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: c }).format(n);
@@ -147,7 +147,7 @@ export default function Discover() {
           <Caption text={caption} />
           <p className="text-base text-ink-soft flex flex-wrap items-center gap-x-3">
             <SlidersHorizontal className="size-5" aria-hidden />
-            {profileIsEmpty(profile) ? 'No shopping preferences saved.' : 'Using your shopping preferences.'}
+            {res?.personalisation?.line ? 'Using what SaySafe remembers (Profile).' : profileIsEmpty(profile) ? 'No shopping preferences saved.' : 'Using your shopping preferences.'}
             <Link to="/preferences" className="font-bold text-teal underline underline-offset-4 min-h-11 inline-flex items-center">My preferences</Link>
             {voiceState.prefs.readAll && <span className="font-bold text-amber">Read entire results is on</span>}
           </p>

@@ -313,11 +313,23 @@ export function specsAnswer(items: ShopItem[], names: string[]): string {
 // ---------- Spoken text (short, built separately from the screen) ----------
 export const shortTitle = (t: string) => { const w = t.replace(/\s*[,|(].*$/, '').split(/\s+/); return w.length > 8 ? `${w.slice(0, 8).join(' ')}` : w.join(' '); };
 
-export function spokenRecommendation(items: ShopItem[], rec: Recommendation, query: string): string {
+/**
+ * "Keep answers short": keep only the first `maxSentences` whole sentences (never cuts mid-sentence, so a price or a
+ * name is never chopped). Deterministic; used for the Assistant's reply text and the AI explanation.
+ */
+export function shortenText(text: string, maxSentences = 1): string {
+  const t = String(text ?? '').replace(/\s+/g, ' ').trim();
+  const parts = t.split(/(?<=[.!?])\s+(?=[A-Z“"€0-9])/);
+  return parts.length <= maxSentences ? t : parts.slice(0, maxSentences).join(' ');
+}
+
+export function spokenRecommendation(items: ShopItem[], rec: Recommendation, query: string, opts: { short?: boolean } = {}): string {
   const best = rec.picks.find((p) => p.role === 'best');
-  if (!best) return `I couldn't find ${query || 'that'} in listings for Ireland within that budget. Try other words or a higher price.`;
+  if (!best) return opts.short ? `I couldn't find ${query || 'that'} within that budget.` : `I couldn't find ${query || 'that'} in listings for Ireland within that budget. Try other words or a higher price.`;
   const p = items.find((x) => x.id === best.id)!;
   const o = p.offers[0];
+  // Short: the pick, its price and shop, and where you'd buy it. No reasons, no follow-up question.
+  if (opts.short) return `My best match is the ${shortTitle(p.title)}, ${money(o.price, o.currency)} at ${o.retailer}. You'd buy it on the shop's own website.`;
   const why = best.reasons.filter((r) => !r.startsWith('€')).slice(0, 2);
   const budget = best.reasons.find((r) => r.includes('budget'));
   const clause = (r: string) => (/^(listed|the lowest)/.test(r) ? `it's ${r}` : /^matches/.test(r) ? `it ${r}` : r);

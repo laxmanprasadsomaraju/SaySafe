@@ -18,8 +18,9 @@ import { routeCompanion } from '../companion/router.js';
 import * as store from './store.js';
 import { extractMemory, type MemoryFact } from './extract.js';
 import { isProductReference, resolveProductRef, referencedNoun } from './context.js';
+import { shortenText } from '../../shared/shopping.js';
 
-export const WHY_PERSONALISED = 'When memory is on, SaySafe remembers only what you clearly tell it about shopping — like a colour, a brand you like or avoid, or your usual budget — so search results suit you. It never remembers health, money you owe, other people, or contact details. Your family can’t see it. It never pays or approves anything. You can change, remove or clear it here at any time.';
+export const WHY_PERSONALISED = 'Memory is on unless you turn it off. SaySafe remembers only what you clearly tell it about shopping — like a colour, a brand you like or avoid, or your usual budget — so search results suit you. It never remembers health, money you owe, other people, or contact details. Your family can’t see it. It never pays or approves anything. You can change, remove or clear it here at any time, or turn it off.';
 const PROFILE_PATH = 'Profile → What SaySafe remembers';
 
 const dateIE = (iso: string) => new Date(iso).toLocaleDateString('en-IE', { day: 'numeric', month: 'long', timeZone: 'Europe/Dublin' });
@@ -156,6 +157,14 @@ export function assistantHook(req: Request, res: Response, next: NextFunction) {
     res.json = (body: any) => {
       // A pasted message going to a scam check is never kept as conversation.
       if (body?.intent?.action === 'check_message') return json0(body);
+      // "Keep answers short" (remembered, memory on): plain conversational replies keep their first two sentences.
+      // Never applied to cards, payments, scam checks or anything with a block, so no safety wording is cut.
+      try {
+        if (body?.intent?.action === 'chat' && !body.companion && typeof body.reply === 'string' && store.wantsShortReplies(hh, uid)) {
+          const short = shortenText(body.reply, 2);
+          if (short !== body.reply) { body = { ...body, reply: short, shortened: true }; if (body.intent) body.intent = { ...body.intent, reply: short }; }
+        }
+      } catch { /* best effort */ }
       if (Array.isArray(body?.products) && body.products.length) {
         try { store.recordProducts(hh, uid, body.products.slice(0, 5).map((p: any) => ({ productId: `demo:${p.id}`, title: p.name, price: p.priceCents / 100, currency: p.currency, retailer: p.merchant, item: itemFromDemo(p) })), 'demo', body.intent?.query ?? said.slice(0, 200)); } catch { /* context is best effort */ }
       }
@@ -194,6 +203,7 @@ export function registerMemory(app: Express) {
   const idOf = (req: Request) => z.string().regex(/^mem_[A-Za-z0-9_-]{6,40}$/).parse(req.params.id);
   const snapshot = (s: Session) => ({
     enabled: store.isEnabled(s.householdId, s.userId),
+    defaultOn: store.MEMORY_DEFAULT_ON,
     items: store.listMemory(s.householdId, s.userId),
     context: {
       turns: store.recentTurns(s.householdId, s.userId).length,
@@ -222,8 +232,10 @@ export function registerMemory(app: Express) {
     res.json({ ok: true });
   });
   app.delete(base, (req, res) => {
-    z.object({ confirm: z.literal(true) }).parse(req.body ?? {});
+    // scope 'context' = Profile → "Clear conversation": only the short conversation context; remembered preferences stay.
+    const { scope } = z.object({ confirm: z.literal(true), scope: z.enum(['all', 'context']).optional() }).parse(req.body ?? {});
     const s = ses(req);
+    if (scope === 'context') return res.json({ ok: true, deleted: store.clearContext(s.householdId, s.userId) });
     res.json({ ok: true, deleted: store.clearAll(s.householdId, s.userId) });
   });
 }

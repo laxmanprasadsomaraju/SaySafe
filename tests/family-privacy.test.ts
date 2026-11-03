@@ -157,6 +157,45 @@ describe('spending approval: Alex reviews only what is routed to him, end to end
   });
 });
 
+describe('memory ON by default does not widen what Alex can reach', () => {
+  it('with long-term memory ON (default) and samples seeded, Alex cannot read under-limit purchases, memory, conversation context, or change the limit', async () => {
+    const { m, f, hh } = await household();
+    const mem = (await m.get('/api/memory').expect(200)).body;
+    expect(mem.enabled).toBe(true); // the default, never switched on by hand here
+    expect(mem.items.length).toBeGreaterThan(0); // labelled sample preferences
+    await m.post('/api/assistant').set(H).send({ text: "I don't like Zorblex" }).expect(200);
+    await m.post('/api/assistant').set(H).send({ text: 'keep my budget below €137' }).expect(200);
+    await m.post('/api/assistant').set(H).send({ text: 'show me a kettle' }).expect(200); // conversation context (turns + Demo Shop products)
+    const ctx = (await m.get('/api/memory')).body.context;
+    expect(ctx.turns).toBeGreaterThan(0);
+    const k = await buy(m, 'kettle-classic'); // €32: under the limit, private
+    const fromAlex = modelPrompts.length; // only prompts made for Alex's requests from here on
+    // Under-limit purchase: not readable by id, not listed anywhere Alex can see.
+    await f.get(`/api/family/requests/${k.request.id}`).expect(404);
+    const all = await familyEverything(f);
+    expect(all).not.toContain(k.request.id);
+    // Memory and conversation context: 404 on every memory route, nothing in any family surface or the AI payload.
+    await f.get('/api/memory').expect(404);
+    await f.put('/api/memory/settings').set(H).send({ enabled: false }).expect(404);
+    await f.delete('/api/memory').set(H).send({ confirm: true, scope: 'context' }).expect(404);
+    await f.patch(`/api/memory/${mem.items[0].id}`).set(H).send({ value: 'green' }).expect(404);
+    await f.delete(`/api/memory/${mem.items[0].id}`).expect(404);
+    const asked = await f.post('/api/assistant').set(H).send({ text: 'show me that kettle again' });
+    await f.post('/api/family/insights/agent').set(H).send({ question: 'What does Mary like and what did she look at?' });
+    const leaks = [all, blobOf(asked.body), modelPrompts.slice(fromAlex).join('\n')].join('\n');
+    for (const leak of ['Zorblex', '€137', 'black (sample)', 'up to €150', 'Prefers the colour', 'Usual budget', 'mem_', 'show me a kettle']) expect(leaks).not.toContain(leak);
+    // Mary's memory is untouched by Alex's attempts.
+    expect((await m.get('/api/memory')).body).toMatchObject({ enabled: true });
+    expect((await m.get('/api/memory')).body.items.map((i: any) => i.label).sort()).toEqual(['Doesn\'t want Zorblex', 'Prefers the colour black (sample)', 'Usual budget: up to €137']); // her budget replaced the sample one
+    // Limit: Alex -> 403, unchanged.
+    const before = (db.prepare('SELECT approval_threshold_cents c FROM spending_policies WHERE household_id=?').get(hh) as any).c;
+    expect((await f.post('/api/family/policy').set(H).send({ thresholdEur: 500 })).status).toBe(403);
+    expect((await f.post('/api/policy').set(H).send({ thresholdEur: 500 })).status).toBe(401);
+    expect((db.prepare('SELECT approval_threshold_cents c FROM spending_policies WHERE household_id=?').get(hh) as any).c).toBe(before);
+    expect(getSharing(hh)).toMatchObject({ shareSummaries: false, shareHistory: false });
+  });
+});
+
 describe('only Mary changes her limit', () => {
   it('Alex → 403 and nothing changes; Mary can (elder endpoint)', async () => {
     const { m, f, hh } = await household();

@@ -311,7 +311,8 @@ export default function Profile() {
   useEffect(() => { if (role === 'elder') loadCircle(); }, [role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading || !role) return <Layout><p>Loading…</p></Layout>;
-  const clearConversation = () => { try { sessionStorage.removeItem(family ? FAMILY_THREAD_KEY : THREAD_KEY); } catch { /* */ } setCleared(true); };
+  // Clears this device's conversation and, for Mary, the short conversation context SaySafe keeps (remembered preferences stay).
+  const clearConversation = () => { try { sessionStorage.removeItem(family ? FAMILY_THREAD_KEY : THREAD_KEY); } catch { /* */ } if (!family) api('/api/memory', { method: 'DELETE', body: { confirm: true, scope: 'context' } }).catch(() => {}); setCleared(true); };
 
   const voice = !family && (
     <Section key="voice" id="voice-h" icon={Volume2} title="Voice & conversation" where={<Where />}>
@@ -373,7 +374,7 @@ export default function Profile() {
     </Section>
   );
 
-  // "What SaySafe remembers": elder only, off by default, saved to the account (never visible to family).
+  // "What SaySafe remembers": elder only, ON by default (clearly disclosed), saved to the account (never visible to family).
   const memory = !family && (
     <Section key="memory" id="memory-h" icon={Brain} title="What SaySafe remembers" where={<Where account />}>
       <MemoryBody />
