@@ -13,6 +13,7 @@
  */
 
 import { LANGS, normaliseLang, type LangCode } from '../../../shared/lang';
+import { speakableMoney } from '../../../shared/money';
 import { VAD, MIC_MESSAGES, pickMime, browserMeter, type MicEnv } from './mic';
 import { dropTranscript } from '../../../shared/voice';
 
@@ -348,7 +349,9 @@ export class SpeechController {
     const synth = this.env.synth, U = this.env.Utterance;
     if (!synth || !U) return;
     if (this.index >= this.queue.length) { this.speaking = false; this.queue = []; this.index = 0; this.segTotal = 0; this.emit(); return; }
-    const u = new U(this.queue[this.index].text);
+    // Money is spoken as words ("49 euro 99 cent"); the caption keeps "€49.99".
+    const said = this.queue[this.index].text;
+    const u = new U(this.textLang === 'en' ? speakableMoney(said) : said);
     u.rate = this.prefs.rate;
     u.lang = LANGS[this.textLang].bcp47;
     const v = this.voiceFor(this.textLang); if (v) u.voice = v;

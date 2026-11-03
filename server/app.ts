@@ -29,6 +29,7 @@ import { guardModelText } from './ai/outputGuard.js';
 import { buildInsights } from './insights/model.js';
 import { answerInsightsQuestion } from './insights/agent.js';
 import { insightsConfig } from './insights/config.js';
+import { listActivity, ActivityQuery } from './activity.js';
 
 export const AI_RULES_ONLY = 'AI unavailable — rule checks only';
 
@@ -367,6 +368,33 @@ export function createApp() {
   app.post('/api/payments/:id/cancel', requireRole('elder'), (req, res) => {
     const s = sessionOf(req);
     res.json(pay.cancelRequest(s.householdId, s.userId, String(req.params.id)));
+  });
+
+  // ---------- My Activity (elder or paired family; household always from the session) ----------
+  app.get('/api/activity', (req, res, next) => {
+    // Prefer the role the page asks for; both roles only ever see their own household.
+    const want = req.query.as === 'family' ? 'family' : 'elder';
+    const s = readSession(req, want) ?? readSession(req, want === 'elder' ? 'family' : 'elder');
+    if (!s) return res.status(401).json({ error: 'not_signed_in' });
+    (req as any).session = s;
+    next();
+  }, wrap(async (req, res) => {
+    const s = sessionOf(req);
+    const parsed = ActivityQuery.safeParse(req.query);
+    if (!parsed.success) return res.status(400).json({ error: 'invalid_input', message: 'Some filters were not valid.' });
+    await sweepWithin(s.householdId); // same lazy, rate-limited reconcile as GET /api/payments
+    res.set('Cache-Control', 'no-store');
+    res.json({ role: s.role, ...listActivity(s.householdId, s.role, parsed.data) });
+  }));
+  // Family circle status for the elder's Profile (names only; no family data beyond that).
+  app.get('/api/family/status', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const links = db.prepare("SELECT u.name, f.status, f.pairing_expires_at FROM family_links f JOIN users u ON u.id=f.family_id WHERE f.household_id=?").all(s.householdId) as any[];
+    res.json({
+      active: links.filter((l) => l.status === 'active').map((l) => ({ name: l.name })),
+      pendingInvites: links.filter((l) => l.status === 'pending' && l.pairing_expires_at > Date.now()).length,
+      policy: pay.getPolicy(s.householdId),
+    });
   });
 
   // ---------- Family ----------
