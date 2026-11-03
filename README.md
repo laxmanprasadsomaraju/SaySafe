@@ -81,6 +81,12 @@ web (React + Vite + Tailwind)  ──►  server (Express, TypeScript)
 
 Payment states: `DRAFT → RISK_REVIEW → (BLOCKED | FAMILY_APPROVAL_PENDING → FAMILY_APPROVED | ) → PAYER_APPROVAL_PENDING → PAYER_APPROVED → CAPTURE_PENDING → CAPTURED (→ REFUNDED)`, plus `FAILED` and `CANCELLED`. Illegal transitions throw; every change is optimistic-locked and written to an audit log. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## Family Safety Insights (native dashboard, optional AG Studio view)
+
+Family members get a read-only insights dashboard at **`/family/insights`**: KPI tiles, an activity chart (inline SVG with a table alternative), an accessible sortable, searchable ledger, shared scam reviews, pending approvals linked to the Family page, and a read-only "ask about this activity" box. It is built in plain SaySafe React and has no third-party dashboard dependency. One endpoint, `GET /api/family/insights` (family session only, own household only), feeds it. Totals count only `CAPTURED` payments, and seeded rows are labelled "Example data".
+
+An optional **AG Studio** view of the same data (`/family/insights/studio`) is selected only by explicit config: `INSIGHTS_DASHBOARD=agstudio` on the server **and** `VITE_AG_STUDIO_LICENSE` at build time. Otherwise the route redirects to the native dashboard, and a failed or slow AG chunk falls back to native. The public deployment stays native (`INSIGHTS_DASHBOARD=native`, the default), because the AG Studio trial licence is evaluation-only. See [docs/AG-STUDIO.md](docs/AG-STUDIO.md).
+
 ## Run it locally
 
 ```bash

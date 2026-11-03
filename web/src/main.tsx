@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
@@ -15,6 +15,11 @@ import Guide from './pages/Guide';
 import Discover from './pages/Discover';
 import ReturnGate from './pages/ReturnGate';
 import Family, { FamilyPair } from './pages/Family';
+
+// Insights pages are lazy so the main bundle does not grow. The native page never imports AG packages.
+const NativeInsights = lazy(() => import('./pages/insights/NativeInsights'));
+const StudioRoute = lazy(() => import('./pages/insights/StudioRoute'));
+const insightsFallback = <p className="p-8">Loading…</p>;
 
 // Apply saved display preferences before first paint.
 if (localStorage.getItem('ss-large') === 'on') document.documentElement.classList.add('large-text');
@@ -46,6 +51,8 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/preferences" element={<Preferences />} />
         <Route path="/family" element={<Family />} />
         <Route path="/family/pair" element={<FamilyPair />} />
+        <Route path="/family/insights" element={<Suspense fallback={insightsFallback}><NativeInsights /></Suspense>} />
+        <Route path="/family/insights/studio" element={<Suspense fallback={insightsFallback}><StudioRoute /></Suspense>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
