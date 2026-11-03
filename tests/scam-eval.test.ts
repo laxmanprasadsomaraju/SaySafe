@@ -49,3 +49,20 @@ describe('scam eval (offline deterministic layer)', async () => {
     }
   });
 });
+
+describe('held-out set v2 is frozen', () => {
+  it('heldout-v2.json still has the sha256 recorded in docs/SCAM-DETECTION.md (do not tune on it)', async () => {
+    const { createHash } = await import('node:crypto');
+    const buf = fs.readFileSync(path.join(__dirname, 'fixtures/scam-eval/heldout-v2.json'));
+    const hash = createHash('sha256').update(buf).digest('hex');
+    expect(hash).toBe('ebbafcdaa9819f42c865e7e7a58779b8876fd25ab12a7fe072a92b73d4e3d48a');
+    expect(fs.readFileSync(path.join(__dirname, '../docs/SCAM-DETECTION.md'), 'utf8')).toContain(hash);
+  });
+  it('offline run is reported, not asserted (results are in heldout-v2-offline.json)', async () => {
+    const v2 = load('heldout-v2.json');
+    const rows: any[] = [];
+    for (const c of v2) { const r = await scanMessage(c.text); rows.push({ id: c.id, category: c.category, truth: c.truth, expected: c.expected, actual: r.verdict }); }
+    console.log(formatSummary(summarise(rows), 'Offline deterministic layer — heldout-v2 (frozen, report only)'));
+    expect(rows.length).toBe(42);
+  });
+});

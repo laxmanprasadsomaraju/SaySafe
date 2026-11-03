@@ -33,7 +33,7 @@ export const TRUSTED_EMAILS: TrustedResource[] = [
     value: 'phishing@paypal.com',
     label: 'PayPal phishing report address (forward suspicious emails and texts here)',
     sourceUrl: 'https://www.paypal.com/ie/security/report-suspicious-messages',
-    verifiedOn: '2026-11-02',
+    verifiedOn: '2026-11-03',
     note: 'This is a REPORTING address. PayPal never asks you to pay or share codes by email.',
   },
 ];
@@ -45,7 +45,7 @@ export const TRUSTED_HELP_PAGES: TrustedResource[] = [
     value: 'https://www.paypal.com/ie/security/report-suspicious-messages',
     label: 'Report a suspicious message to PayPal',
     sourceUrl: 'https://www.paypal.com/ie/security/report-suspicious-messages',
-    verifiedOn: '2026-11-02',
+    verifiedOn: '2026-11-03',
   },
   {
     id: 'help-contact',
@@ -53,7 +53,7 @@ export const TRUSTED_HELP_PAGES: TrustedResource[] = [
     value: 'https://www.paypal.com/ie/cshelp/contact-us',
     label: 'Contact PayPal (Ireland help centre)',
     sourceUrl: 'https://www.paypal.com/ie/cshelp/contact-us',
-    verifiedOn: '2026-11-02',
+    verifiedOn: '2026-11-03',
   },
   {
     id: 'help-resolution',
@@ -70,7 +70,7 @@ export const TRUSTED_HELP_PAGES: TrustedResource[] = [
     value: 'https://www.paypal.com/ie/security/learn-about-fake-messages',
     label: 'How to spot fake PayPal messages',
     sourceUrl: 'https://www.paypal.com/ie/security/learn-about-fake-messages',
-    verifiedOn: '2026-11-02',
+    verifiedOn: '2026-11-03',
   },
 ];
 

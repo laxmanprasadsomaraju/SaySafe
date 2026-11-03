@@ -19,7 +19,7 @@
 Full detail, limits and eval results: [SCAM-DETECTION.md](SCAM-DETECTION.md).
 1. Rules engine extracts links/emails/phones and scores signals (high/medium/info, grouped in risk families). Three verdicts only: `suspicious`, `needs_checking`, `no_obvious_warning_signs` (always with a disclosure). Legacy codes are mapped by `normalizeVerdict`.
 2. Threat-intel adapters (local list, optional Google Web Risk, optional PhishTank) receive only the URL string. We never fetch the URL.
-3. Groq explains in plain words. Its verdict is merged with `mergeWithAi`, which can only escalate (never lower, never grant the all-clear). Spoken text always matches the final verdict.
+3. Groq may add evidence: each reason needs a fixed category and an exact quote from the message (`server/scam/aiEvidence.ts`). Only validated reasons can raise the verdict, by one step (`raiseWithEvidence`): never lower, never grant the all-clear. Invalid output after one retry -> rules only, labelled. Spoken text always matches the final verdict.
 4. Screenshots: magic-byte checked, 4 MB max, processed in memory, never stored; the vision model transcribes and flags unclear characters, which rules out "No obvious warning signs".
 
 ## Data

@@ -1,0 +1,418 @@
+{
+  "ranAt": "2026-11-03T01:37:08.989Z",
+  "rows": [
+    {
+      "id": "v2-legit-receipt-cafe",
+      "category": "legit_paypal_receipt",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-refund-shop",
+      "category": "legit_paypal_receipt",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-grandson-thanks",
+      "category": "legit_family",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-gp-reminder",
+      "category": "legit_reminder",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-library-due",
+      "category": "legit_reminder",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-bank-statement",
+      "category": "legit_bank_reminder",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-parcel-delivered",
+      "category": "legit_delivery",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-friend-sent-money",
+      "category": "legit_friend_bill_split",
+      "truth": "legitimate",
+      "expected": "no_obvious_warning_signs",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-electric-bill-due-date",
+      "category": "legit_bill",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-legit-bill-due-today",
+      "category": "legit_bill",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "payment_demand,payment_deadline"
+    },
+    {
+      "id": "v2-legit-electrician-invoice",
+      "category": "legit_invoice_with_phone",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "phone_unverified,payment_demand"
+    },
+    {
+      "id": "v2-legit-club-subs",
+      "category": "legit_money_request",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "payment_demand"
+    },
+    {
+      "id": "v2-legit-paypal-signin-code",
+      "category": "legit_code_message",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "urgency"
+    },
+    {
+      "id": "v2-legit-new-device-notice",
+      "category": "legit_security_notice",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "invoice_scam"
+    },
+    {
+      "id": "v2-scam-limited-lookalike",
+      "category": "convincing_lookalike",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "url_brand_lookalike"
+    },
+    {
+      "id": "v2-scam-subdomain-refund",
+      "category": "convincing_lookalike",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "url_brand_in_subdomain"
+    },
+    {
+      "id": "v2-scam-hi-mam-rent",
+      "category": "convincing_family_emergency",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "payment_demand,family_impersonation,payment_deadline"
+    },
+    {
+      "id": "v2-scam-garda-fine",
+      "category": "convincing_authority",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "urgency"
+    },
+    {
+      "id": "v2-scam-revenue-text",
+      "category": "convincing_fake_refund",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "sensitive_request,overpayment_story"
+    },
+    {
+      "id": "v2-scam-bank-callback",
+      "category": "convincing_bank_impersonation",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "urgency,call_us,invoice_scam"
+    },
+    {
+      "id": "v2-scam-otp-courier",
+      "category": "convincing_otp_request",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "sensitive_request,payment_demand"
+    },
+    {
+      "id": "v2-scam-remote-broadband",
+      "category": "convincing_remote_access",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "remote_access"
+    },
+    {
+      "id": "v2-scam-giftcard-boss",
+      "category": "convincing_gift_card",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "secrecy,gift_card"
+    },
+    {
+      "id": "v2-scam-crypto-romance",
+      "category": "convincing_romance",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "crypto,payment_demand,romance_investment"
+    },
+    {
+      "id": "v2-scam-marketplace-courier-link",
+      "category": "convincing_marketplace",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "url_login_words,sensitive_request"
+    },
+    {
+      "id": "v2-scam-overpay-buyer",
+      "category": "convincing_overpayment",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "urgency,payment_demand"
+    },
+    {
+      "id": "v2-scam-safe-account-garda",
+      "category": "convincing_bank_impersonation",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "secrecy,safe_account,account_problem"
+    },
+    {
+      "id": "v2-scam-prize-fee",
+      "category": "obvious_scam",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "payment_demand,payment_via_link,prize"
+    },
+    {
+      "id": "v2-scam-injection-invoice",
+      "category": "prompt_injection",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "url_brand_lookalike,prompt_injection,payment_deadline"
+    },
+    {
+      "id": "v2-amb-unknown-number-hello",
+      "category": "ambiguous",
+      "truth": "scam",
+      "expected": "needs_checking",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-amb-shop-link-promo",
+      "category": "ambiguous",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-amb-landlord-new-iban",
+      "category": "ambiguous",
+      "truth": "scam",
+      "expected": "needs_checking",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-amb-friend-asks-loan",
+      "category": "ambiguous",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-amb-charity-collection",
+      "category": "ambiguous",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "paypal_user_content"
+    },
+    {
+      "id": "v2-amb-renewal-notice",
+      "category": "ambiguous",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-rw-paypal-invoice-support-phone",
+      "category": "genuine_paypal_domain_phone_invoice",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "paypal_user_content,call_us,call_to_cancel,invoice_scam,payment_demand"
+    },
+    {
+      "id": "v2-rw-paypal-request-refund-phone",
+      "category": "genuine_paypal_domain_phone_invoice",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "paypal_user_content,call_us,call_to_cancel,payment_demand"
+    },
+    {
+      "id": "v2-rw-legit-domain-unsafe-ask",
+      "category": "legit_domain_unsafe_request",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "no_obvious_warning_signs",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-rw-docs-share-phish",
+      "category": "legit_domain_unsafe_request",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": ""
+    },
+    {
+      "id": "v2-rw-whatsapp-code-friend",
+      "category": "convincing_otp_request",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "sensitive_request,payment_demand,overpayment_story"
+    },
+    {
+      "id": "v2-rw-parcel-customs-sms",
+      "category": "convincing_delivery_fee",
+      "truth": "scam",
+      "expected": "suspicious",
+      "actual": "suspicious",
+      "aiUsed": false,
+      "note": "payment_demand,payment_via_link"
+    },
+    {
+      "id": "v2-rw-paypal-real-receipt-with-phone",
+      "category": "legit_invoice_with_phone",
+      "truth": "legitimate",
+      "expected": "needs_checking",
+      "actual": "needs_checking",
+      "aiUsed": false,
+      "note": "phone_unverified"
+    }
+  ],
+  "summary": {
+    "matrix": {
+      "suspicious": {
+        "suspicious": 19,
+        "needs_checking": 1,
+        "no_obvious_warning_signs": 1
+      },
+      "needs_checking": {
+        "suspicious": 0,
+        "needs_checking": 8,
+        "no_obvious_warning_signs": 5
+      },
+      "no_obvious_warning_signs": {
+        "suspicious": 0,
+        "needs_checking": 0,
+        "no_obvious_warning_signs": 8
+      }
+    },
+    "falsePositives": [],
+    "falseNegatives": [
+      "v2-amb-unknown-number-hello",
+      "v2-amb-landlord-new-iban",
+      "v2-rw-legit-domain-unsafe-ask"
+    ],
+    "underWarn": [
+      "v2-legit-electric-bill-due-date",
+      "v2-amb-unknown-number-hello",
+      "v2-amb-landlord-new-iban",
+      "v2-amb-friend-asks-loan",
+      "v2-amb-renewal-notice",
+      "v2-rw-legit-domain-unsafe-ask",
+      "v2-rw-docs-share-phish"
+    ],
+    "overWarn": []
+  }
+}
