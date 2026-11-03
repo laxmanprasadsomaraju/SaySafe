@@ -170,6 +170,7 @@ which now fakes Subscriptions v1: create / approve / GET / cancel, and a one-sho
 
 ## Known gaps
 - Only the user's own typed records and Demo Shop payments: no bank / PayPal wallet import.
-- The PayPal 204 cancel on an ACTIVE subscription and live `BILLING.SUBSCRIPTION.*` delivery are verified only after a sandbox buyer approves a real subscription (the browser test uses the mock).
-- The scam phone extractor misses a spaced Irish national number ("087 999 1111") and a number followed directly by a full stop, so `contact_mismatch` then falls back to the "new number" wording without showing the number.
+- The PayPal 204 cancel on an ACTIVE subscription was proven by script on 3 Nov 2026 10:37 GMT (sandbox buyer approved I-BY…W7, `scripts/paypal-setup-plan.ts --cancel` → 204, GET → CANCELLED), **not** through the app UI. The in-app tap-to-cancel and live `BILLING.SUBSCRIPTION.*` delivery are still exercised only against the mock.
+- ~~The scam phone extractor missed a spaced Irish number after "new number" ("new number 087 999 1111.")~~ Fixed 3 Nov 2026 (`tests/qa-fixes.test.ts`); the offline scam-eval verdicts and signals are unchanged on all 106 cases.
+- No reminders before a charge (there is no free scheduler). No bank / PayPal wallet / statement import (statement import is planned).
 - Name matching is English-centric (no phonetic matching beyond one typo).

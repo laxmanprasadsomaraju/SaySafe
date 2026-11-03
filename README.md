@@ -27,11 +27,15 @@ Organised as **Before → During → After payment**. Every feature and its exac
 | During | SaySafe Demo Shop, exact purchase review, family spending threshold, family approve/decline with expiry, buyer approval on PayPal's sandbox page, verified single capture, lost-redirect recovery |
 | After | Receipt confirmed from PayPal's capture, payment timeline with signed-webhook evidence, searchable Activity, refund request (buyer) and merchant refund (admin-only, off on the hosted demo), order-problem guidance, Family Safety Insights |
 
-**In development:** interactive Assistant cards (purchase review, family status, receipt and refund cards inside the conversation) and a regrouped Activity/Profile.
+**Now in the hosted demo:** interactive Assistant cards (purchase review, family status, receipt and refund cards inside the conversation). **In development:** a regrouped Activity screen.
 
 ## 5. Screenshots
 
-Real captures of SaySafe (sandbox data, no personal details). More screenshots will be added in `docs/screenshots/`.
+Real captures (PayPal sandbox, fictional data; ids and emails redacted). New captures of the hosted app live in [`docs/screenshots/`](docs/screenshots/); the in-app set below is from earlier builds and is being retaken with seeded demo data.
+
+| Hosted landing (desktop) |
+|---|
+| <img src="docs/screenshots/landing-desktop-1440.webp" width="640" alt="SaySafe landing page on desktop: Pay with confidence, not doubt, with a real SaySafe scam result on a phone"> |
 
 | Scam check result | Waiting for family | Family member approves | PayPal-confirmed receipt | Shopping by voice |
 |---|---|---|---|---|

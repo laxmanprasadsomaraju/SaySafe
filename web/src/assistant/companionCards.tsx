@@ -22,7 +22,7 @@ import {
 import {
   UI_LABEL, METHOD_LABEL, ServerPaymentsList, ServerSubsList, ServerContactsList, ServerDemoStatus, ServerDemoStart, ServerCancelIntent,
   ServerCancelResult, ServerCancelHelp, helpFromCancelHelp, cancelCardFrom, cancelPhase, searchQueryString, parseAmount, money, day, todayIso,
-  telHref, mailHref, FREQ_LABEL, nextChargeText, isDemo, sourceText, EXTERNAL_DISCLAIMER,
+  telHref, mailHref, FREQ_LABEL, nextChargeText, isDemo, sourceText, EXTERNAL_DISCLAIMER, matchesCardText, MATCHES_SCOPE_NOTE,
 } from './companion';
 import { parseServer, type BlockOf, type Block } from './schemas';
 import type { BlockActions } from './blocks';
@@ -177,6 +177,7 @@ function PaymentMatchesCard({ b, act }: { b: BlockOf<'payment_matches'>; act: Bl
     catch (e) { setErr(errMsg(e)); } finally { setBusy(false); }
   };
   const who = r.query.q;
+  const shown = matchesCardText(r);
   const ask = [who ? `paying ${who}` : 'a payment', r.query.amountCents != null ? money(r.query.amountCents, 'EUR') : null].filter(Boolean).join(' · ');
   if (!elderOnly(act)) return null;
   return (
@@ -184,16 +185,16 @@ function PaymentMatchesCard({ b, act }: { b: BlockOf<'payment_matches'>; act: Bl
       <Head icon={Search} right={<Pill label={r.matches.length ? `${r.matches.length} possible match${r.matches.length === 1 ? '' : 'es'}` : 'No match found'} tone={r.matches.length ? 'pending' : 'muted'} />}>Your records: {ask}</Head>
       <div className="mt-3 rounded-2xl border-2 border-amber bg-amber-soft p-3">
         <p className="font-bold flex items-center gap-2"><AlertTriangle className="size-5 shrink-0 text-amber" aria-hidden />{UI_LABEL.dontPayAgain}{who ? ` with ${who}` : ''}.</p>
-        <p className="mt-1 break-words">{r.guidance}</p>
+        {shown.guidance && <p className="mt-1 break-words">{shown.guidance}</p>}
       </div>
       {r.matches.length > 0 && (
         <ul className="mt-2 divide-y divide-line" aria-label="Possible matches">
           {r.matches.map((m) => <MatchRow key={m.id} m={m} busy={busy} onEdit={() => void edit(m.id)} onDelete={() => void del(m.id)} />)}
         </ul>
       )}
-      {r.notes.length > 0 && (
+      {shown.notes.length > 0 && (
         <ul className="mt-2 space-y-1 text-base text-ink-soft" aria-label="Notes">
-          {r.notes.map((n) => <li key={n} className="flex gap-1.5"><Info className="size-5 shrink-0 mt-0.5" aria-hidden /><span className="min-w-0 break-words">{n}</span></li>)}
+          {shown.notes.map((n) => <li key={n} className="flex gap-1.5"><Info className="size-5 shrink-0 mt-0.5" aria-hidden /><span className="min-w-0 break-words">{n}</span></li>)}
         </ul>
       )}
       <Err e={err} /><Done m={msg} />
@@ -203,7 +204,7 @@ function PaymentMatchesCard({ b, act }: { b: BlockOf<'payment_matches'>; act: Bl
             <button type="button" onClick={() => setAdding(true)} className={btnSecondary}><Plus className="size-5" aria-hidden />Add a record</button>
             <button type="button" onClick={() => act.append?.('Here are all the payment records you saved.', [{ kind: 'companion_records', section: 'payments' }])} className={btnSecondary}>All my records</button>
           </div>}
-      <p className="mt-3 text-sm text-ink-soft">SaySafe only knows SaySafe Demo Shop payments made in this app and records you typed. It never pays, blocks or marks anything as paid.</p>
+      <p className="mt-3 text-sm text-ink-soft">{MATCHES_SCOPE_NOTE}</p>
       <PrivateNote />
     </div>
   );

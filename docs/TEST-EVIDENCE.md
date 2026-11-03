@@ -14,6 +14,13 @@ Nothing below is a test on a physical phone or with a real person. Those are lis
 
 | # | Suite | Date (GMT) | Commit | Result | Kind | Environment |
 |---|---|---|---|---|---|---|
+| H1 | vitest unit / integration / security (QA-fix commit) | 2026-11-03 12:34 | working tree committed as the QA-fix commit on `main` (parent `8a6a794`) | **473 passed, 0 failed** (34 files) | Mocked | Node 22.23.3, vitest 5.1 |
+| H2 | TypeScript + production build (QA-fix commit) | 2026-11-03 12:35 | same | **0 errors; built** | Static / Build | `tsc --noEmit`, Vite 8 |
+| H3 | Hosted `/api/health` | 2026-11-03 12:14 and 12:25 | `8a6a794` deployed | **ok**: PayPal sandbox configured, Groq ok, Channel3 configured, Turso replica persistent | Hosted API | https://saysafe.onrender.com |
+| H4 | Hosted `scripts/e2e-browser.mjs` + axe | 2026-11-03 12:16–12:17 | `8a6a794` deployed | **17/17 passed; axe 0 violations on 7 screens** | Hosted browser + real PayPal sandbox (order create + redirect only) | Playwright Chromium headless via the sandbox egress proxy |
+| H5 | Hosted Assistant family flow (`scripts/e2e-hosted.mjs`, port of `e2e-assistant-family.mjs`) | 2026-11-03 12:25–12:31 | `8a6a794` deployed | **16 passed, 2 failed** (see §H5) | Hosted browser + real PayPal sandbox + live Groq + live Channel3 | as H4 |
+| H6 | Hosted companion flow (port of `e2e-companion.mjs`) | 2026-11-03 | — | **Not completed** (stopped by a script error, then paused by instruction while demo data is seeded) | — | — |
+| H7 | PayPal Subscriptions API cancel proof | 2026-11-03 10:37 | script `scripts/paypal-setup-plan.ts --cancel` | **Sandbox buyer approved I-BY…W7; cancel → 204; GET → CANCELLED** | Real PayPal sandbox (API, **not through the app UI**) | raw responses in project `work/subs-probe/` |
 | 1 | vitest unit / integration / security | 2026-11-03 10:02 | `d062acb` (branch `docs-site`; app code identical to `main` `d71bcac` except the landing and Help pages) | **376 passed, 0 failed** (28 files) | Mocked | Node 22.23.3, vitest 5.1, Linux sandbox |
 | 2 | TypeScript | 2026-11-03 10:03 | `d062acb` | **0 errors** | Static | `tsc --noEmit`, TypeScript 7 |
 | 3 | Production build | 2026-11-03 10:03 | `d062acb` | **Built** | Build | Vite 8 |
@@ -24,6 +31,23 @@ Nothing below is a test on a physical phone or with a real person. Those are lis
 | 8 | Sandbox refund through PayPal API | 2026-11-03 (early morning) | branch `refund` `61e62a5` | **Refund COMPLETED, capture REFUNDED** | Real PayPal sandbox | API call; in-app admin refund disabled on hosted |
 | 9 | Scam detection held-out set v2 | 2026-11-03 | branch `scam-calibrate` `9ecb41e` | **42 cases: 2 false positives, 1 false negative** | Live AI | Groq `openai/gpt-oss-20b` + rules |
 | 10 | Voice controller QA | 2026-11-03 | branch `voice-shopping` `fea9581` | Passed (see [VOICE.md](VOICE.md)); per-check counts not recorded | Real browser, simulated microphone | Chromium headless, fake media stream, stubbed `speechSynthesis` |
+
+## H. Hosted runs and QA fixes, 3 November 2026 (12:14–12:40 GMT)
+
+Hosted target: https://saysafe.onrender.com running `8a6a794` (live since 12:12). The QA fixes below are committed on `main` but **not deployed** at the time of these runs, so hosted results are for `8a6a794`.
+
+**H4 `e2e-browser.mjs` (hosted browser, 17/17):** landing explains product · Try it as Mary opens the guided scam check · home has 4 shortcuts · one bottom nav · no display buttons in the header, no idle voice bar · at most one outstanding action · Check a message opens the Assistant · fake PayPal support flagged · official PayPal contact recognised · malicious look-alike rejected · genuine PayPal invoice not called safe · family pairs with one-time code · large purchase awaits family approval · family review card in Alex's Assistant shows the server amount · family decline prevents payment (409) · small purchase creates a real sandbox order · redirects to the PayPal sandbox approval page. axe 0 on landing desktop/mobile, home, check result, order awaiting, family dashboard, family assistant.
+
+**H5 `e2e-hosted.mjs` family part (hosted browser, real sandbox, live AI):** passed — health; demo start; companion chips on a fresh conversation; fictional PayPal phishing text → Suspicious; Channel3 listings with real images (3/3 loaded); Alex pairs; Mary's card Pending €120.00; server FAMILY_APPROVAL_PENDING; Alex's tabs; Insights link; Alex's review card shows exact item/shop/amount; Mary's card turns Approved with Continue to PayPal; survives reload; Continue to PayPal reaches the **real** sandbox checkout URL; confirm before buyer approval refused (409 `not_approved`); native Family Safety Insights renders for Alex.
+Failed — (1) completing buyer approval with a fictional guest card on PayPal's hosted page: PayPal sent the guest flow to `checkoutweb/signup` and it did not return (automation limit on PayPal's page, not a SaySafe result); (2) the companion part stopped because the suggestion chips only show on a fresh conversation (script bug, fixed in the script). So **the receipt card after buyer approval, Activity detail and all companion cards are not yet verified on the hosted app**; they remain verified locally against the mock PayPal only.
+axe (tags wcag2a/aa, wcag21a/aa, wcag22aa) on hosted screens: 0 violations on landing, Home, Assistant, Alex's review/approved cards, Profile, Insights; **1 rule on Channel3/Demo Shop product buttons: `label-content-name-mismatch`** (accessible name `"<title>, €… at <shop>, best match. Open details"` does not contain the visible "BEST MATCH" badge text). Earlier runs did not include the `wcag21a` tag, which is why it was not reported before. Open.
+Real sandbox orders created: a few unapproved sandbox orders (no capture), e.g. …534J, …580M, …3056.
+
+**QA fixes in this commit (mocked tests in `tests/qa-fixes.test.ts`, 13 tests):**
+- Payment matches card no longer repeats "Don't pay again until you've checked with John" (heading only) or the scope footnote (footer only).
+- Phone extractor: a spaced Irish mobile after "new number" / "number" with a full stop ("new number 087 999 1111.") was dropped as an ID; it is now extracted, so the contact-mismatch warning shows the number. IDs, dates and amounts are still ignored.
+- Contact-mismatch summary: the sentence after the warning is capitalised ("… Call Tom on the number you saved. This message looks suspicious.").
+- Scam eval unchanged: offline verdicts **and** signal codes compared before/after the extractor change on all 106 cases in `tests/fixtures/scam-eval/*.json`: **0 differences**. The live v2 counts (42 cases: 2 false positives, 1 false negative) therefore stand; the live AI set was not re-run (Groq rate limits).
 
 ## 1. vitest (mocked)
 

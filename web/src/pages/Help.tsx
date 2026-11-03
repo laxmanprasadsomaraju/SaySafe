@@ -137,6 +137,38 @@ const TOPICS: Topic[] = [
     shots: [{ src: '/screens/receipt.webp', alt: 'SaySafe receipt: Paid, Easy-Pour Electric Kettle, €32.00 EUR, Receipt confirmed by PayPal, with order and transaction numbers.', cap: 'A real sandbox receipt (test money)' }],
   },
   {
+    id: 'already-paid', title: 'Have I already paid?', summary: 'Check your own records before you pay someone twice.',
+    steps: [
+      'In the Assistant, ask “Did I already pay John €80?”, or tap “Did I already pay someone?”.',
+      'SaySafe looks through payment records you typed in yourself and your SaySafe Demo Shop payments.',
+      'Each record you typed is marked “Recorded by you — not verified”. It is not proof the money arrived.',
+      'If a name or amount only partly matches, the card says so. If nothing is found, that does not mean you have not paid.',
+      'Before paying again, check with the person or your bank statement.',
+    ],
+    notes: ['SaySafe cannot see your bank, your PayPal wallet or payments made outside SaySafe. Importing statements is planned, not available.', 'Records are private to you: your family member never sees them. Delete them all in Profile › Privacy & data › Delete all my companion data.'],
+  },
+  {
+    id: 'subscriptions', title: 'Subscriptions', summary: 'Add up what you pay regularly, and get help cancelling.',
+    steps: [
+      'In the Assistant, ask “What do I pay every month?”, or open Profile › Privacy & data › My subscriptions.',
+      'Add each subscription yourself: the company, the amount and how often. SaySafe adds up the monthly and yearly cost.',
+      'To cancel one with another company, SaySafe shows that company’s official cancel page and PayPal’s automatic payments page. You cancel there yourself.',
+      'When you tell SaySafe you have cancelled, it shows “You told SaySafe this is cancelled — not confirmed by the provider”.',
+      'The SaySafe Demo Membership (PayPal sandbox, test money) is the only subscription SaySafe can cancel for you, and only after you tap “Cancel billing via PayPal”. Saying “yes” never cancels it. It says cancelled only when PayPal confirms.',
+    ],
+    notes: ['SaySafe does not send reminders before a charge. It cannot see subscriptions you have not added.', 'Totals are your own figures and are never converted between currencies.'],
+  },
+  {
+    id: 'trusted-contacts', title: 'Trusted contacts', summary: 'Save the real numbers of the people you trust.',
+    steps: [
+      'Open Profile › Privacy & data › Trusted contacts, or ask the Assistant “What’s my son’s number?”.',
+      'Add a name, who they are to you (for example “son”) and their phone number or email.',
+      'When a message says it is from them but uses a different number, the scam check tells you, and shows the last four digits of the number you saved.',
+      'Call the number you saved before you do anything the message asks.',
+    ],
+    notes: ['Contacts are “Saved by you — not verified”. SaySafe does not check who owns a number, and a message can fake a familiar number.', 'Your contacts are never sent to the AI service and are never shown to your family member.'],
+  },
+  {
     id: 'voice', title: 'Voice commands and Stop', summary: 'Tap to talk, tap again to cancel, and Stop at any time.',
     steps: [
       'Tap the microphone and allow microphone access when your browser asks.',
@@ -152,7 +184,7 @@ const TOPICS: Topic[] = [
   {
     id: 'accessibility', title: 'Accessibility controls', summary: 'Bigger text, high contrast, captions and keyboard use.',
     steps: [
-      'Use “Bigger text” and “Contrast” to make the screen easier to read. They are in the header today and are moving into Profile.',
+      'Use “Bigger text” and “Contrast” to make the screen easier to read. They are in Profile › Accessibility, and in the Assistant under Menu › Display.',
       'Voice settings (mute, read replies automatically, speed, read everything) are in Profile.',
       'Animations switch off when your device asks for reduced motion.',
       'Everything works with a keyboard. Press Tab to move, and use “Skip to main content” at the top.',
