@@ -6,9 +6,11 @@
  *  - Only allow-listed columns are read. Never returned: user ids, session/token data, approval nonces,
  *    fingerprints, idempotency keys, raw webhook payloads, PayPal order/capture ids (only "present?"),
  *    audit detail_json, raw scam message text (it is never stored; only the result headline is excerpted).
- *  - No writes. No new tables.
+ *  - Purchases: only requests routed to the family member for review, plus the elder's individual history and/or
+ *    spending totals only while she shares them (server/family/permissions.ts). No writes.
  */
 import { db } from '../db/index.js';
+import { familyVisibleRows, getSharing, spendingSummaryForFamily } from '../family/permissions.js';
 import { normalizeVerdict } from '../scam/verdicts.js';
 import { computeKpis, STATE_LABELS, type InsightEvent, type InsightPayment, type InsightScan, type InsightsPayload } from '../../shared/insights.js';
 
@@ -25,11 +27,10 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
   const policy = db.prepare('SELECT currency FROM spending_policies WHERE household_id = ?').get(householdId) as { currency: string } | undefined;
   const currency = policy?.currency ?? 'EUR';
 
-  const rows = db.prepare(
-    `SELECT id, created_at, state, items_json, merchant, amount_cents, currency, paypal_order_id, paypal_capture_id,
-            captured_amount, captured_currency, idempotency_key, example
-       FROM payment_requests WHERE household_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500`,
-  ).all(householdId) as any[];
+  // Permission-filtered on the server, fresh on every call: requests routed to family for review, plus Mary's
+  // individual history only while she shares it. Under-limit purchases are otherwise never read here.
+  const sharing = getSharing(householdId);
+  const rows = familyVisibleRows(householdId, 500);
 
   const approvalStmt = db.prepare('SELECT status, expires_at, decided_at FROM approvals WHERE request_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1');
   const webhookStmt = db.prepare("SELECT received_at FROM webhook_events WHERE resource_id = ? AND event_type = 'PAYMENT.CAPTURE.COMPLETED' AND verified = 1 ORDER BY received_at ASC LIMIT 1");
@@ -86,7 +87,8 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
   ).all(householdId) as any[];
   const paymentIds = new Set(payments.map((p) => p.id));
   const productOf = new Map(payments.map((p) => [p.id, p.product]));
-  const events: InsightEvent[] = audits.map((e) => {
+  // Never reveal that a private purchase exists: drop every payment/approval event that is not about a visible request.
+  const events: InsightEvent[] = audits.filter((e) => e.action === 'scan.shared' || (e.target && paymentIds.has(e.target))).map((e) => {
     const at = toIso(e.at)!;
     const pid = e.target && paymentIds.has(e.target) ? (e.target as string) : null;
     const what = pid ? productOf.get(pid) : undefined;
@@ -116,5 +118,7 @@ export function buildInsights(householdId: string, viewer: { userId: string; nam
     scans,
     events,
     kpis: computeKpis(payments, scans, currency),
+    sharing: { shareSummaries: sharing.shareSummaries, shareHistory: sharing.shareHistory },
+    spendingSummary: spendingSummaryForFamily(householdId),
   };
 }

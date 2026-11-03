@@ -173,6 +173,13 @@ payment, durable idempotency, verified and deduplicated webhooks, refunds only w
 never actionable, per-visitor household isolation. Details and tests: [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md)
 and [docs/PAYMENT-LIFECYCLE.md](docs/PAYMENT-LIFECYCLE.md). SaySafe never opens links found in messages and never says "safe".
 
+### Family permissions
+
+Privacy first, enforced on the server. Alex (the family helper) sees only purchases that crossed Mary's limit and need his OK: the exact item, shop, price, status and, afterwards, whether it was paid. Everything under the limit is private.
+Only Mary can change her limit (Alex's attempt gets 403). In Profile › Family sharing she can turn on "Share spending summaries" (month/category totals only) or "Share my purchase history"; both start OFF, also for existing households.
+Turning one off applies on Alex's very next screen load and Insights question. Alex never sees Mary's conversations, contacts, subscriptions, typed payment records or preferences.
+The Family Insights AI only receives the permission-filtered rows (minimal fields, no ids). Tests: `tests/family-privacy.test.ts`; details in [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md).
+
 ## 16. Accessibility
 
 WCAG 2.2 AA target: large text, 48 px+ touch targets, Atkinson Hyperlegible, visible focus, keyboard use, skip link, captions for everything spoken, Bigger text and High contrast, reduced motion, no colour-only meaning. Automated axe checks: 0 violations on 6 hosted screens (3 Nov 2026) and on `/` and `/help` at 320/390/1440 px locally. **Not yet** tested with older adults or with real screen-reader users.

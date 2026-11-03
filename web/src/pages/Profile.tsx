@@ -1,7 +1,7 @@
 /**
  * Profile, in three groups (DOM and reading order = visual order):
  *   1. Personal experience: Voice & conversation, Accessibility, Language
- *   2. Account & preferences: Shopping preferences, Trusted family, Privacy & data
+ *   2. Account & preferences: Shopping preferences, Trusted family, Family sharing (Mary only), Privacy & data
  *   3. Demo & help: Mary's demo (things to try, walkthrough, Try as Alex, Reset demo) and the Help Centre
  * Layout: each group is a two-column grid of INDEPENDENT column stacks (flex columns), not one grid of cards.
  * The old single `grid lg:grid-cols-2` put mismatched cards into shared rows, so a short card next to a tall one
@@ -224,7 +224,58 @@ function DemoAndHelp({ family }: { family: boolean }) {
   );
 }
 
-type Circle = { active: { name: string }[]; pendingInvites: number; policy: { thresholdCents: number } };
+type Sharing = { shareSummaries: boolean; shareHistory: boolean };
+type Circle = { active: { name: string }[]; pendingInvites: number; policy: { thresholdCents: number }; sharing?: Sharing };
+const eurFmt = (cents: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(cents / 100);
+
+/**
+ * Mary's "Family sharing": her limit (only she can change it) and two opt-in switches, both off by default.
+ * The server enforces all of it; this only sends Mary's choice.
+ */
+export function FamilySharingBody({ circle, onChange }: { circle: Circle; onChange: (c: Circle) => void }) {
+  const name = circle.active[0]?.name;
+  const who = name ?? 'your family helper';
+  const Who = name ?? 'Your family helper';
+  const sh = circle.sharing ?? { shareSummaries: false, shareHistory: false };
+  const [limit, setLimit] = useState(String(circle.policy.thresholdCents / 100));
+  const [busy, setBusy] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const flip = async (k: keyof Sharing) => {
+    setBusy(k); setErr(null); setMsg(null);
+    try { const next = await api<Sharing>('/api/family/sharing', { body: { [k]: !sh[k] } }); onChange({ ...circle, sharing: { shareSummaries: next.shareSummaries, shareHistory: next.shareHistory } }); }
+    catch (e: any) { setErr(e?.message || 'Something went wrong.'); } finally { setBusy(null); }
+  };
+  const saveLimit = async (e: React.FormEvent) => {
+    e.preventDefault(); setBusy('limit'); setErr(null); setMsg(null);
+    try { const p = await api<{ thresholdCents: number }>('/api/policy', { body: { thresholdEur: Number(limit) } }); onChange({ ...circle, policy: { ...circle.policy, thresholdCents: p.thresholdCents } }); setMsg('Limit saved.'); }
+    catch (er: any) { setErr(er?.message || 'Something went wrong.'); } finally { setBusy(null); }
+  };
+  const row = (k: keyof Sharing, label: string, hint: string) => (
+    <div className="flex items-center justify-between gap-4 py-3">
+      <span className="min-w-0"><span className="block font-bold" id={`fs-${k}`}>{label}</span><span className="block text-base text-ink-soft" id={`fsh-${k}`}>{hint}</span></span>
+      <button type="button" role="switch" aria-checked={sh[k]} aria-labelledby={`fs-${k}`} aria-describedby={`fsh-${k}`} onClick={() => void flip(k)} disabled={busy !== null}
+        className={switchBtn(sh[k])} data-testid={`share-${k}`}>{sh[k] ? 'On' : 'Off'}</button>
+    </div>
+  );
+  return (
+    <>
+      <p>{Who} only sees purchases that need their OK. Turn these on if you want them to see more.</p>
+      <div className="mt-1 divide-y divide-line">
+        {row('shareSummaries', `Share spending summaries with ${who}`, 'Totals by month and type of item. No single purchases.')}
+        {row('shareHistory', `Share my purchase history with ${who}`, 'Each Demo Shop purchase. Never your messages, contacts or subscriptions.')}
+      </div>
+      <form onSubmit={saveLimit} className="mt-2 border-t border-line pt-3 flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[9rem]"><label htmlFor="my-limit" className="font-bold block mb-1">My limit in euro</label>
+          <input id="my-limit" type="number" min={0} max={500} step={1} value={limit} onChange={(e) => setLimit(e.target.value)} aria-describedby="my-limit-h" className="w-full min-h-12 rounded-2xl border-2 border-line px-4 bg-paper focus:border-teal outline-none" /></div>
+        <button type="submit" disabled={busy !== null} className={btnSecondary}>Save</button>
+        <p id="my-limit-h" className="w-full text-base text-ink-soft">Above {eurFmt(circle.policy.thresholdCents)}, {who} checks first. Only you can change this.</p>
+      </form>
+      {msg && <p role="status" className="mt-2 text-teal font-bold">{msg}</p>}
+      {err && <p role="alert" className="mt-2 text-danger font-bold">{err}</p>}
+    </>
+  );
+}
 /** Mary's family circle in Profile: loading, an explicit error with Retry (never a silent blank), or the circle. */
 export function FamilyCircleBody({ circle, error, onRetry }: { circle: Circle | null; error: string | null; onRetry: () => void }) {
   if (error) return (
@@ -238,7 +289,7 @@ export function FamilyCircleBody({ circle, error, onRetry }: { circle: Circle | 
   return (
     <>
       <p className="font-bold">{circle.active.length ? `Connected: ${circle.active.map((a) => a.name).join(', ')}` : 'No family member connected yet.'}</p>
-      <p className="mt-1 text-base text-ink-soft">Above {new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(circle.policy.thresholdCents / 100)} they review first.{circle.pendingInvites ? ` ${circle.pendingInvites} unused invite code${circle.pendingInvites > 1 ? 's' : ''}.` : ''}</p>
+      <p className="mt-1 text-base text-ink-soft">Above {eurFmt(circle.policy.thresholdCents)} they review first. They see only those purchases.{circle.pendingInvites ? ` ${circle.pendingInvites} unused invite code${circle.pendingInvites > 1 ? 's' : ''}.` : ''}</p>
       <ul className="mt-1 divide-y divide-line"><li><Link to="/help" className={linkRow}>{circle.active.length ? 'Family help and invite codes' : 'Invite a family member'}<ChevronRight className="size-5" aria-hidden /></Link></li></ul>
     </>
   );
@@ -283,13 +334,19 @@ export default function Profile() {
     </Section>
   );
   const shopping = !family && <ShoppingSummary key="shop" />;
+  const sharingCard = !family && circle && (
+    <Section key="sharing" id="sharing-h" icon={Users} title="Family sharing" where={<Where account />}>
+      <FamilySharingBody circle={circle} onChange={setCircle} />
+    </Section>
+  );
   const familyCard = (
     <Section key="family" id="family-h" icon={Users} title="Trusted family" where={<Where account />}>
       {family ? (
         <>
           <p>You review bigger purchases. You can’t pay from their account.</p>
+          <p className="mt-1 text-base text-ink-soft">You see only the purchases sent to you, plus anything they choose to share. Only they can change their limit.</p>
           <ul className="mt-2 divide-y divide-line">
-            <li><Link className={linkRow} to="/family">Waiting for you and limits<ChevronRight className="size-5" aria-hidden /></Link></li>
+            <li><Link className={linkRow} to="/family">Waiting for you<ChevronRight className="size-5" aria-hidden /></Link></li>
             <li><Link className={linkRow} to="/family/assistant"><span className="inline-flex items-center gap-2"><MessageCircle className="size-5 text-teal" aria-hidden />Assistant</span><ChevronRight className="size-5" aria-hidden /></Link></li>
             {cfg?.insights !== false && <li><Link className={linkRow} to="/family/insights"><span className="inline-flex items-center gap-2"><BarChart3 className="size-5 text-teal" aria-hidden />Safety insights</span><ChevronRight className="size-5" aria-hidden /></Link></li>}
             {cfg?.insightsDashboard === 'agstudio' && agStudioLicenseKey(import.meta.env) && <li><Link className={linkRow} to="/family/insights/studio">Insights: AG Studio view<ChevronRight className="size-5" aria-hidden /></Link></li>}
@@ -329,7 +386,7 @@ export default function Profile() {
       <Group id="personal-h" title="Personal experience" lead="How SaySafe speaks, looks and answers. Saved on this device."
         left={voice ? [voice] : [a11y]} right={voice ? [a11y, lang] : []} />
       <Group id="account-h" title="Account & preferences" lead={family ? 'Your role in the household, and your privacy.' : 'What SaySafe remembers for you, who helps you, and your data.'}
-        left={family ? [familyCard] : [shopping, familyCard]} right={[privacy]} />
+        left={family ? [familyCard] : [shopping, familyCard, sharingCard]} right={[privacy]} />
       <DemoAndHelp family={family} />
     </Layout>
   );

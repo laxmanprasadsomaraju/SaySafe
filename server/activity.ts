@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { db } from './db/index.js';
 import { refundView } from './payments/service.js';
+import { familyVisibleRows } from './family/permissions.js';
 
 export type StatusGroup = 'pending' | 'paid' | 'cancelled' | 'refunded' | 'failed' | 'scan' | 'other';
 /** Activity sections: Purchases & payments, Scam checks, Family reviews, Refunds. Each item is in exactly one. */
@@ -77,7 +78,10 @@ export const ActivityQuery = z.object({
 export type ActivityQuery = z.infer<typeof ActivityQuery>;
 
 export function listActivity(householdId: string, role: 'elder' | 'family', query: ActivityQuery) {
-  const rows = db.prepare('SELECT * FROM payment_requests WHERE household_id=? ORDER BY created_at DESC, rowid DESC LIMIT 500').all(householdId) as any[];
+  // Family members only see requests routed to them for review, plus Mary's history while she shares it.
+  const rows = role === 'family'
+    ? familyVisibleRows(householdId, 500)
+    : db.prepare('SELECT * FROM payment_requests WHERE household_id=? ORDER BY created_at DESC, rowid DESC LIMIT 500').all(householdId) as any[];
   const items: ActivityItem[] = rows.map((r) => {
     const a = db.prepare('SELECT status, expires_at, decided_at, reason FROM approvals WHERE request_id=? ORDER BY created_at DESC LIMIT 1').get(r.id) as any;
     const lines = (() => { try { return JSON.parse(r.items_json) as { name: string; quantity: number }[]; } catch { return []; } })();

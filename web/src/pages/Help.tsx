@@ -137,13 +137,26 @@ const TOPICS: Topic[] = [
       'As Mary, choose a Demo Shop item over €75, for example the €120 microwave. It shows “Waiting for family”.',
       'Alex sees the exact item, shop and price, and chooses Approve or Decline. The answer applies only to that purchase and expires after 30 minutes.',
       'If Alex approves, Mary continues to PayPal and approves the payment herself. If Alex declines, nothing can be paid.',
-      'Alex can also see shared scam checks and a read-only Insights dashboard (see “Insights”), and can change Mary’s limit.',
+      'Alex can also see shared scam checks and a read-only Insights dashboard (see “Insights”). Only Mary can change her limit (see “What Alex can see”).',
     ],
     notes: ['Alex can never pay from Mary’s account or approve the PayPal step.', 'Tested with two browser sessions. Not yet tested on two physical phones.'],
     shots: [
       { src: '/screens/family-waiting.webp', alt: 'Mary’s screen: Waiting for family, Simple Dial Microwave 20L, €120, with a Cancel this purchase button.', cap: 'Mary’s phone: waiting for family' },
       { src: '/screens/family-request.webp', alt: 'Alex’s screen: Above Mary’s limit of €75, the microwave for €120, with Approve and Decline buttons.', cap: 'Alex’s phone: Approve or Decline' },
     ],
+  },
+  {
+    id: 'what-alex-can-see', title: 'What Alex can see', summary: 'Alex only sees purchases that need his OK. You choose if he sees more.',
+    steps: [
+      'Alex sees a purchase only when it is over your limit and needs his OK. He sees the item, the shop, the price, and later whether it was paid.',
+      'Purchases under your limit are private. Alex does not see them.',
+      'Alex never sees your conversations, contacts, subscriptions or the payment records you typed in.',
+      'Only you can change your limit. Go to Profile, then “Family sharing”.',
+      'Want Alex to see more? In “Family sharing”, turn on “Share spending summaries” for totals only, or “Share my purchase history” for each Demo Shop purchase. Both start off.',
+      'Changed your mind? Turn it off. Alex stops seeing it straight away, and so does his Insights assistant.',
+      'Scam checks are shared one at a time, only when you choose “Send to family”.',
+    ],
+    notes: ['SaySafe checks these rules on its server, not just on the screen.'],
   },
   {
     id: 'paypal-sandbox', title: 'PayPal sandbox payments', summary: 'How a Demo Shop purchase is paid, with test money.',
@@ -254,7 +267,8 @@ const TOPICS: Topic[] = [
   {
     id: 'privacy', title: 'Privacy and data', summary: 'What SaySafe keeps, and what it never sees.',
     steps: [
-      'SaySafe stores your demo household, family links, spending limit, purchases, family decisions, PayPal confirmations and shared scam checks, so they survive a restart.',
+      'SaySafe stores your demo household, family links, spending limit, sharing choices, purchases, family decisions, PayPal confirmations and shared scam checks, so they survive a restart.',
+      'Your family helper sees only purchases that need their OK, unless you share more (see “What Alex can see”).',
       'For a scam check it keeps the result and headline. Uploaded screenshots are not stored.',
       'Shopping preferences are saved for your demo account; edit or clear them in Profile. Voice settings stay on this device.',
       'Messages, screenshots and voice clips you send are processed by Groq’s AI service. Product searches go to Channel3. Payments go to PayPal’s sandbox.',

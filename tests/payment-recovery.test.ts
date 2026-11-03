@@ -345,6 +345,8 @@ describe('HTTP: order page recovery and lazy sweep', () => {
     const other = household();
     expect((await sweepHousehold(other.hh)).swept).toBe(0); // someone else's sweep never touches this household
     expect(stateOf(id)).toBe('CAPTURE_PENDING');
+    // An under-limit purchase is private to Mary; she shares her history here so Alex's dashboard lists it.
+    await e.post('/api/family/sharing').set(H).send({ shareHistory: true }).expect(200);
     const ov = await f.get('/api/family/overview').expect(200);
     expect(ov.body.requests.find((x: any) => x.id === id).state).toBe('CAPTURED');
     expect((await sweepHousehold(row(id).household_id)).skipped).toBe(true); // rate-limited: once a minute per household

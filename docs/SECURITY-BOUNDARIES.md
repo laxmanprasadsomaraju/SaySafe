@@ -87,9 +87,15 @@ snapshots payments, approvals, records, subscriptions, used cancel tokens and po
 | Actor | Can | Cannot |
 |---|---|---|
 | Elder (Mary) | own payments, approvals view, typed records, subscriptions, contacts, scans, Reset demo | approve own request (family-only route), refund, see another household |
-| Family (Alex, paired by one-time code) | review/approve/decline own household's requests, change the limit, Insights, shared scans | see typed records, subscriptions or contacts (403), pay, refund, see another household |
+| Family (Alex, paired by one-time code) | see and approve/decline only the requests routed to him (above Mary's limit) and their outcome; Insights over those; shared scans; Mary's history / spending totals only while she shares them | see under-limit purchases (404), change the limit (403) or sharing (401), see typed records, subscriptions, contacts or preferences (403/401), pay, refund, see another household |
 | Merchant admin (`ADMIN_TOKEN`) | refund / reconcile Demo Shop payments | — (route disabled when unset: the hosted demo) |
 | Anonymous | scam check, catalogue, discovery | anything with a household |
+
+Family permissions (one module, `server/family/permissions.ts`, used by every family route and the Insights AI):
+a family member can read a purchase only if it has an approval request (it crossed Mary's limit) or Mary turned on
+"Share my purchase history"; "Share spending summaries" adds month/category totals only. Both switches default to OFF,
+the migration adds them as 0 to existing households, and they are read from the database on every call, so a revoke
+applies to the next API read and the next AI call. Evidence: `tests/family-privacy.test.ts`.
 
 Cross-tenant / IDOR evidence: `tests/authz-isolation-evidence.test.ts` § 2 — for **every** id of visitor A
 (payments incl. samples, approvals, typed records, subscriptions, contacts) visitor B's elder and family sessions get

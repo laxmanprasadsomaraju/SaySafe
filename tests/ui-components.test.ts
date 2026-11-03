@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createElement as h } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
-import { FamilyCircleBody } from '../web/src/pages/Profile';
+import { FamilyCircleBody, FamilySharingBody } from '../web/src/pages/Profile';
 import { REGISTRY } from '../web/src/assistant/blocks';
 
 const render = (el: any) => renderToStaticMarkup(h(MemoryRouter, null, el));
@@ -35,8 +35,20 @@ describe('Profile › Trusted family circle', () => {
     expect(render(h(FamilyCircleBody, { circle: null, error: null, onRetry: () => {} }))).toContain('role="status"');
     const html = render(h(FamilyCircleBody, { circle: { active: [{ name: 'Alex' }], pendingInvites: 1, policy: { thresholdCents: 7500 } }, error: null, onRetry: () => {} }));
     expect(text(html)).toMatch(/Connected: Alex/);
-    expect(text(html)).toMatch(/Above €75\.00 they review first\. 1 unused invite code\./);
+    expect(text(html)).toMatch(/Above €75\.00 they review first\. They see only those purchases\. 1 unused invite code\./);
     expect(html).not.toContain('role="alert"');
+  });
+  it('Family sharing: both switches start Off, with plain copy, and Mary\'s own limit control', () => {
+    const html = render(h(FamilySharingBody, { circle: { active: [{ name: 'Alex' }], pendingInvites: 0, policy: { thresholdCents: 7500 }, sharing: { shareSummaries: false, shareHistory: false } }, onChange: () => {} }));
+    const t = text(html);
+    expect(t).toMatch(/Alex only sees purchases that need their OK\. Turn these on if you want them to see more\./);
+    expect(t).toMatch(/Share spending summaries with Alex/);
+    expect(t).toMatch(/Share my purchase history with Alex/);
+    expect((html.match(/role="switch" aria-checked="false"/g) ?? []).length).toBe(2);
+    expect(t).toMatch(/Only you can change this\./);
+    // No sharing info from the server (older server) -> still Off, never assumed On.
+    const html2 = render(h(FamilySharingBody, { circle: { active: [], pendingInvites: 0, policy: { thresholdCents: 7500 } }, onChange: () => {} }));
+    expect((html2.match(/aria-checked="true"/g) ?? []).length).toBe(0);
   });
 });
 

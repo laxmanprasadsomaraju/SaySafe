@@ -34,7 +34,10 @@ CREATE TABLE IF NOT EXISTS spending_policies (
   approval_threshold_cents INTEGER NOT NULL DEFAULT 7500,
   currency TEXT NOT NULL DEFAULT 'EUR',
   updated_by TEXT,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  share_summaries_with_family INTEGER NOT NULL DEFAULT 0,
+  share_history_with_family INTEGER NOT NULL DEFAULT 0,
+  sharing_updated_at TEXT
 );
 CREATE TABLE IF NOT EXISTS payment_requests (
   id TEXT PRIMARY KEY,
@@ -228,6 +231,10 @@ export const ADDED_COLUMNS: [table: string, column: string, ddl: string][] = [
   ['webhook_events', 'attempts', 'INTEGER NOT NULL DEFAULT 0'],
   // A scam check of one of the built-in training examples (decided on the server by exact text): practice, never an incident.
   ['security_scans', 'example', 'INTEGER NOT NULL DEFAULT 0'],
+  // Family privacy (opt-in, OFF by default): existing households get 0 for both, never silently enabled.
+  ['spending_policies', 'share_summaries_with_family', 'INTEGER NOT NULL DEFAULT 0'],
+  ['spending_policies', 'share_history_with_family', 'INTEGER NOT NULL DEFAULT 0'],
+  ['spending_policies', 'sharing_updated_at', 'TEXT'],
 ];
 
 export function migrateSchema(db: Db) {
