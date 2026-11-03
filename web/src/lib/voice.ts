@@ -43,6 +43,7 @@ export function useVoiceInput(onText: (t: string) => void) {
           if (blob.size < 1200) throw new Error("I didn't hear anything. Please try again, or type instead.");
           const fd = new FormData();
           fd.append('audio', blob, type.includes('mp4') ? 'speech.mp4' : type.includes('ogg') ? 'speech.ogg' : 'speech.webm');
+          fd.append('language', speech.getSnapshot().prefs.lang);
           const { text } = await api<{ text: string }>('/api/voice/transcribe', { form: fd });
           if (!text) throw new Error("I didn't catch that. Please try again, or type instead.");
           setState('done');

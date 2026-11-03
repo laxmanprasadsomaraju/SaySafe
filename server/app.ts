@@ -2,6 +2,7 @@ import { searchChannel3, Channel3Error, channel3Configured } from './catalogue/c
 import { parseRequest, recommend, spokenRecommendation, sanitizeProfile, profileIsEmpty } from '../shared/shopping.js';
 import { getProfile, saveProfile, clearProfile } from './prefs/store.js';
 import { explainBest } from './ai/explain.js';
+import { normaliseLang } from '../shared/lang.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -79,6 +80,8 @@ export function createApp() {
     next();
   });
 
+  /** Reply language (beta), whitelisted: en, es, pl, fr, de, pt. Anything else is English. */
+  const langOf = (req: Request) => normaliseLang(req.get('x-saysafe-lang') ?? req.body?.lang);
   const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 1 } });
   const originOf = (req: Request) => process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`;
   const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
@@ -122,7 +125,7 @@ export function createApp() {
   app.post('/api/scan', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const text = z.string().trim().min(1).max(8000).parse(req.body?.text);
-    const result = await scanMessage(text, { userName: s?.name ?? 'Mary' });
+    const result = await scanMessage(text, { userName: s?.name ?? 'Mary', lang: langOf(req) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result });
@@ -138,7 +141,7 @@ export function createApp() {
     if (!aiConfigured()) return res.status(503).json({ error: 'ai_unavailable', message: 'Screenshot reading is not available right now. You can paste the text instead.' });
     const extracted = await extractFromImage(`data:${mime};base64,${f.buffer.toString('base64')}`);
     // The image is processed in memory and never stored.
-    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain });
+    const result = await scanMessage(extracted.text, { userName: s?.name ?? 'Mary', extractedFromImage: true, ocrUncertain: extracted.uncertain, lang: langOf(req) });
     const scanId = newId('scan');
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary) VALUES (?,?,?,?)').run(scanId, s?.householdId ?? null, result.verdict, result.headline);
     res.json({ scanId, ...result, extractedText: extracted.text });
@@ -156,7 +159,7 @@ export function createApp() {
     const q = z.string().trim().min(1).max(300).parse(req.body?.question);
     const scan = req.body?.scan;
     if (!aiConfigured() || !scan?.verdict) return res.json({ answer: 'Please do not use links or numbers from that message. Open the PayPal app yourself, or ask your family member.' });
-    res.json({ answer: await explainMore(q, scan, readSession(req, 'elder')?.name) });
+    res.json({ answer: await explainMore(q, scan, readSession(req, 'elder')?.name, langOf(req)), lang: langOf(req) });
   }));
 
   // ---------- Voice + assistant ----------
@@ -164,7 +167,7 @@ export function createApp() {
     const f = (req as any).file as Express.Multer.File | undefined;
     if (!f) return res.status(400).json({ error: 'no_audio' });
     try {
-      const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm');
+      const text = await transcribe(f.buffer, f.mimetype || 'audio/webm', f.originalname || 'speech.webm', langOf(req));
       res.json({ text });
     } catch (e) {
       if (e instanceof AIUnavailableError) return res.status(503).json({ error: 'stt_unavailable', message: 'Voice is not available right now. You can type instead.' });
@@ -178,23 +181,26 @@ export function createApp() {
     const said = z.string().trim().min(1).max(4000).parse(req.body?.text);
     const lastResults = z.array(z.string().max(100)).max(5).catch([]).parse(req.body?.lastResults);
     const step = z.string().max(40).catch('home').parse(req.body?.step);
-    const { intent, ai } = await interpret(said, { name, lastResults, step });
+    const lang = langOf(req);
+    const { intent, ai, replyLang: aiLang } = await interpret(said, { name, lastResults, step, lang });
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
+    let replyLang = aiLang;
     let discover: { query: string; suggested: boolean } | null = null;
     if (intent.action === 'shop') {
       // Real-product questions go to Channel3 discovery (same rules as /discover). The Demo Shop flow is unchanged.
       const wantsReal = /\b(real (shops?|products?|listings?|prices?)|retailers?|other shops|currys|harvey norman|argos|did electrical|online shops?|compare (prices|shops)|in ireland)\b/i.test(said);
       if (wantsReal && channel3Configured()) {
         discover = { query: said, suggested: false };
-        reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website.";
+        reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website."; replyLang = 'en';
       } else {
         products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
-        reply = describeOptions(products, name);
-        if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; }
+        // English template, unless the AI already answered in the chosen reply language.
+        if (lang === 'en' || replyLang !== lang) { reply = describeOptions(products, name); replyLang = 'en'; }
+        if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; replyLang = 'en'; }
       }
     }
-    res.json({ intent, products, reply, ai, discover });
+    res.json({ intent, products, reply, replyLang, ai, discover });
   }));
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------

@@ -5,6 +5,7 @@
  * Keys live only on the server.
  */
 import { z } from 'zod';
+import { whisperLanguage } from '../../shared/lang.js';
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
@@ -141,13 +142,13 @@ export async function chatJSON<T>(schema: z.ZodType<T>, messages: ChatMessage[],
 }
 
 /** Speech to text with Groq Whisper. */
-export async function transcribe(audio: Buffer, mime: string, filename = 'speech.webm'): Promise<string> {
+export async function transcribe(audio: Buffer, mime: string, filename = 'speech.webm', language: unknown = 'en'): Promise<string> {
   const ep = PRIMARY;
   if (!ep.apiKey || !ep.sttModel) throw new AIUnavailableError('Speech-to-text not configured');
   const form = new FormData();
   form.append('file', new Blob([new Uint8Array(audio)], { type: mime }), filename);
   form.append('model', ep.sttModel);
-  form.append('language', 'en');
+  form.append('language', whisperLanguage(language)); // whitelisted: en, es, pl, fr, de, pt
   form.append('response_format', 'json');
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 30000);

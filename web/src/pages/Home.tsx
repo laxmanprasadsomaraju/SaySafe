@@ -6,6 +6,7 @@ import { Card, MicButton, Caption, Button } from '../components/ui';
 import { api, eur, type PaymentRequest } from '../lib/api';
 import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
+import { normaliseLang } from '../../../shared/lang';
 import { stateLabel } from './Order';
 
 function greeting() {
@@ -17,6 +18,7 @@ export default function Home() {
   const me = useMe('elder');
   const nav = useNavigate();
   const [caption, setCaption] = useState<string | null>(null);
+  const [captionLang, setCaptionLang] = useState<string | undefined>();
   const [typed, setTyped] = useState('');
   const [showType, setShowType] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -25,7 +27,7 @@ export default function Home() {
 
   const handle = useCallback(async (text: string) => {
     setBusy(true);
-    setCaption(`You said: “${text}”`);
+    setCaption(`You said: “${text}”`); setCaptionLang(undefined);
     const turn = speech.beginTurn();
     try {
       const r = await api('/api/assistant', { body: { text, step: 'home' } });
@@ -34,7 +36,7 @@ export default function Home() {
       if (a === 'shop') { nav('/shop', { state: { query: text, result: r } }); return; }
       if (a === 'check_message') { nav('/check', { state: { text: r.intent.message_text && r.intent.message_text !== text ? r.intent.message_text : '' } }); return; }
       if (a === 'trusted_help' || a === 'order_problem') { nav('/help', { state: { problem: a === 'order_problem' } }); return; }
-      setCaption(r.reply); speech.speak(r.reply, { turn });
+      setCaption(r.reply); setCaptionLang(r.replyLang); speech.speak(r.reply, { turn, lang: normaliseLang(r.replyLang) });
     } catch (e: any) { setCaption(e.message); }
     finally { setBusy(false); speech.endThinking(); }
   }, [nav]);
@@ -66,7 +68,7 @@ export default function Home() {
             <Button type="submit" busy={busy}>Ask</Button>
           </form>
         )}
-        <div className="w-full max-w-xl"><Caption text={caption} /></div>
+        <div className="w-full max-w-xl"><Caption text={caption} lang={captionLang} /></div>
       </div>
 
       <nav aria-label="Main actions" className="mt-10 grid md:grid-cols-2 gap-5">

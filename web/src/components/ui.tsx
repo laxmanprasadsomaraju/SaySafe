@@ -62,10 +62,10 @@ export function MicButton({ state, onClick, size = 'lg', label = 'Tap to speak' 
 }
 
 /** What the assistant said, always shown as text too (captions). */
-export function Caption({ text }: { text: string | null }) {
+export function Caption({ text, lang }: { text: string | null; lang?: string }) {
   if (!text) return null;
   return (
-    <div role="status" aria-live="polite" className="fade-up flex gap-3 items-start bg-teal-soft text-navy rounded-2xl px-5 py-4 text-[length:var(--text-lead)]">
+    <div role="status" aria-live="polite" lang={lang && lang !== 'en' ? lang : undefined} className="fade-up flex gap-3 items-start bg-teal-soft text-navy rounded-2xl px-5 py-4 text-[length:var(--text-lead)]">
       <ShieldCheck className="size-7 shrink-0 text-teal mt-0.5" aria-hidden />
       <p>{text}</p>
     </div>

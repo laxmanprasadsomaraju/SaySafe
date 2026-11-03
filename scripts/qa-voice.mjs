@@ -64,7 +64,9 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
     await p.getByRole('button', { name: 'Stop speaking' }).click();
     await p.waitForTimeout(1500);
     const after = await p.evaluate((n) => window.__tts.log.slice(n), before);
-    check('Stop cancels and nothing else is spoken afterwards', after[0]?.t === 'cancel' && !after.some((x) => x.t === 'speak'), JSON.stringify(after.map((x) => x.t)));
+    // A sentence may legitimately start between reading the log and the click; what matters is nothing after the cancel.
+    const ci = after.findIndex((x) => x.t === 'cancel');
+    check('Stop cancels and nothing else is spoken afterwards', ci >= 0 && !after.slice(ci).some((x) => x.t === 'speak'), JSON.stringify(after.map((x) => x.t)));
     check('Stop button disabled once stopped', await p.getByRole('button', { name: 'Stop speaking' }).isDisabled());
 
     // Pause / resume.
@@ -93,7 +95,8 @@ for (const [w, h] of [[390, 844], [1440, 900]]) {
     await p.waitForURL(/\/home/);
     await p.waitForTimeout(1500);
     const navLog = await p.evaluate((n) => window.__tts.log.slice(n), nNav);
-    check('Navigation cancels speech', navLog[0]?.t === 'cancel' && !navLog.some((x) => x.t === 'speak'), JSON.stringify(navLog.map((x) => x.t)));
+    const ni = navLog.findIndex((x) => x.t === 'cancel');
+    check('Navigation cancels speech', ni >= 0 && !navLog.slice(ni).some((x) => x.t === 'speak'), JSON.stringify(navLog.map((x) => x.t)));
 
     // Mute blocks auto speech; mic button barge-in is covered by unit tests (no mic in headless).
     await p.goto(`${BASE}/discover`);

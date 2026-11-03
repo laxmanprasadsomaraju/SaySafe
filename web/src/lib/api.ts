@@ -2,10 +2,17 @@ export class ApiError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
 }
 
+/** Reply language (beta) from the voice preferences; the server whitelists it. */
+function replyLang(): string {
+  try { return JSON.parse(localStorage.getItem('ss-voice-prefs') ?? '{}').lang ?? 'en'; } catch { return 'en'; }
+}
+
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown; form?: FormData } = {}): Promise<T> {
+  const headers: Record<string, string> = { 'X-SaySafe-Lang': replyLang() };
+  if (!opts.form && opts.body) headers['Content-Type'] = 'application/json';
   const res = await fetch(path, {
     method: opts.method ?? (opts.body || opts.form ? 'POST' : 'GET'),
-    headers: opts.form ? undefined : opts.body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: opts.form ?? (opts.body ? JSON.stringify(opts.body) : undefined),
     credentials: 'same-origin',
   });
@@ -38,7 +45,7 @@ export interface PaymentRequest {
 export interface ScanResult {
   scanId: string;
   verdict: 'suspicious' | 'needs_verification' | 'verified_official_contact';
-  headline: string; spokenSummary: string;
+  headline: string; spokenSummary: string; spokenLang?: string;
   signals: { code: string; severity: 'high' | 'medium' | 'info'; title: string; detail: string; evidence?: string }[];
   aiReasons: string[];
   safeActions: { label: string; url: string }[];

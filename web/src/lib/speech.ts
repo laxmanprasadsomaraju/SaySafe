@@ -12,11 +12,13 @@
  *   ("Read aloud", "Replay") or has turned on "Read everything".
  */
 
+import { LANGS, normaliseLang, type LangCode } from '../../../shared/lang';
+
 export type SpeechStatus = 'ready' | 'listening' | 'thinking' | 'speaking' | 'paused' | 'muted' | 'unavailable' | 'error';
 /** auto: short reply, only if autoSpeak is on. critical: safety warning, spoken if autoSpeak is on even when longer.
  *  user: the user pressed a Read aloud / Replay button (unmutes). list: the opt-in "Read everything" mode. */
 export type SpeechPriority = 'auto' | 'critical' | 'user' | 'list';
-export interface SpeechPrefs { muted: boolean; autoSpeak: boolean; rate: number; readAll: boolean }
+export interface SpeechPrefs { muted: boolean; autoSpeak: boolean; rate: number; readAll: boolean; lang: LangCode }
 export interface SpeechSnapshot {
   status: SpeechStatus;
   supported: boolean;
@@ -27,17 +29,19 @@ export interface SpeechSnapshot {
   segment: { index: number; total: number } | null;
   canReplay: boolean;
   error: string | null;
+  /** Why something was shown as text instead of spoken (language / no voice). */
+  notice: string | null;
 }
 
 export interface SpeechEnv {
-  synth: Pick<SpeechSynthesis, 'speak' | 'cancel' | 'getVoices'> & Partial<Pick<SpeechSynthesis, 'resume' | 'paused'>> | null;
+  synth: Pick<SpeechSynthesis, 'speak' | 'cancel' | 'getVoices'> & Partial<Pick<SpeechSynthesis, 'resume' | 'paused' | 'addEventListener'>> | null;
   Utterance: (new (text: string) => SpeechSynthesisUtterance) | null;
   storage: Pick<Storage, 'getItem' | 'setItem'> | null;
 }
 
 export const AUTO_MAX_CHARS = 320;
 export const PREFS_KEY = 'ss-voice-prefs';
-const DEFAULT_PREFS: SpeechPrefs = { muted: false, autoSpeak: true, rate: 0.95, readAll: false };
+const DEFAULT_PREFS: SpeechPrefs = { muted: false, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' };
 
 /** Split into sentences; very long sentences are split again at commas so each utterance stays short. */
 export function splitSentences(text: string): string[] {
@@ -70,6 +74,9 @@ export class SpeechController {
   private lastText: string | string[] | null = null;
   private lastPriority: SpeechPriority = 'user';
   private err: string | null = null;
+  private notice: string | null = null;
+  private textLang: LangCode = 'en';
+  private lastLang: LangCode = 'en';
   private prefs: SpeechPrefs;
   private listeners = new Set<() => void>();
   private snap: SpeechSnapshot;
@@ -77,7 +84,18 @@ export class SpeechController {
   constructor(private env: SpeechEnv) {
     this.prefs = this.loadPrefs();
     this.snap = this.build();
+    try { env.synth?.addEventListener?.('voiceschanged', () => this.emit()); } catch { /* optional */ }
   }
+
+  /** A device voice for this language (en falls back to the default voice, others never do). */
+  private voiceFor(lang: LangCode): SpeechSynthesisVoice | null {
+    try {
+      const voices = this.env.synth?.getVoices() ?? [];
+      if (lang === 'en') return voices.find((x) => /^en-(IE|GB)/i.test(x.lang)) ?? voices.find((x) => /^en/i.test(x.lang)) ?? null;
+      return voices.find((x) => x.lang?.toLowerCase().startsWith(lang)) ?? null;
+    } catch { return null; }
+  }
+  hasVoice(lang: LangCode) { return lang === 'en' || this.voiceFor(lang) !== null; }
 
   // ----- store plumbing (useSyncExternalStore) -----
   subscribe = (fn: () => void) => { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; };
@@ -99,6 +117,7 @@ export class SpeechController {
       segment: (this.speaking || this.paused) && this.segTotal > 1 && cur ? { index: cur.seg + 1, total: this.segTotal } : null,
       canReplay: this.lastText !== null && supported,
       error: this.err,
+      notice: this.notice,
     };
   }
 
@@ -115,6 +134,7 @@ export class SpeechController {
           autoSpeak: typeof j.autoSpeak === 'boolean' ? j.autoSpeak : p.autoSpeak,
           rate: typeof j.rate === 'number' && j.rate >= 0.6 && j.rate <= 1.5 ? j.rate : p.rate,
           readAll: typeof j.readAll === 'boolean' ? j.readAll : p.readAll,
+          lang: normaliseLang(j.lang),
         };
       } else if (st?.getItem('ss-voice') === 'off') p.muted = true; // legacy "Voice" toggle
     } catch { /* defaults */ }
@@ -154,24 +174,36 @@ export class SpeechController {
    * Speak text (or a list of parts, read one after another). Returns true if speech started.
    * A Promise is awaited first; if anything newer happened meanwhile (stop, navigation, another speak) it is dropped.
    */
-  async speak(input: string | string[] | Promise<string | string[]>, opts: { priority?: SpeechPriority; turn?: number } = {}): Promise<boolean> {
+  async speak(input: string | string[] | Promise<string | string[]>, opts: { priority?: SpeechPriority; turn?: number; lang?: LangCode } = {}): Promise<boolean> {
     if (opts.turn !== undefined && opts.turn !== this.gen) return false;
     if (input instanceof Promise) {
       const g = this.gen;
       let v: string | string[];
       try { v = await input; } catch { return false; }
       if (g !== this.gen) return false;
-      return this.speakNow(v, opts.priority ?? 'auto');
+      return this.speakNow(v, opts.priority ?? 'auto', opts.lang ?? 'en');
     }
-    return this.speakNow(input, opts.priority ?? 'auto');
+    return this.speakNow(input, opts.priority ?? 'auto', opts.lang ?? 'en');
   }
 
-  private speakNow(input: string | string[], priority: SpeechPriority): boolean {
+  private speakNow(input: string | string[], priority: SpeechPriority, lang: LangCode = 'en'): boolean {
     const parts = (Array.isArray(input) ? input : [input]).map((t) => t.trim()).filter(Boolean);
     if (this.activity === 'thinking') this.activity = null;
+    this.notice = null;
     if (!parts.length) { this.emit(); return false; }
     this.lastText = Array.isArray(input) ? parts : parts[0];
     this.lastPriority = priority;
+    this.lastLang = lang;
+    // Reply language: never speak text in another language automatically (e.g. an English fallback
+    // while Spanish is selected). It stays on screen. A user-pressed "Read aloud" may read it in its own language.
+    if (priority !== 'user' && lang !== this.prefs.lang) {
+      this.notice = `This reply is in ${LANGS[lang].name}, so it is shown as text only.`;
+      this.emit(); return false;
+    }
+    if (lang !== 'en' && this.env.synth && !this.voiceFor(lang)) {
+      this.notice = `No ${LANGS[lang].name} voice on this device; reading on screen.`;
+      this.emit(); return false;
+    }
     const total = parts.join(' ').length;
     if (!this.env.synth || !this.env.Utterance) { this.emit(); return false; }
     if (this.prefs.muted) {
@@ -188,6 +220,7 @@ export class SpeechController {
     this.index = 0;
     this.err = null;
     this.paused = false;
+    this.textLang = lang;
     this.play(g);
     return true;
   }
@@ -199,8 +232,8 @@ export class SpeechController {
     if (this.index >= this.queue.length) { this.speaking = false; this.queue = []; this.index = 0; this.segTotal = 0; this.emit(); return; }
     const u = new U(this.queue[this.index].text);
     u.rate = this.prefs.rate;
-    u.lang = 'en-IE';
-    try { const v = synth.getVoices().find((x) => /en-(IE|GB)/.test(x.lang)); if (v) u.voice = v; } catch { /* no voices yet */ }
+    u.lang = LANGS[this.textLang].bcp47;
+    const v = this.voiceFor(this.textLang); if (v) u.voice = v;
     u.onend = () => { if (g !== this.gen) return; this.index++; this.play(g); };
     u.onerror = (e: any) => {
       if (g !== this.gen) return;
@@ -219,7 +252,7 @@ export class SpeechController {
     this.gen++;
     this.hardCancel();
     this.queue = []; this.index = 0; this.segTotal = 0;
-    this.speaking = false; this.paused = false; this.err = null;
+    this.speaking = false; this.paused = false; this.err = null; this.notice = null;
     this.emit();
   }
   pause() {
@@ -237,7 +270,7 @@ export class SpeechController {
     this.play(g); // restart from the current sentence
   }
   togglePause() { if (this.paused) this.resume(); else this.pause(); }
-  replay() { if (this.lastText !== null) this.speakNow(this.lastText, this.lastPriority === 'list' ? 'list' : 'user'); }
+  replay() { if (this.lastText !== null) this.speakNow(this.lastText, this.lastPriority === 'list' ? 'list' : 'user', this.lastLang); }
 }
 
 function browserEnv(): SpeechEnv {

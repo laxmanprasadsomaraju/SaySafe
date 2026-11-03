@@ -1,6 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Square, Pause, Play, RotateCcw, Volume2, VolumeX, SlidersHorizontal, ListMusic } from 'lucide-react';
 import { speech, type SpeechStatus } from '../lib/speech';
+import { LANGS, LANG_CODES, normaliseLang } from '../../../shared/lang';
 import { useSpeech } from '../lib/voice';
 
 const CHIP: Record<SpeechStatus, { label: string; cls: string; dot: string }> = {
@@ -46,6 +47,13 @@ export function VoiceBar() {
               Read everything (whole results lists)
             </label>
             <label className="inline-flex items-center gap-3 min-h-11 font-bold">
+              Reply language (beta)
+              <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={s.prefs.lang} onChange={(e) => { speech.stop(); speech.setPrefs({ lang: normaliseLang(e.target.value) }); }}>
+                {LANG_CODES.map((c) => <option key={c} value={c} lang={LANGS[c].bcp47}>{LANGS[c].label}</option>)}
+              </select>
+            </label>
+            {s.prefs.lang !== 'en' && <p className="w-full text-base text-ink-soft">SaySafe will answer and listen in {LANGS[s.prefs.lang].name} where it can. Screens stay in English. Anything not in {LANGS[s.prefs.lang].name} is shown as text, not spoken{speech.hasVoice(s.prefs.lang) ? '' : `. This device has no ${LANGS[s.prefs.lang].name} voice, so replies are shown on screen`}.</p>}
+            <label className="inline-flex items-center gap-3 min-h-11 font-bold">
               Speed
               <select className="min-h-11 rounded-full border-2 border-line bg-paper px-3" value={String(s.prefs.rate)} onChange={(e) => speech.setPrefs({ rate: Number(e.target.value) })}>
                 <option value="0.8">Slower</option>
@@ -66,6 +74,7 @@ export function VoiceBar() {
             {s.segment && <span className="inline-flex items-center gap-1 mr-2 rounded-full bg-amber-soft text-amber font-bold text-sm px-2 py-0.5 whitespace-nowrap"><ListMusic className="size-4" aria-hidden />Reading all · {s.segment.index} of {s.segment.total}</span>}
             {s.caption ? <span className="text-navy">“{s.caption}”</span> : s.status === 'unavailable' ? 'This browser can’t speak. Everything is shown as text.' : s.prefs.readAll ? <span className="font-bold text-amber">Read everything is on</span> : null}
             {s.error && <span className="text-danger font-bold"> {s.error}</span>}
+            {!s.caption && s.notice && <span className="text-ink-soft"> {s.notice}</span>}
           </p>
         </div>
         <div className="flex gap-1.5 justify-end shrink-0">
@@ -93,9 +102,9 @@ export function VoiceBar() {
 }
 
 /** Per-card / per-section "Read aloud" (user-chosen, so it plays even when auto-speak is off). */
-export function ReadAloud({ text, label = 'Read aloud', className = '' }: { text: string | string[]; label?: string; className?: string }) {
+export function ReadAloud({ text, label = 'Read aloud', className = '', lang }: { text: string | string[]; label?: string; className?: string; lang?: string }) {
   return (
-    <button type="button" onClick={() => speech.speak(text, { priority: 'user' })} className={`inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-11 ${className}`}>
+    <button type="button" onClick={() => speech.speak(text, { priority: 'user', lang: normaliseLang(lang) })} className={`inline-flex items-center gap-2 font-bold text-teal underline underline-offset-4 min-h-11 ${className}`}>
       <Volume2 className="size-5" aria-hidden />{label}
     </button>
   );

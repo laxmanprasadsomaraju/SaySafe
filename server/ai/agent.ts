@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { chatJSON, aiConfigured } from './provider.js';
 import { searchProducts, type Product } from '../catalogue/products.js';
+import { replyLanguageInstruction, looksLike, type LangCode } from '../../shared/lang.js';
 
 export const Intent = z.object({
   action: z.enum(['shop', 'check_message', 'trusted_help', 'order_problem', 'select_product', 'confirm', 'cancel', 'chat']),
@@ -50,17 +51,22 @@ export function fallbackIntent(said: string): IntentT {
   return { action: 'chat', reply: 'I can help you shop, check a message, or find trusted help. What would you like?' };
 }
 
-export async function interpret(said: string, context: { name: string; lastResults?: string[]; step?: string }) {
-  if (!aiConfigured()) return { intent: fallbackIntent(said), ai: false as const };
+export async function interpret(said: string, context: { name: string; lastResults?: string[]; step?: string; lang?: LangCode }) {
+  const lang = context.lang ?? 'en';
+  if (!aiConfigured()) return { intent: fallbackIntent(said), ai: false as const, replyLang: 'en' as LangCode };
   try {
     const ctx = `User name: ${context.name}. Current step: ${context.step ?? 'home'}. ${context.lastResults?.length ? 'Options on screen: ' + context.lastResults.map((n, i) => `${i + 1}. ${n}`).join('; ') : ''}`;
-    const r = await chatJSON(Intent, [
-      { role: 'system', content: SYSTEM },
-      { role: 'user', content: `${ctx}\n<user_said>${said.slice(0, 4000)}</user_said>` },
-    ], { fast: true, maxTokens: 400 });
-    return { intent: r.data, ai: true as const, provider: r.provider, model: r.model };
+    const messages = [
+      { role: 'system' as const, content: SYSTEM + replyLanguageInstruction(lang) },
+      { role: 'user' as const, content: `${ctx}\n<user_said>${said.slice(0, 4000)}</user_said>` },
+    ];
+    // Non-English replies use the larger model (the small one drifts to English), with one retry if it still does.
+    let r = await chatJSON(Intent, messages, { fast: lang === 'en', maxTokens: 400 });
+    if (lang !== 'en' && !looksLike(r.data.reply, lang)) r = await chatJSON(Intent, messages, { fast: false, maxTokens: 400 });
+    const replyLang: LangCode = lang === 'en' || looksLike(r.data.reply, lang) ? lang : 'en';
+    return { intent: r.data, ai: true as const, provider: r.provider, model: r.model, replyLang };
   } catch {
-    return { intent: fallbackIntent(said), ai: false as const };
+    return { intent: fallbackIntent(said), ai: false as const, replyLang: 'en' as LangCode };
   }
 }
 

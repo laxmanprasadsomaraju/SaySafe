@@ -42,7 +42,10 @@ export default function Check() {
   const show = (r: ScanResult) => {
     setResult(r); setShared(false);
     // Spoken: risk first, then the protective action. The full explanation stays on screen.
-    speech.speak(spokenScam(r), { priority: 'critical', turn: turn.current });
+    // In another reply language, speak the AI summary only if the server confirmed it is in that language.
+    const lang = speech.getSnapshot().prefs.lang;
+    if (lang !== 'en' && r.spokenLang === lang) speech.speak(r.spokenSummary, { priority: 'critical', turn: turn.current, lang });
+    else speech.speak(spokenScam(r), { priority: 'critical', turn: turn.current, lang: 'en' });
     setTimeout(() => { resultRef.current?.focus({ preventScroll: true }); resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 50);
   };
   const scan = useCallback(async (t: string) => {
@@ -118,8 +121,8 @@ export default function Check() {
               <div className={`border-l-[8px] rounded-[var(--radius-card)] p-6 ${v.cls}`}>
                 <p className={`flex items-center gap-2 font-bold uppercase tracking-wider text-sm ${v.ic}`}><v.icon className="size-6" aria-hidden />{v.label}</p>
                 <h2 className="text-[1.9rem] mt-2">{result.headline}</h2>
-                <p className="mt-3 text-[length:var(--text-lead)]">{result.spokenSummary}</p>
-                <ReadAloud className="mt-3" text={[result.headline, result.spokenSummary]} label="Read the full result aloud" />
+                <p className="mt-3 text-[length:var(--text-lead)]" lang={result.spokenLang && result.spokenLang !== 'en' ? result.spokenLang : undefined}>{result.spokenSummary}</p>
+                <ReadAloud className="mt-3" text={result.spokenLang && result.spokenLang !== 'en' ? result.spokenSummary : [result.headline, result.spokenSummary]} lang={result.spokenLang} label="Read the full result aloud" />
               </div>
               {result.ocrUncertain && <Notice tone="warn" title="Some letters in the screenshot were hard to read.">Please check the address carefully, or paste the text instead.</Notice>}
               {top.length > 0 && (

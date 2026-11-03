@@ -6,6 +6,7 @@ import { Button, Card, PageTitle, MicButton, Caption, Notice, SandboxBadge } fro
 import { api, eur, newKey, type Product } from '../lib/api';
 import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
+import { normaliseLang } from '../../../shared/lang';
 
 interface Quote { lines: { productId: string; name: string; unitCents: number; quantity: number; lineCents: number; image: string }[]; totalCents: number; currency: string; merchant: string; needsFamily: boolean; thresholdCents: number; spoken: string }
 
@@ -16,6 +17,7 @@ export default function Shop() {
   const [query, setQuery] = useState('');
   const [products, setProducts] = useState<Product[]>([]);
   const [caption, setCaption] = useState<string | null>(null);
+  const [captionLang, setCaptionLang] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [quote, setQuote] = useState<Quote | null>(null);
   const [paying, setPaying] = useState(false);
@@ -33,7 +35,7 @@ export default function Shop() {
     if (r.intent.action === 'confirm' && quote) { pay(); return; }
     if (r.intent.action === 'cancel') { setQuote(null); }
     if (r.intent.action === 'check_message') { nav('/check'); return; }
-    setCaption(r.reply); speech.speak(r.reply, { turn: turn.current });
+    setCaption(r.reply); setCaptionLang(r.replyLang); speech.speak(r.reply, { turn: turn.current, lang: normaliseLang(r.replyLang) });
   };
 
   const ask = useCallback(async (text: string) => {
@@ -56,7 +58,7 @@ export default function Shop() {
       key.current = newKey();
       setQuote(q);
       const extra = q.needsFamily ? ` This is above your protected limit of ${eur(q.thresholdCents)}, so I'll ask your family member to check it first.` : ' Would you like to pay with PayPal?';
-      setCaption(q.spoken + extra); speech.speak(q.spoken + extra);
+      setCaption(q.spoken + extra); setCaptionLang(undefined); speech.speak(q.spoken + extra);
       setTimeout(() => reviewRef.current?.focus(), 50);
     } catch (e: any) { setErr(e.message); }
   };
@@ -85,7 +87,7 @@ export default function Shop() {
               <Button type="submit" busy={busy} icon={<Search className="size-6" aria-hidden />}>Find</Button>
             </form>
             {voice.error && <p role="alert" className="text-danger font-bold">{voice.error}</p>}
-            <Caption text={caption} />
+            <Caption text={caption} lang={captionLang} />
           </div>
         </div>
       )}
@@ -142,7 +144,7 @@ export default function Shop() {
               <p className="flex items-start gap-3"><Users className={`size-7 shrink-0 ${quote.needsFamily ? 'text-amber' : 'text-teal'}`} aria-hidden /><span><span className="font-bold block">{quote.needsFamily ? 'Family check needed' : 'No family check needed'}</span><span className="text-ink-soft text-lg">Your protected limit is {eur(quote.thresholdCents)}.</span></span></p>
               <p className="flex items-start gap-3"><Lock className="size-7 text-teal shrink-0" aria-hidden /><span><span className="font-bold block">You approve the payment at PayPal</span><span className="text-ink-soft text-lg">SaySafe never sees your PayPal password.</span></span></p>
             </Card>
-            <Caption text={caption} />
+            <Caption text={caption} lang={captionLang} />
             <div className="flex flex-col gap-3">
               <Button onClick={pay} busy={paying}>{quote.needsFamily ? 'Ask my family to check' : 'Continue to PayPal'}</Button>
               <Button variant="secondary" icon={<ArrowLeft className="size-6" aria-hidden />} onClick={() => { setQuote(null); setCaption(null); }} disabled={paying}>Cancel, go back</Button>
