@@ -50,7 +50,7 @@ export default function Judges() {
         <ul className="mt-4 grid gap-2 text-lg list-disc pl-6">
           <li>The AI never pays, approves or captures. Only buttons do, checked by the server.</li>
           <li>Family approval (Alex) and buyer approval at PayPal (Mary) are separate. Both are needed over the €75 limit.</li>
-          <li>Alex sees only the requests sent to him (item, shop, amount, and later whether it was paid). Purchases under the limit stay private unless Mary turns on “Share spending summaries with Alex” (totals only) or “Share my individual purchase history with Alex”; both are off by default. Only Mary can change her limit. Enforced on the server.</li>
+          <li>Alex sees only the requests sent to him (item, shop, amount, and later whether it was paid). Purchases under the limit stay private unless Mary turns on “Share spending summaries with Alex” (totals only) or “Share my purchase history with Alex”; both are off by default. Only Mary can change her limit. Enforced on the server.</li>
           <li>“Paid” appears only after PayPal confirms the capture; “Webhook verified” only after PayPal’s signed notice is checked.</li>
           <li>Sample data is always labelled and never counted with real sandbox payments.</li>
           <li>Real Channel3 products are bought on the retailer’s site; only the Demo Shop is paid in SaySafe.</li>

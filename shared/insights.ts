@@ -83,6 +83,14 @@ export interface InsightsPayload {
   scans: InsightScan[];
   events: InsightEvent[];
   kpis: InsightKpis;
+  /** What the elder chose to share beyond review requests (both off by default). */
+  sharing?: { shareSummaries: boolean; shareHistory: boolean };
+  /** Totals per month / category; null unless the elder shares spending summaries. Never individual rows. */
+  spendingSummary?: {
+    basis: string;
+    months: { month: string; currency: string; count: number; totalCents: number; sample: boolean }[];
+    categories: { category: string; currency: string; count: number; totalCents: number; sample: boolean }[];
+  } | null;
 }
 
 export interface InsightsAgentAnswer {

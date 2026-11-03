@@ -16,6 +16,7 @@ import { STATE_LABELS } from '../../shared/insights.js';
 import type { InsightsSummaryT, MoneyT } from '../../shared/insightsSummary.js';
 import type { SubscriptionT } from '../../shared/companion.js';
 import { isSeededRow } from './model.js';
+import { familyVisibleRows } from '../family/permissions.js';
 
 const toIso = (s: string | null | undefined) => (s ? new Date(s.includes('T') ? s : `${s.replace(' ', 'T')}Z`).toISOString() : '');
 
@@ -38,8 +39,9 @@ export function buildSummary(v: Viewer, now = new Date()): InsightsSummaryT {
   const elder = db.prepare('SELECT u.name AS name FROM households h JOIN users u ON u.id = h.elder_id WHERE h.id = ?').get(hh) as { name: string } | undefined;
   const nowMs = now.getTime();
 
-  // ---------- Demo Shop purchases (shared with family: same policy as Activity + family dashboard) ----------
-  const rows = db.prepare(
+  // ---------- Demo Shop purchases (family: permission-filtered, see server/family/permissions.ts) ----------
+  // Family: only requests routed to them for review (+ Mary's history while she shares it). Same filter as every family route.
+  const rows = v.role === 'family' ? familyVisibleRows(hh, 500) : db.prepare(
     `SELECT id, state, items_json, amount_cents, currency, paypal_capture_id, captured_amount, captured_currency, idempotency_key, example, created_at, updated_at
        FROM payment_requests WHERE household_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 500`,
   ).all(hh) as any[];

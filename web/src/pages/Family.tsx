@@ -34,22 +34,20 @@ export function FamilyPair() {
   );
 }
 
-interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; verdictLabel?: string; summary: string; created_at: string }[] }
+interface Overview { me: { name: string }; elder: { name: string }; policy: { thresholdCents: number; currency: string }; sharing?: { shareSummaries: boolean; shareHistory: boolean }; requests: PaymentRequest[]; alerts: { id: string; verdict: string; verdictLabel?: string; summary: string; created_at: string }[] }
 
 export default function Family() {
   const nav = useNavigate();
   const [o, setO] = useState<Overview | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [limit, setLimit] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const cfg = useConfig();
 
   const inFlight = useRef(false);
   const load = () => {
     if (inFlight.current) return Promise.resolve(); // polling: never stack requests while the server is waking up
     inFlight.current = true;
-    return api<Overview>('/api/family/overview').then((x) => { setO(x); setErr((p) => (p?.startsWith('We could not reach') ? null : p)); setLimit((x.policy.thresholdCents / 100).toString()); }).catch((e) => { if (e.status === 401) nav('/family/pair', { replace: true }); else setErr(e.message); }).finally(() => { inFlight.current = false; });
+    return api<Overview>('/api/family/overview').then((x) => { setO(x); setErr((p) => (p?.startsWith('We could not reach') ? null : p)); }).catch((e) => { if (e.status === 401) nav('/family/pair', { replace: true }); else setErr(e.message); }).finally(() => { inFlight.current = false; });
   };
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []); // eslint-disable-line
 
@@ -58,10 +56,6 @@ export default function Family() {
     try { await api(`/api/family/requests/${r.id}/decision`, { body: { decision, approvalId: r.approval!.id } }); await load(); }
     catch (e: any) { setErr(e.message); }
     finally { setBusyId(null); }
-  };
-  const saveLimit = async (e: React.FormEvent) => {
-    e.preventDefault(); setErr(null); setSaved(false);
-    try { await api('/api/family/policy', { body: { thresholdEur: Number(limit) } }); setSaved(true); load(); } catch (er: any) { setErr(er.message); }
   };
 
   if (!o) return <Layout mode="family">{err ? <Notice tone="danger" title={err} /> : <p>Loading…</p>}</Layout>;
@@ -110,19 +104,20 @@ export default function Family() {
           {cfg?.insights !== false && (
             <Card className="p-6">
               <h2 className="text-2xl flex items-center gap-2"><BarChart3 className="size-6 text-teal" aria-hidden />Safety insights</h2>
-              <p className="mt-2 text-lg text-ink-soft">Purchases, your decisions, PayPal confirmations and the scam checks Mary shares with you.</p>
-              <p className="mt-1 text-base text-ink-soft">Her own payment records, subscriptions and contacts stay private to her.</p>
+              <p className="mt-2 text-lg text-ink-soft">The purchases you reviewed, your decisions, PayPal confirmations and the scam checks {o.elder.name} shares with you.</p>
+              <p className="mt-1 text-base text-ink-soft">Her other purchases, payment records, subscriptions and contacts stay private to her.</p>
               <Link to="/family/insights" className="mt-3 inline-flex items-center min-h-12 px-5 rounded-full border-2 border-teal text-teal-deep font-bold hover:bg-teal-soft text-lg" data-testid="family-view-insights">View insights</Link>
             </Card>
           )}
-          <Card className="p-6">
-            <h2 className="text-2xl flex items-center gap-2"><Wallet className="size-6 text-teal" aria-hidden />Protected limit</h2>
-            <p className="mt-2 text-lg text-ink-soft">Purchases above this need your review first.</p>
-            <form onSubmit={saveLimit} className="mt-4 flex gap-3 items-end">
-              <div className="flex-1"><label htmlFor="limit" className="font-bold block mb-2">Limit in euro</label><input id="limit" type="number" min={0} max={500} step={1} value={limit} onChange={(e) => setLimit(e.target.value)} className="w-full min-h-14 rounded-2xl border-2 border-line px-5 bg-paper focus:border-teal outline-none" /></div>
-              <Button type="submit" variant="secondary">Save</Button>
-            </form>
-            {saved && <p role="status" className="mt-2 text-teal font-bold">Saved.</p>}
+          <Card className="p-6" data-testid="family-what-you-see">
+            <h2 className="text-2xl flex items-center gap-2"><Wallet className="size-6 text-teal" aria-hidden />What you can see</h2>
+            <p className="mt-2 text-lg">{o.elder.name}'s limit is {eur(o.policy.thresholdCents)}. Purchases above it come to you to check.</p>
+            <p className="mt-1 text-base text-ink-soft">{o.sharing?.shareHistory
+              ? `${o.elder.name} also shares her purchase history with you.`
+              : o.sharing?.shareSummaries
+                ? `${o.elder.name} also shares her spending totals with you. Her other purchases stay private.`
+                : `You only see purchases that need your OK. Her other purchases stay private.`}</p>
+            <p className="mt-1 text-base text-ink-soft">Only {o.elder.name} can change her limit or what she shares.</p>
           </Card>
           <Card className="p-6">
             <h2 className="text-2xl flex items-center gap-2"><ShieldAlert className="size-6 text-danger" aria-hidden />Alerts {o.elder.name} shared</h2>

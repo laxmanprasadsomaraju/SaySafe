@@ -177,8 +177,22 @@ function AskBox() {
 export function NativeInsightsBody({ d }: { d: InsightsPayload }) {
   const k = d.kpis;
   const pending = d.payments.filter((p) => p.awaitingMyDecision);
+  const sh = d.sharing ?? { shareSummaries: false, shareHistory: false };
+  const totals = d.spendingSummary?.months.filter((m) => !m.sample) ?? [];
   return (
     <div className="space-y-6">
+      <p className="text-lg text-ink-soft" data-testid="insights-scope">{sh.shareHistory
+        ? `${d.elder.name} shares her purchase history with you. Her messages, contacts and subscriptions stay private.`
+        : `You see the purchases ${d.elder.name} asked you to check${sh.shareSummaries ? ', and her spending totals' : ''}. Her other purchases stay private.`}</p>
+      {d.spendingSummary && (
+        <Card className="p-5" aria-labelledby="totals-h">
+          <h2 id="totals-h" className="text-2xl flex items-center gap-2"><Wallet className="size-6 text-teal" aria-hidden />Spending totals {d.elder.name} shares</h2>
+          {totals.length === 0 ? <p className="mt-2 text-ink-soft">No paid Demo Shop purchases yet.</p> : (
+            <ul className="mt-3 space-y-1 text-lg">{totals.slice(-6).map((m) => <li key={`${m.month}${m.currency}`}><span className="font-bold">{m.month}</span>: {money(m.totalCents / 100, m.currency)} · {m.count} purchase{m.count === 1 ? '' : 's'}</li>)}</ul>
+          )}
+          <p className="mt-2 text-sm text-ink-soft">Totals only, PayPal sandbox (no real money). Single purchases are not shown.</p>
+        </Card>
+      )}
       <section aria-label="Key numbers" className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         <Kpi icon={<Clock className="size-5 text-amber" aria-hidden />} label="Waiting for you" value={String(k.pendingApprovals)} />
         <Kpi icon={<CheckCircle2 className="size-5 text-teal" aria-hidden />} label="Approved" value={String(k.approved)} />

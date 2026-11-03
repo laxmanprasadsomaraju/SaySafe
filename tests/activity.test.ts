@@ -76,18 +76,21 @@ describe('GET /api/activity', () => {
     expect([...times].sort().reverse()).toEqual(times);
   });
 
-  it('family sees the household payments but only scans the elder shared', async () => {
+  it('family sees only purchases routed to them for review (not under-limit ones) and only scans the elder shared', async () => {
     const mary = await elder();
     const alex = await familyFor(mary);
     const a = (await mary.post('/api/scan').set(H).send({ text: 'Your PayPal account is suspended, verify at http://paypa1-secure.example now' }).expect(200)).body;
     await mary.post('/api/scan').set(H).send({ text: 'Another odd PayPal message http://paypal.login-check.example' }).expect(200);
     await mary.post(`/api/scan/${a.scanId}/share`).set(H).send({}).expect(200);
-    await buy(mary, 'kettle-classic');
+    const kettle = (await buy(mary, 'kettle-classic')).body.request.id; // €32: under Mary's limit -> private
+    const micro = (await buy(mary, 'microwave')).body.request.id; // €120: above the limit -> sent to family for review
     const r = await alex.get('/api/activity?as=family').expect(200);
     expect(r.body.role).toBe('family');
     const scans = r.body.items.filter((i: any) => i.type === 'scan');
     expect(scans.map((s: any) => s.id)).toEqual([a.scanId]);
-    expect(r.body.items.some((i: any) => i.type === 'payment')).toBe(true);
+    const pays = r.body.items.filter((i: any) => i.type === 'payment').map((i: any) => i.id);
+    expect(pays).toContain(micro);
+    expect(pays).not.toContain(kettle);
   });
 
   it('filters by text, status, type, amount and date', async () => {

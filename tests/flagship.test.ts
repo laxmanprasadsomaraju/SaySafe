@@ -389,12 +389,19 @@ describe('what Mary can shop (server catalogue, never a blank result)', () => {
 
 describe('family dashboard counts (live finding: sample request shown as "waiting for you")', () => {
   it('sample requests are never "waiting for you" and sample decisions are not counted', async () => {
-    const { f } = await household(true);
-    const d = (await f.get('/api/family/insights').expect(200)).body;
+    const { m, f } = await household(true);
+    let d = (await f.get('/api/family/insights').expect(200)).body;
     expect(d.kpis.pendingApprovals).toBe(0);
     expect(d.kpis.approved).toBe(0);
     expect(d.kpis.declined).toBe(0);
     expect(d.payments.some((p: any) => p.source === 'seeded' && p.state === 'FAMILY_APPROVAL_PENDING')).toBe(true); // still listed, labelled
+    // Only sample purchases that went through family review are visible; under-limit ones are private unless Mary shares her history.
+    const reviewedSamplePaid = (db.prepare("SELECT COUNT(*) n FROM payment_requests p WHERE example=1 AND state='CAPTURED' AND household_id=(SELECT household_id FROM payment_requests WHERE id=?) AND EXISTS (SELECT 1 FROM approvals a WHERE a.request_id=p.id)").get(d.payments[0].id) as any).n;
+    expect(d.kpis.seededCaptured.count).toBe(reviewedSamplePaid);
+    expect(reviewedSamplePaid).toBeLessThan(2);
+    await m.post('/api/family/sharing').set(H).send({ shareHistory: true }).expect(200);
+    d = (await f.get('/api/family/insights').expect(200)).body;
+    expect(d.kpis.pendingApprovals).toBe(0);
     expect(d.kpis.seededCaptured.count).toBe(2);
     expect(d.kpis.sandboxCaptured.count).toBe(0);
   });

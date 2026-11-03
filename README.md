@@ -93,7 +93,7 @@ SaySafe’s PayPal connection is a merchant account: it can’t read a buyer’s
 
 Server-side prices; family approval bound to the exact basket, single use, 30-minute expiry; Mary can’t approve her own request; payer approval at PayPal; one capture in flight; durable idempotency; verified, deduplicated webhooks; sample data never actionable; per-visitor household isolation; never opens links in messages.
 
-**Family permissions** (enforced on the server): Alex sees and answers only the requests above Mary’s limit (item, shop, amount, status, and later whether it was paid). Purchases under the limit stay private. Two optional switches, both off by default and revocable: “Share spending summaries with Alex” (totals only) and “Share my individual purchase history with Alex”. Only Mary changes her limit. Alex never sees her conversations, other payments, contacts or subscriptions. Details: [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md).
+**Family permissions** (enforced on the server): Alex sees and answers only the requests above Mary’s limit (item, shop, amount, status, and later whether it was paid). Purchases under the limit stay private. Two optional switches, both off by default and revocable: “Share spending summaries with Alex” (totals only) and “Share my purchase history with Alex”. Only Mary changes her limit. Alex never sees her conversations, other payments, contacts or subscriptions. Details: [docs/SECURITY-BOUNDARIES.md](docs/SECURITY-BOUNDARIES.md).
 
 ## Tests and evidence
 

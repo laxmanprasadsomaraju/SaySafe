@@ -161,6 +161,16 @@ try {
   ok('11 repeated approval does not duplicate the action', again.status >= 400 && (HOSTED || sql(`SELECT count(*) FROM audit_log WHERE target='${id}' AND action='approval.approved'`) === '1'), `racing request → ${racer.status}, repeat → ${again.status}`);
   ok('8 approval saved to THIS purchase only (fingerprint-bound)', HOSTED || (sql(`SELECT status FROM approvals WHERE request_id='${id}'`) === 'approved' && sql(`SELECT state FROM payment_requests WHERE id='${id}'`) === 'FAMILY_APPROVED'));
   await shot(f, '05b-alex-approved', '[data-card="family_review"]');
+  // Family privacy (server-enforced): Alex sees only requests routed to him; Mary's limit is hers alone.
+  const maryIds = ((await get(m, '/api/payments')).body ?? []).filter((r) => !r.approval).map((r) => r.id);
+  const alexOv = (await get(f, '/api/family/overview')).body ?? {};
+  const alexAct = (await get(f, '/api/activity?as=family')).body ?? {};
+  const seen = new Set([...(alexOv.requests ?? []).map((r) => r.id), ...(alexAct.items ?? []).map((i) => i.id)]);
+  const leaked = maryIds.filter((x) => seen.has(x));
+  const direct = maryIds[0] ? (await get(f, `/api/family/requests/${maryIds[0]}`)).status : 404;
+  ok('P1 Alex never sees Mary’s under-limit purchases (list or by id)', leaked.length === 0 && (alexOv.requests ?? []).every((r) => r.approval) && direct === 404, `${maryIds.length} private, ${leaked.length} leaked, by id → ${direct}`);
+  const limitTry = await post(f, '/api/family/policy', { thresholdEur: 500 });
+  ok('P2 Alex cannot change Mary’s limit (403); sharing is off by default', limitTry.status === 403 && alexOv.sharing?.shareHistory === false && alexOv.sharing?.shareSummaries === false, `policy → ${limitTry.status}`);
 
   // ---------- 6. Mary's same conversation refreshes from the server ----------
   const cont = lastCard(m, 'family_status').getByRole('button', { name: 'Continue to PayPal' });

@@ -30,6 +30,7 @@ import { PRODUCTS, searchProducts, getProduct } from './catalogue/products.js';
 import { interpret, describeOptions, eur } from './ai/agent.js';
 import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from './ai/provider.js';
 import * as pay from './payments/service.js';
+import * as fam from './family/permissions.js';
 import { paypalConfigured, getOrder as getPayPalOrder } from './paypal/client.js';
 import { handleWebhook, webhookStatus } from './payments/webhooks.js';
 import { correlation, count, log, metrics, startedAt } from './obs.js';
@@ -530,7 +531,21 @@ export function createApp() {
       active: links.filter((l) => l.status === 'active').map((l) => ({ name: l.name })),
       pendingInvites: links.filter((l) => l.status === 'pending' && l.pairing_expires_at > Date.now()).length,
       policy: pay.getPolicy(s.householdId),
+      sharing: fam.getSharing(s.householdId),
     });
+  });
+  // Only Mary changes her own limit and what she shares with family (elder session only; household from the session).
+  app.post('/api/policy', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const eurVal = z.number().min(0).max(500).parse(req.body?.thresholdEur);
+    pay.setThreshold(s.householdId, Math.round(eurVal * 100), s.userId);
+    res.json(pay.getPolicy(s.householdId));
+  });
+  app.post('/api/family/sharing', requireRole('elder'), (req, res) => {
+    const s = sessionOf(req);
+    const body = z.object({ shareSummaries: z.boolean().optional(), shareHistory: z.boolean().optional() }).strict().parse(req.body ?? {});
+    res.set('Cache-Control', 'no-store');
+    res.json(fam.setSharing(s.householdId, s.userId, body));
   });
 
   // ---------- Family ----------
@@ -541,13 +556,16 @@ export function createApp() {
     const rows = db.prepare('SELECT id, verdict, summary, created_at FROM security_scans WHERE household_id=? AND shared_with_family=1 ORDER BY created_at DESC LIMIT 10').all(s.householdId);
     // Older rows hold legacy verdict codes; always send the three public verdicts.
     const scans = (rows as { id: string; verdict: string; summary: string; created_at: string }[]).map((r) => ({ ...r, verdict: normalizeVerdict(r.verdict), verdictLabel: VERDICT_LABEL[normalizeVerdict(r.verdict)] }));
-    res.json({ me: { name: s.name }, elder: { name: elder?.name }, policy: pay.getPolicy(s.householdId), requests: pay.listRequests(s.householdId), alerts: scans });
+    // Only requests routed to family for review, plus Mary's purchase history if (and while) she shares it.
+    const sharing = fam.getSharing(s.householdId);
+    res.set('Cache-Control', 'no-store');
+    res.json({ me: { name: s.name }, elder: { name: elder?.name }, policy: pay.getPolicy(s.householdId), sharing: { shareSummaries: sharing.shareSummaries, shareHistory: sharing.shareHistory }, requests: fam.familyVisibleRows(s.householdId, 20).map(pay.publicView), alerts: scans });
   }));
+  // Family members can never change Mary's limit: only she can (POST /api/policy, elder session).
   app.post('/api/family/policy', requireRole('family'), (req, res) => {
     const s = sessionOf(req);
-    const eurVal = z.number().min(0).max(500).parse(req.body?.thresholdEur);
-    pay.setThreshold(s.householdId, Math.round(eurVal * 100), s.userId);
-    res.json(pay.getPolicy(s.householdId));
+    audit(s.householdId, s.userId, 'policy.change_denied');
+    res.status(403).json({ error: 'forbidden', message: 'Only the account holder can change their own limit.' });
   });
   // Read-only: one request of the family member's own household (the Assistant's review card re-fetches it by id).
   app.get('/api/family/requests/:id', requireRole('family'), (req, res) => {
@@ -555,12 +573,13 @@ export function createApp() {
     const id = z.string().regex(/^pay_[A-Za-z0-9_-]{4,60}$/).parse(req.params.id);
     const elder = db.prepare('SELECT u.name FROM households h JOIN users u ON u.id=h.elder_id WHERE h.id=?').get(s.householdId) as any;
     res.set('Cache-Control', 'no-store');
-    res.json({ ...pay.publicView(pay.load(id, s.householdId)), elderName: elder?.name ?? null });
+    res.json({ ...pay.publicView(fam.loadForFamily(id, s.householdId)), elderName: elder?.name ?? null });
   });
   app.post('/api/family/requests/:id/decision', requireRole('family'), (req, res) => {
     const s = sessionOf(req);
     const decision = z.enum(['approve', 'decline']).parse(req.body?.decision);
     const approvalId = z.string().min(5).max(40).parse(req.body?.approvalId);
+    fam.loadForFamily(String(req.params.id), s.householdId); // 404 unless this request was routed to family
     res.json(pay.decide(s.householdId, s.userId, String(req.params.id), approvalId, decision, req.body?.reason));
   });
   // Family members have no refund authority (the old /api/family/requests/:id/refund route was removed on purpose).

@@ -49,6 +49,7 @@ afterAll(() => { globalThis.fetch = realFetch; });
 import { createApp } from '../server/app';
 import { db } from '../server/db/index';
 import { buildInsights } from '../server/insights/model';
+import { setSharing } from '../server/family/permissions';
 import { paymentCandidates } from '../server/companion/store';
 import { searchPayments, classifyRepeat, type Candidate } from '../server/companion/match';
 
@@ -283,6 +284,11 @@ describe('3. evidence model and double counting across surfaces', () => {
     expect(searchPayments([...cands, ...cands], {}).matches.length).toBe(searchPayments(cands, {}).matches.length); // same record twice -> counted once
 
     // Insights (family): every shop row once, typed records never; totals only from CAPTURED; samples separate from sandbox.
+    // Default (nothing shared): only rows routed to family for review.
+    const reviewed = (db.prepare('SELECT DISTINCT request_id id FROM approvals WHERE request_id IN (SELECT id FROM payment_requests WHERE household_id=?)').all(hh) as any[]).map((r) => r.id).sort();
+    expect(buildInsights(hh, { userId: 'x', name: 'Alex' }).payments.map((p) => p.id).sort()).toEqual(reviewed);
+    // With Mary's "Share my individual purchase history" on: every shop row once.
+    setSharing(hh, 'test-mary', { shareHistory: true });
     const ins = buildInsights(hh, { userId: 'x', name: 'Alex' });
     expect(ins.payments.map((p) => p.id).sort()).toEqual([...payIds].sort());
     const capturedSample = db.prepare("SELECT COALESCE(SUM(amount_cents),0) s, COUNT(*) n FROM payment_requests WHERE household_id=? AND state='CAPTURED' AND example=1").get(hh) as any;

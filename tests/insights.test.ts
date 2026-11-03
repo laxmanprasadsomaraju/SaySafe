@@ -21,6 +21,7 @@ import { createApp } from '../server/app';
 import { db } from '../server/db/index';
 import { insightsConfig } from '../server/insights/config';
 import { computeKpis } from '../shared/insights';
+import { setSharing } from '../server/family/permissions';
 
 const app = createApp();
 const H = { 'Content-Type': 'application/json' };
@@ -71,6 +72,7 @@ describe('GET /api/family/insights — authorisation and isolation', () => {
   it('another household sees nothing of this household', async () => {
     const a = await household('Mary');
     const b = await household('Eve');
+    setSharing(a.hh, 'test-mary', { shareHistory: true }); // Mary shares her history with her own Alex only
     const mine = insertPayment(a.hh, { state: 'CAPTURED', cents: 4200, capture: 'CAPmine1', captured: '42.00' });
     db.prepare('INSERT INTO security_scans (id, household_id, verdict, summary, shared_with_family) VALUES (?,?,?,?,1)').run('scan_mine1', a.hh, 'suspicious', 'Fake parcel text');
     const other = await b.family.get('/api/family/insights').expect(200);
@@ -103,6 +105,7 @@ describe('GET /api/family/insights — data model', () => {
 
   it('totals come ONLY from CAPTURED rows; sandbox vs seeded labelled; webhook confirmation derived', async () => {
     const { family, hh } = await household();
+    setSharing(hh, 'test-mary', { shareHistory: true }); // data-model test over the full history Mary chose to share
     insertPayment(hh, { state: 'CAPTURED', cents: 4200, capture: 'CAPreal1', captured: '42.00' });
     insertPayment(hh, { state: 'CAPTURED', cents: 1000, capture: 'SEEDcap1', captured: '10.00', seeded: true });
     insertPayment(hh, { state: 'REFUNDED', cents: 9900, capture: 'CAPrefunded', captured: '99.00' });
@@ -151,6 +154,7 @@ describe('POST /api/family/insights/agent — read-only', () => {
 
   it('answers the example questions from own data and changes nothing', async () => {
     const { family, hh } = await household();
+    setSharing(hh, 'test-mary', { shareHistory: true });
     insertPayment(hh, { state: 'FAMILY_APPROVAL_PENDING', cents: 12000, approval: 'pending' });
     insertPayment(hh, { state: 'CANCELLED', cents: 15000, approval: 'declined' });
     insertPayment(hh, { state: 'CAPTURED', cents: 4200, capture: 'CAPagent1', captured: '42.00' });
