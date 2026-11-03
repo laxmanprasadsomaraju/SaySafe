@@ -1,5 +1,7 @@
 # Family Safety Insights: native dashboard + optional AG Studio view
 
+> **Public deployment:** visitors always get SaySafe’s own **native React dashboard**. An optional AG Studio dashboard exists behind two explicit switches (`INSIGHTS_DASHBOARD=agstudio` on the server and `VITE_AG_STUDIO_LICENSE` at build time). Neither is set on the public deployment, so AG Studio is **not enabled** there and never runs. The AG Studio trial licence is for evaluation only; no licence key is in the repository or the build. (If the public build still contains the compiled, unused AG chunk, that is being removed in the release fixes.)
+
 SaySafe gives family members a read-only **Family Safety Insights** dashboard. It has two front ends on **one backend**:
 
 | | Native SaySafe dashboard | AG Studio dashboard |
