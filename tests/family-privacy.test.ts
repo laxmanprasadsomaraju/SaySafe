@@ -125,7 +125,7 @@ describe('spending approval: Alex reviews only what is routed to him, end to end
     const all = await familyEverything(f);
     expect(all).not.toContain(kettle.request.id);
     expect(all).not.toMatch(/Easy-Pour Electric Kettle/);
-    expect(all).not.toMatch(/John Smith|Shannon Boiler|Netflix|Gutter Guy/); // seeded contacts, payment records, subscriptions
+    expect(all).not.toMatch(/John Smith|Shannon Boiler|StreamBox|TuneWave|Riverside Pharmacy|Pat Doyle|Hearthside|Fence repair/); // seeded contacts, payment records, subscriptions
     for (const path of ['/api/companion/payments', '/api/companion/subscriptions', '/api/companion/contacts', '/api/preferences', '/api/payments', `/api/payments/${kettle.request.id}`]) {
       const r = await f.get(path);
       expect([401, 403, 404]).toContain(r.status);
@@ -321,7 +321,7 @@ describe('sharing switches: default OFF, on, revoke (API and AI payload)', () =>
     expect(user).not.toContain(k.request.id);
     expect(user).not.toContain(micro.request.id);
     expect(user).not.toMatch(/ORDER[A-Z0-9]{6}|CAPORDER|pay_|apr_|hh_|usr_/);
-    expect(user).not.toMatch(/John Smith|Shannon Boiler|Netflix|Gutter Guy/);
+    expect(user).not.toMatch(/John Smith|Shannon Boiler|StreamBox|TuneWave|Riverside Pharmacy|Pat Doyle|Hearthside|Fence repair/);
     expect(data.spendingTotals).toBeNull();
     // Mary's own /insights is unchanged: she still sees everything of hers.
     const mine = (await m.get('/api/insights/summary').expect(200)).body;
