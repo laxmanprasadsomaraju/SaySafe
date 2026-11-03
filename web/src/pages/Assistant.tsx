@@ -315,13 +315,13 @@ export default function Assistant() {
         <textarea id="assistant-input" ref={inputRef} rows={1} value={input} maxLength={4000} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handle(input); } }}
           placeholder={modeInfo?.placeholder ?? 'Message SaySafe'} className="flex-1 min-w-0 min-h-12 max-h-32 resize-none rounded-3xl border-2 border-line bg-paper px-4 py-2.5 leading-snug focus:border-teal outline-none" />
-        {voice.state !== 'unsupported' && (
+        {voice.state !== 'unsupported' && (!input.trim() || voice.state !== 'idle') && (
           <button type="button" onClick={voice.toggle} aria-pressed={voice.state === 'listening'} aria-label={micLabel}
             className={`size-12 shrink-0 rounded-full grid place-items-center text-white ${voice.state === 'listening' ? 'bg-danger ring-4 ring-danger/25' : 'bg-teal hover:bg-teal-deep'}`}>
             {voice.state === 'processing' ? <Loader2 className="size-6 motion-safe:animate-spin" aria-hidden /> : voice.state === 'listening' ? <Square className="size-5" fill="currentColor" aria-hidden /> : <Mic className="size-6" aria-hidden />}
           </button>
         )}
-        <button type="submit" disabled={busy || !input.trim()} aria-label="Send" className="size-12 shrink-0 rounded-full bg-navy text-white grid place-items-center disabled:opacity-40"><SendHorizontal className="size-6" aria-hidden /></button>
+        {(input.trim() || voice.state === 'unsupported') && <button type="submit" disabled={busy || !input.trim()} aria-label="Send" className="size-12 shrink-0 rounded-full bg-navy text-white grid place-items-center disabled:opacity-40"><SendHorizontal className="size-6" aria-hidden /></button>}
       </form>
       {voice.error && <p role="alert" className="mt-1 text-danger font-bold text-base">{voice.error}</p>}
       <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" tabIndex={-1} aria-label="Upload a screenshot to check" onChange={(e) => { const f = e.target.files?.[0]; if (f) void scanImage(f); }} />
@@ -339,7 +339,7 @@ export default function Assistant() {
         detail={prepReady.length ? 'Nothing has been paid.' : 'Your purchase is waiting for their answer.'} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-[length:var(--text-title)]">Assistant</h1>
-        <button type="button" onClick={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} className="inline-flex items-center gap-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal"><RotateCcw className="size-5" aria-hidden />New conversation</button>
+        <button type="button" onClick={() => { speech.stopAll(); setThread(fresh(thread.mode)); }} className="inline-flex items-center gap-2 min-h-12 px-4 rounded-full border-2 border-line font-bold hover:border-teal"><RotateCcw className="size-5" aria-hidden />Start over</button>
       </div>
       <p className="mt-1 text-base text-ink-soft flex items-start gap-2"><ShieldCheck className="size-5 text-teal shrink-0 mt-0.5" aria-hidden />Payments use the PayPal Sandbox (no real money) and always need your own approval at PayPal.</p>
       <div role="log" aria-live="polite" aria-label="Conversation" className="mt-4 flex flex-col gap-3">

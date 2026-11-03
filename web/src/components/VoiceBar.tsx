@@ -58,16 +58,16 @@ export function VoiceBar() {
           </p>}
         </div>
         <div className="flex flex-wrap gap-1.5 justify-end ml-auto">
-          <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
+          {active && <button type="button" onClick={() => speech.stopAll()} disabled={!active} aria-label={speakingNow ? 'Stop speaking' : 'Stop'}
             className={`${btn} ${active ? 'bg-danger border-danger text-white hover:bg-[#7f1724]' : 'border-line text-navy'}`}>
             <Square className="size-5" aria-hidden fill="currentColor" /><span className={active ? '' : 'sr-only'}>Stop</span>
-          </button>
-          <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
+          </button>}
+          {speakingNow && <button type="button" onClick={() => speech.togglePause()} disabled={!speakingNow} aria-label={s.status === 'paused' ? 'Resume speaking' : 'Pause speaking'} className={`${btn} border-line text-navy hover:border-teal`}>
             {s.status === 'paused' ? <Play className="size-5" aria-hidden /> : <Pause className="size-5" aria-hidden />}
-          </button>
-          <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>
+          </button>}
+          {s.canReplay && !active && <button type="button" onClick={() => speech.replay()} disabled={!s.canReplay} aria-label="Replay the last reply" className={`${btn} border-line text-navy hover:border-teal`}>
             <RotateCcw className="size-5" aria-hidden />
-          </button>
+          </button>}
           <button type="button" onClick={() => speech.toggleMute()} disabled={!s.supported} aria-pressed={s.prefs.muted} aria-label={s.prefs.muted ? 'Unmute voice' : 'Mute voice'}
             className={`${btn} ${s.prefs.muted ? 'bg-navy border-navy text-white' : 'border-line text-navy hover:border-teal'}`}>
             {s.prefs.muted ? <VolumeX className="size-5" aria-hidden /> : <Volume2 className="size-5" aria-hidden />}

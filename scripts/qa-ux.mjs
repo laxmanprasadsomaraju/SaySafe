@@ -72,6 +72,7 @@ async function audit(p, label) {
       if (!(hit && (hit === e || e.contains(hit) || hit.contains(e)))) hidden.push(`${name(e)} (under ${hit?.closest('[data-testid="bottom-stack"]') ? 'bottom nav' : hit?.closest('header') ? 'header' : hit?.tagName})`);
     }
     window.scrollTo(0, 0);
+    document.querySelectorAll('*').forEach((el) => { if (el.scrollLeft) el.scrollLeft = 0; });
     const small = [...document.querySelectorAll('button, a[href], input:not([type=file]), select, textarea, summary')].filter((e) => {
       const r = e.getBoundingClientRect(); if (!r.width || !r.height || r.width <= 2) return false;
       if (e.tagName === 'A' && getComputedStyle(e).display === 'inline') return false;
@@ -206,17 +207,18 @@ if (PART === 'walk' || PART === 'all') {
   // the visible control whose label best matches the task words. Counts taps, typing, scrolling; notes friction.
   const ctx = await ctxFor(390, 'default', st.cookies); const p = await ctx.newPage();
   const steps = []; const friction = [];
-  const pick = async (words) => {
-    const cands = await p.evaluate((ws) => [...document.querySelectorAll('button, a[href]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight; })
-      .map((e, i) => ({ i, t: (e.getAttribute('aria-label') || e.textContent || '').trim().replace(/\s+/g, ' ') })).map((c) => ({ ...c, s: ws.filter((w) => c.t.toLowerCase().includes(w)).length })).filter((c) => c.s > 0).sort((a, b) => b.s - a.s), words);
-    return cands[0] ?? null;
-  };
+  // Pick and tap in ONE step (the page may still be rendering, so indices must not be reused across calls).
+  const tapBest = (words) => p.evaluate((ws) => {
+    const vis = [...document.querySelectorAll('button, a[href]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight; });
+    const best = vis.map((e) => ({ e, t: (e.getAttribute('aria-label') || e.textContent || '').trim().replace(/\s+/g, ' ') }))
+      .map((c) => ({ ...c, s: ws.filter((w) => c.t.toLowerCase().includes(w)).length })).filter((c) => c.s > 0).sort((a, b) => b.s - a.s)[0];
+    if (!best) return null; best.e.click(); return best.t;
+  }, words);
   const clickBest = async (words, task) => {
-    const c = await pick(words);
-    if (!c) { friction.push(`${task}: nothing on screen matched ${words.join('/')} without scrolling`); await p.mouse.wheel(0, 600); await p.waitForTimeout(200); const c2 = await pick(words); if (!c2) return null; steps.push({ task, action: 'scroll' }); return clickIdx(c2, task); }
-    return clickIdx(c, task);
+    let t = await tapBest(words);
+    if (!t) { friction.push(`${task}: nothing on screen matched ${words.join('/')} without scrolling`); await p.mouse.wheel(0, 600); await p.waitForTimeout(200); steps.push({ task, action: 'scroll' }); t = await tapBest(words); if (!t) return null; }
+    steps.push({ task, action: 'tap', target: t.slice(0, 40) }); await p.waitForTimeout(600); return t;
   };
-  const clickIdx = async (c, task) => { await p.evaluate((i) => [...document.querySelectorAll('button, a[href]')].filter((e) => { const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight; })[i].click(), c.i); steps.push({ task, action: 'tap', target: c.t.slice(0, 40) }); await p.waitForTimeout(600); return c; };
   const inView = (loc) => loc.evaluate((e) => { const r = e.getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }).catch(() => false);
   const t0 = Date.now();
   // Task 1
