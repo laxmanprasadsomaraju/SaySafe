@@ -21,7 +21,7 @@ export function Logo() {
   );
 }
 
-export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode?: 'elder' | 'family' | 'public' }) {
+export function Layout({ children, mode = 'elder', wide = false }: { children: ReactNode; mode?: 'elder' | 'family' | 'public'; wide?: boolean }) {
   const [large, setLarge] = usePref('ss-large', 'large-text');
   const [contrast, setContrast] = usePref('ss-contrast', 'high-contrast');
   const [voiceOn, setVoiceOn] = useState(() => localStorage.getItem('ss-voice') !== 'off');
@@ -35,7 +35,7 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
     <div className="min-h-dvh flex flex-col">
       <a href="#main" className="skip-link">Skip to main content</a>
       <header className="border-b border-line bg-ivory/90 backdrop-blur sticky top-0 z-20">
-        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : 'max-w-5xl'} px-4 sm:px-5 py-3 flex flex-wrap items-center gap-2 justify-between`}>
+        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : wide ? 'max-w-7xl' : 'max-w-5xl'} px-4 sm:px-5 py-3 flex flex-wrap items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home"><Logo /></Link>
           <nav aria-label="Display settings" className="flex flex-wrap gap-1.5 sm:gap-2">
             {mode === 'elder' && loc.pathname !== '/home' && (
@@ -51,9 +51,9 @@ export function Layout({ children, mode = 'elder' }: { children: ReactNode; mode
           </nav>
         </div>
       </header>
-      <main id="main" tabIndex={-1} className={mode === 'public' ? 'flex-1 w-full outline-none' : 'flex-1 mx-auto w-full max-w-5xl px-5 py-8 md:py-12 outline-none'}>{children}</main>
+      <main id="main" tabIndex={-1} className={mode === 'public' ? 'flex-1 w-full outline-none' : `flex-1 mx-auto w-full ${wide ? 'max-w-7xl' : 'max-w-5xl'} px-5 py-8 md:py-12 outline-none`}>{children}</main>
       <footer className="border-t border-line text-ink-soft text-base">
-        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : 'max-w-5xl'} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
+        <div className={`mx-auto ${mode === 'public' ? 'max-w-7xl md:px-10' : wide ? 'max-w-7xl' : 'max-w-5xl'} px-5 py-6 flex flex-wrap gap-x-6 gap-y-2 justify-between`}>
           <p>SaySafe — Shop simply. Pay safely. Demo uses the PayPal sandbox; no real money moves.</p>
           <p><Link className="underline" to="/guide">How to use SaySafe</Link> · Not affiliated with PayPal. <a className="underline" href="https://github.com/laxmanprasadsomaraju/SaySafe" target="_blank" rel="noreferrer">Open source (MIT)</a></p>
         </div>

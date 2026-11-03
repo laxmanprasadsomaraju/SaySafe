@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, X, ShieldAlert, Clock, Wallet, RotateCcw } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, X, ShieldAlert, Clock, Wallet, RotateCcw, BarChart3 } from 'lucide-react';
+import { useConfig } from '../lib/insightsApi';
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, type PaymentRequest } from '../lib/api';
@@ -42,6 +43,7 @@ export default function Family() {
   const [limit, setLimit] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const cfg = useConfig();
 
   const load = () => api<Overview>('/api/family/overview').then((x) => { setO(x); setLimit((x.policy.thresholdCents / 100).toString()); }).catch((e) => { if (e.status === 401) nav('/family/pair', { replace: true }); else setErr(e.message); });
   useEffect(() => { load(); const t = setInterval(load, 5000); return () => clearInterval(t); }, []); // eslint-disable-line
@@ -104,6 +106,13 @@ export default function Family() {
           </Card>
         </section>
         <aside className="space-y-5">
+          {cfg?.insights !== false && (
+            <Card className="p-6">
+              <h2 className="text-2xl flex items-center gap-2"><BarChart3 className="size-6 text-teal" aria-hidden />Safety insights</h2>
+              <p className="mt-2 text-lg text-ink-soft">Purchases, your decisions, PayPal confirmations and shared scam checks over time.</p>
+              <Link to="/family/insights" className="mt-3 inline-block font-bold text-teal underline text-lg">Open insights dashboard</Link>
+            </Card>
+          )}
           <Card className="p-6">
             <h2 className="text-2xl flex items-center gap-2"><Wallet className="size-6 text-teal" aria-hidden />Protected limit</h2>
             <p className="mt-2 text-lg text-ink-soft">Purchases above this need your review first.</p>

@@ -12,5 +12,5 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
-  "include": ["server", "web/src", "tests", "scripts"]
+  "include": ["server", "shared", "web/src", "tests", "scripts"]
 }

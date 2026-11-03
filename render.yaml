@@ -17,3 +17,7 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: INSIGHTS_DASHBOARD   # public deployment stays on the native dashboard (AG Studio trial is evaluation-only)
+        value: native
+      - key: VITE_AG_STUDIO_LICENSE   # leave unset in production until AG Grid grants written permission
+        sync: false

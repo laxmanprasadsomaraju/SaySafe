@@ -18,6 +18,9 @@ import { transcribe, health as aiHealth, aiConfigured, AIUnavailableError } from
 import * as pay from './payments/service.js';
 import { paypalConfigured, verifyWebhook, getOrder as getPayPalOrder } from './paypal/client.js';
 import { SAMPLE_MESSAGES } from './scam/samples.js';
+import { buildInsights } from './insights/model.js';
+import { answerInsightsQuestion } from './insights/agent.js';
+import { insightsConfig } from './insights/config.js';
 
 export function createApp() {
   const app = express();
@@ -82,9 +85,9 @@ export function createApp() {
 
   // ---------- Status ----------
   app.get('/api/health', wrap(async (_req, res) => {
-    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, time: new Date().toISOString() });
+    res.json({ ok: true, paypal: { configured: paypalConfigured(), env: 'sandbox' }, ai: await aiHealth(), channel3: { configured: channel3Configured() }, insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, time: new Date().toISOString() });
   }));
-  app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), channel3Configured: channel3Configured(), demo: true }));
+  app.get('/api/config', (_req, res) => res.json({ paypalConfigured: paypalConfigured(), aiConfigured: aiConfigured(), channel3Configured: channel3Configured(), insights: insightsConfig().enabled, insightsDashboard: insightsConfig().dashboard, demo: true }));
 
   // ---------- Sessions ----------
   app.post('/api/demo/start', (req, res) => {
@@ -293,6 +296,21 @@ export function createApp() {
   app.post('/api/family/requests/:id/refund', requireRole('family'), wrap(async (req, res) => {
     const s = sessionOf(req);
     res.json(await pay.merchantRefund(s.householdId, `demo-merchant:${s.userId}`, String(req.params.id)));
+  }));
+
+  // ---------- Family Safety Insights (read-only; one endpoint for both dashboards) ----------
+  const insightsOn = (_req: Request, res: Response, next: NextFunction) => (insightsConfig().enabled ? next() : res.status(404).json({ error: 'not_found' }));
+  app.get('/api/family/insights', insightsOn, requireRole('family'), (req, res) => {
+    const s = sessionOf(req);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(buildInsights(s.householdId, { userId: s.userId, name: s.name }));
+  });
+  app.post('/api/family/insights/agent', insightsOn, aiLimiter, requireRole('family'), wrap(async (req, res) => {
+    const s = sessionOf(req);
+    const question = z.string().trim().min(1).max(500).parse(req.body?.question);
+    // Data always comes from the session's own household, never from the request body.
+    res.setHeader('Cache-Control', 'no-store');
+    res.json(await answerInsightsQuestion(question, buildInsights(s.householdId, { userId: s.userId, name: s.name })));
   }));
 
   // ---------- Static web app ----------
