@@ -24,10 +24,10 @@ import { RenderBlock, ProductSheet, type BlockActions } from '../assistant/block
 
 const KEY = 'ss-assistant-thread';
 const MODES: { mode: Exclude<Mode, 'chat'>; label: string; icon: typeof Mic; placeholder: string }[] = [
-  { mode: 'check', label: 'Check a message', icon: MessageSquareWarning, placeholder: 'Paste the message here' },
-  { mode: 'find', label: 'Find a product', icon: ShoppingBag, placeholder: 'e.g. a kettle under €40' },
-  { mode: 'help', label: 'Get trusted help', icon: LifeBuoy, placeholder: 'What’s the problem?' },
-  { mode: 'payments', label: 'My payments', icon: Wallet, placeholder: 'e.g. show my last payment' },
+  { mode: 'check', label: 'Check a message', icon: MessageSquareWarning, placeholder: 'Paste the message' },
+  { mode: 'find', label: 'Find a product', icon: ShoppingBag, placeholder: 'e.g. kettle under €40' },
+  { mode: 'help', label: 'Get trusted help', icon: LifeBuoy, placeholder: 'What’s wrong?' },
+  { mode: 'payments', label: 'My payments', icon: Wallet, placeholder: 'e.g. last payment' },
 ];
 const PROMPT: Record<Mode, string> = {
   check: 'Paste the message, email, link or phone number you got, or read it out. I never open its links.',
@@ -271,7 +271,10 @@ export default function Assistant() {
     const mode = m.data;
     setThread((t) => {
       const last = t.messages[t.messages.length - 1];
-      return last?.role === 'assistant' && last.text === PROMPT[mode] ? { ...t, mode } : { ...t, mode, messages: [...t.messages, { id: mid(), role: 'assistant', text: PROMPT[mode], blocks: [] }] };
+      if (last?.role === 'assistant' && last.text === PROMPT[mode]) return { ...t, mode };
+      // A brand-new conversation: the mode prompt replaces the general greeting.
+      if (t.messages.length === 1 && t.messages[0].text === PROMPT.chat) return fresh(mode);
+      return { ...t, mode, messages: [...t.messages, { id: mid(), role: 'assistant', text: PROMPT[mode], blocks: [] }] };
     });
     nav('/assistant', { replace: true });
     if (mode === 'payments') { const turn = speech.beginTurn(); showHistory(turn).catch(() => {}).finally(() => speech.endThinking()); }
