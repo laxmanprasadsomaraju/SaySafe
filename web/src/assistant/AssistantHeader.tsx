@@ -29,8 +29,10 @@ export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; vo
   }, [open]);
   const item = 'w-full flex items-center gap-3 min-h-12 px-4 rounded-2xl font-bold text-left hover:bg-teal-soft';
   const sw = switchBtn;
+  // Sticky right under the site header, so "Menu" (new conversation, voice, display) never scrolls away in a long
+  // conversation. Static on short screens (see index.css, max-height 26rem). -mx/px keep the bar's background full width.
   return (
-    <div className="relative">
+    <div className="assistant-bar sticky z-10 -mx-5 px-5 py-1.5 bg-ivory/95 backdrop-blur" style={{ top: 'var(--header-h, 0px)' }} data-testid="assistant-bar">
       <div className="flex items-center gap-2">
         {back && (
           <button type="button" onClick={() => { const idx = (window.history.state as { idx?: number } | null)?.idx ?? 0; if (idx > 0) nav(-1); else nav(back); }} className="inline-flex items-center gap-1 min-h-12 min-w-12 pl-2 pr-3 -ml-2 rounded-full font-bold text-teal hover:bg-teal-soft">
@@ -44,7 +46,7 @@ export function AssistantHeader({ onNew, voice = true }: { onNew: () => void; vo
         </button>
       </div>
       {open && (
-        <div id={id} role="group" aria-label="Conversation options" className="mt-2 rounded-[var(--radius-card)] border border-line bg-paper shadow-[var(--shadow-card)] p-2">
+        <div id={id} role="group" aria-label="Conversation options" className="mt-2 rounded-[var(--radius-card)] border border-line bg-paper shadow-[var(--shadow-card)] p-2 overflow-y-auto overscroll-contain" style={{ maxHeight: 'calc(100dvh - var(--header-h, 0px) - var(--stack-h, 0px) - 6rem)' }}>
           <button type="button" className={item} onClick={() => { setOpen(false); onNew(); }}><RotateCcw className="size-5 text-teal" aria-hidden />New conversation</button>
           {voice && (
             <>

@@ -113,6 +113,17 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
     return () => { ro.disconnect(); document.documentElement.style.setProperty('--stack-h', '0px'); };
   });
 
+  // The sticky header's height, so a page's own sticky toolbar (the Assistant's title + Menu) sits right under it.
+  const head = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const el = head.current;
+    const set = () => document.documentElement.style.setProperty('--header-h', `${el?.offsetHeight ?? 0}px`);
+    set();
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(set); ro.observe(el);
+    return () => ro.disconnect();
+  });
+
   const p = loc.pathname;
   const app = mode !== 'public';
   const external = p.startsWith('/checkout/');
@@ -122,7 +133,7 @@ export function Layout({ children, mode = 'elder', wide = false, dock, footer = 
   return (
     <div className="min-h-dvh flex flex-col" style={{ paddingBottom: 'var(--stack-h, 0px)' }}>
       <a href="#main" className="skip-link">Skip to main content</a>
-      <header className="border-b border-line bg-ivory/95 backdrop-blur sticky top-0 z-20">
+      <header ref={head} className="border-b border-line bg-ivory/95 backdrop-blur sticky top-0 z-20">
         <div className={`mx-auto ${width} px-4 sm:px-5 py-2.5 flex items-center gap-2 justify-between`}>
           <Link to={mode === 'family' ? '/family' : mode === 'public' ? '/' : '/home'} aria-label="SaySafe home" className="min-h-12 inline-flex items-center"><Logo /></Link>
           <div className="flex items-center gap-1">

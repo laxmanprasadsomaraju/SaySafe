@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { db } from '../db/index.js';
 import { getProduct, DEMO_MERCHANT } from '../catalogue/products.js';
 import { priceCart, fingerprint, APPROVAL_TTL_MS } from '../payments/service.js';
-import { DEMO_SEED_VERSION, SAMPLE_CONTACTS, SAMPLE_RECORDS, SAMPLE_SHOP, SAMPLE_SUBS } from '../../shared/demoData.js';
+import { DEMO_SEED_VERSION, SAMPLE_CONTACTS, SAMPLE_RECORDS, SAMPLE_SHOP, SAMPLE_SUBS, SAMPLE_RENAMES_V3 } from '../../shared/demoData.js';
 
 const DAY = 86_400_000;
 /** Stable id for a sample row in one household: same household + key -> same id; different households never collide. */
@@ -91,4 +91,20 @@ export function seedDemoHousehold(householdId: string, ownerId: string, now: Dat
 export function seedInfo(householdId: string) {
   const r = db.prepare('SELECT seed_version, anchored_at FROM demo_seeds WHERE household_id=?').get(householdId) as { seed_version: number; anchored_at: string } | undefined;
   return r ? { version: Number(r.seed_version), anchoredAt: r.anchored_at } : null;
+}
+
+/**
+ * Boot-time migration for households seeded before v3: renames the real-brand SAMPLE rows to the fictional names in
+ * place (same ids, dates and statuses; only example=1 rows, never anything the visitor typed or a real payment), then
+ * records the new seed version. Idempotent. Returns how many rows were renamed.
+ */
+export function migrateSampleData(): number {
+  let n = 0;
+  db.transaction(() => {
+    for (const r of SAMPLE_RENAMES_V3) {
+      n += Number(db.prepare(`UPDATE ${r.table} SET ${r.column}=? WHERE example=1 AND ${r.column}=?`).run(r.to, r.from).changes ?? 0);
+    }
+    db.prepare('UPDATE demo_seeds SET seed_version=? WHERE seed_version<?').run(DEMO_SEED_VERSION, DEMO_SEED_VERSION);
+  })();
+  return n;
 }

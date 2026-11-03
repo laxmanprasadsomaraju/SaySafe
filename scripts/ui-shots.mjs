@@ -18,7 +18,7 @@ let proxy;
 if (px && HOSTED) { const u = new URL(px); proxy = { server: `${u.protocol}//${u.host}`, username: decodeURIComponent(u.username) || undefined, password: decodeURIComponent(u.password) || undefined }; }
 const b = await chromium.launch(proxy ? { proxy } : {});
 const ctx = await b.newContext({ viewport: { width: 1440, height: 900 }, reducedMotion: 'reduce' });
-await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
+await ctx.addInitScript(() => localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' })));
 const p = await ctx.newPage();
 await p.route('https://www.sandbox.paypal.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<html lang="en"><title>PayPal stub</title><h1>PayPal (stub)</h1></html>' }));
 const layout = [];
@@ -46,7 +46,7 @@ async function capture(name) {
     });
     layout.push({ page: name, width: w, ...lay });
     // Full-page capture: sticky header and fixed bottom bar are laid out in flow so they don't repeat mid-image.
-    const st = await p.addStyleTag({ content: 'header.sticky{position:static!important}[data-testid="bottom-stack"]{position:static!important}div[style*="--stack-h"]{padding-bottom:0!important}' });
+    const st = await p.addStyleTag({ content: 'header.sticky{position:static!important}.assistant-bar.sticky{position:static!important}[data-testid="bottom-stack"]{position:static!important}div[style*="--stack-h"]{padding-bottom:0!important}' });
     await p.waitForTimeout(100);
     await p.screenshot({ path: `${OUT}/${name}-${w}.png`, fullPage: true });
     await st.evaluate((e) => e.remove());

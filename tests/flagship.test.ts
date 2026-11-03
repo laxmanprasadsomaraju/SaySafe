@@ -361,19 +361,22 @@ describe('what Mary can shop (server catalogue, never a blank result)', () => {
     try {
       const r = await ask(m, 'I want to buy a garden hose');
       expect(r.products).toEqual([]);
-      expect(r.reply).toMatch(/^I can't find that in the Demo Shop\. You can buy: /);
+      expect(r.reply).toMatch(/^That's not in the Demo Shop\. It sells /);
+      expect(r.reply).not.toMatch(/search real shops|Channel3/); // no Channel3 here: nothing promised
       expect(r.catalogue.length).toBeGreaterThanOrEqual(10);
       expect(r.catalogue.find((c: any) => c.productId === 'microwave')).toMatchObject({ name: 'Simple Dial Microwave 20L', priceCents: 12000, currency: 'EUR' });
     } finally { if (saved !== undefined) process.env.CHANNEL3_API_KEY = saved; }
   });
-  it('with Channel3 available it also searches real shops (and still lists the catalogue)', async () => {
+  it('with Channel3 available the app is handed the product to search (and still lists the catalogue)', async () => {
     const { m } = await household();
     const saved = process.env.CHANNEL3_API_KEY; process.env.CHANNEL3_API_KEY = 'test-key-not-called';
     try {
       const r = await ask(m, 'I want to buy a garden hose');
       expect(r.catalogue.length).toBeGreaterThan(0);
-      expect(r.discover).toMatchObject({ suggested: true });
-      expect(r.reply).toMatch(/Channel3/);
+      expect(r.discover).toMatchObject({ suggested: true }); // the app runs this search before showing the chips
+      expect(r.realQuery).toMatch(/garden hose/);
+      expect(r.reply).toMatch(/Say 'search real shops'/);
+      expect(r.reply).not.toMatch(/I'll also look/); // never promises a search
     } finally { if (saved === undefined) delete process.env.CHANNEL3_API_KEY; else process.env.CHANNEL3_API_KEY = saved; }
   });
   it('a catalogue chip ("Let’s buy the demo <full name>") opens that exact product’s purchase card', async () => {

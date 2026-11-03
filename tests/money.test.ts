@@ -28,7 +28,7 @@ describe('spoken money', () => {
     const spoken: string[] = [];
     class U { text: string; rate = 1; lang = ''; voice: any = null; onend: any = null; onerror: any = null; constructor(t: string) { this.text = t; } }
     const env: SpeechEnv = { synth: { speak: (u: any) => spoken.push(u.text), cancel: () => {}, getVoices: () => [] } as any, Utterance: U as any, storage: null };
-    const s = new SpeechController(env);
+    const s = new SpeechController(env); s.unmute(); // spoken replies turned on (off by default)
     s.speak('That is €49.99.');
     expect(spoken).toEqual(['That is 49 euro 99 cent.']);
     expect(s.getSnapshot().caption).toBe('That is €49.99.');

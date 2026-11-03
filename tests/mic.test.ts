@@ -35,6 +35,7 @@ function setup(opts: { level?: (ms: number) => number; deny?: string; noMeter?: 
     now: () => Date.now(),
   };
   const s = new SpeechController(env, mic);
+  s.unmute(); // spoken replies turned on by the person: the mic must still never make SaySafe talk on silence
   const onText = vi.fn();
   return { s, log, recorders, transcribe, onText, resolve: (t: string) => resolveT?.(t), counts: () => ({ tracksStopped, metersClosed }) };
 }

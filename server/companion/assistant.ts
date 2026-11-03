@@ -8,6 +8,7 @@ import type { Session } from '../auth.js';
 import * as store from './store.js';
 import { searchPayments, parseDateHint, fmtMoney, normName, tokenSimilarity, tokens } from './match.js';
 import { findCancelGuide, GENERIC_CANCEL_STEPS } from '../../shared/cancelGuides.js';
+import { SAMPLE_CANCEL_NOTICE } from '../../shared/demoData.js';
 import * as demo from './demoMembership.js';
 import { buildSummary } from '../insights/summary.js';
 import type { InsightsSummaryT, MoneyT, InsightFocus } from '../../shared/insightsSummary.js';
@@ -116,6 +117,11 @@ export async function answerCompanion(action: CompanionAction, p: CompanionInten
     if (!merchant && !sub && !p.category) {
       // Nothing named: show the list so she can pick one (each row has "Help me cancel").
       return listCard(subs, 'all', now, 'Which one would you like to cancel? Tap it in the list, then "Help me cancel".');
+    }
+    if (sub?.sample) {
+      // A sample (fictional) subscription: no real company page exists, so no link: an in-app explanation instead.
+      const reply = `Sample data: ${sub.merchant}, ${fmtMoney(sub.amountCents, sub.currency)} ${sub.frequency === 'yearly' ? 'a year' : sub.frequency === 'weekly' ? 'a week' : 'a month'}. ${SAMPLE_CANCEL_NOTICE}`;
+      return { reply, card: { kind: 'subscription_help', merchant: sub.merchant, subscription: sub, guide: null, genericSteps: [], paypalAutopayUrl: PAYPAL_AUTOPAY_URL, cancellationScope: { ...CANCELLATION_SCOPE.external }, disclaimer: SAMPLE_CANCEL_NOTICE } };
     }
     const g = findCancelGuide(merchant ?? sub?.merchant);
     const disclaimer = "SaySafe can't cancel this subscription for you. Only the company can. If you pay them through PayPal, you can also stop the automatic payment in PayPal yourself. Keep their confirmation email.";

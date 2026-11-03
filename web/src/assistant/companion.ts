@@ -105,7 +105,11 @@ const RetryErrorB = z.object({ kind: z.literal('retry_error'), message: Str(400)
 /** Mary's insights summary (server-built from the same stores as Activity). Re-read from the server on mount. */
 const InsightsSummaryB = z.object({ kind: z.literal('insights_summary'), focus: z.enum(INSIGHT_FOCI), summary: InsightsSummary });
 /** What the Demo Shop sells, from the server catalogue (GET /api/products or the no-match answer). Each chip asks to buy it. */
-const ShopCatalogueB = z.object({ kind: z.literal('shop_catalogue'), items: z.array(z.object({ productId: Str(60), name: Str(120), category: Str(40), priceCents: z.number().int().min(0), currency: z.string().regex(/^[A-Z]{3}$/) })).min(1).max(30), channel3: z.boolean().default(false) });
+const ShopCatalogueB = z.object({ kind: z.literal('shop_catalogue'), items: z.array(z.object({ productId: Str(60), name: Str(120), category: Str(40), priceCents: z.number().int().min(0), currency: z.string().regex(/^[A-Z]{3}$/) })).min(1).max(30), channel3: z.boolean().default(false),
+  /** The product that wasn't in the Demo Shop: "Search real shops" (chip, typed or spoken) searches Channel3 for it. */
+  realQuery: Str(120).optional(),
+  /** Real listings for realQuery are on screen (true), or the search found nothing / failed (false). */
+  realFound: z.boolean().optional() });
 
 export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB, ShopCatalogueB] as const;
 export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary', 'shop_catalogue'] as const;

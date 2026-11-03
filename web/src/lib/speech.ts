@@ -38,8 +38,8 @@ export interface SpeechSnapshot {
   /** Mic outcome to show on screen, never spoken ("I didn't hear anything. Tap to try again."). */
   micMessage: string | null;
   micSupported: boolean;
-  /** Playback is On, but the browser won't let a page speak before the first tap/click (autoplay policy). Shown as
-   *  "Tap to enable sound" — never as Muted. */
+  /** Spoken replies are on, but the browser won't let a page speak before the first tap/click (autoplay policy).
+   *  Shown as "Tap to enable sound" — never as "off". */
   needsTap: boolean;
 }
 
@@ -64,12 +64,14 @@ export function voiceEffect(prefs: Pick<SpeechPrefs, 'muted' | 'autoSpeak' | 're
   const dep = (on: boolean) => (!on ? 'off' : playback === 'on' ? 'on' : 'saved-muted') as VoiceEffect['autoShort'];
   const autoShort = dep(prefs.autoSpeak), readAll = dep(prefs.readAll);
   const note = playback === 'unavailable' ? 'This browser can’t speak aloud. Replies are always shown as text.'
-    : playback === 'muted' ? (prefs.autoSpeak || prefs.readAll ? 'Voice playback is muted. Your automatic speaking choices below are saved, but nothing plays until you turn playback on. A “Read aloud” button you press still plays.' : 'Voice playback is muted. A “Read aloud” button you press still plays.')
+    : playback === 'muted' ? (prefs.autoSpeak || prefs.readAll ? 'Spoken replies are off. Your automatic speaking choices below are saved, but nothing plays until you turn on spoken replies. A “Read aloud” button you press still plays.' : 'Spoken replies are off. A “Read aloud” button you press still plays.')
     : null;
   return { playback, autoShort, readAll, note };
 }
 export const PREFS_KEY = 'ss-voice-prefs';
-const DEFAULT_PREFS: SpeechPrefs = { muted: false, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' };
+// Spoken replies are OFF until the person turns them on (consent): a fresh visitor never hears audio by itself.
+// `muted` is the internal name for "spoken replies off"; the UI never says "Muted".
+const DEFAULT_PREFS: SpeechPrefs = { muted: true, autoSpeak: true, rate: 0.95, readAll: false, lang: 'en' };
 
 /** Split into sentences; very long sentences are split again at commas so each utterance stays short. */
 export function splitSentences(text: string): string[] {
@@ -93,6 +95,8 @@ interface Item { text: string; seg: number }
 
 export class SpeechController {
   private gen = 0;
+  /** Turn token (see beginTurn). */
+  private turnGen = 0;
   private queue: Item[] = [];
   private index = 0;
   private segTotal = 0;
@@ -171,38 +175,41 @@ export class SpeechController {
       if (raw) {
         const j = JSON.parse(raw);
         p = {
-          // Muted is kept only when the person chose it (mutedByUser). Older saved prefs, test profiles and the legacy
-          // "ss-voice" key could carry a muted state nobody chose here, which made a fresh-looking visit start muted.
-          muted: j.muted === true && j.mutedByUser === true,
+          // Spoken replies are on only when the person turned them on here (spokenOptIn). Older saved prefs that were
+          // "on" by default (no opt-in), test profiles and the legacy "ss-voice" key all start with spoken replies off.
+          muted: !(j.spokenOptIn === true && j.muted === false),
           autoSpeak: typeof j.autoSpeak === 'boolean' ? j.autoSpeak : p.autoSpeak,
           rate: typeof j.rate === 'number' && j.rate >= 0.6 && j.rate <= 1.5 ? j.rate : p.rate,
           readAll: typeof j.readAll === 'boolean' ? j.readAll : p.readAll,
           lang: normaliseLang(j.lang),
         };
-      } // the legacy "ss-voice" key is ignored: playback is On unless the person mutes it here
+      } // the legacy "ss-voice" key is ignored: spoken replies stay off unless the person turns them on here
     } catch { /* defaults */ }
     return p;
   }
   private savePrefs() {
     try {
-      this.env.storage?.setItem(PREFS_KEY, JSON.stringify({ ...this.prefs, mutedByUser: this.prefs.muted }));
+      this.env.storage?.setItem(PREFS_KEY, JSON.stringify({ ...this.prefs, spokenOptIn: !this.prefs.muted }));
       this.env.storage?.setItem('ss-voice', this.prefs.muted ? 'off' : 'on');
     } catch { /* private mode */ }
   }
   setPrefs(patch: Partial<SpeechPrefs>) {
     this.prefs = { ...this.prefs, ...patch };
     this.savePrefs();
-    if (patch.muted) this.stop(); else this.emit();
+    if (patch.muted) this.stop(false); else this.emit(); // turning spoken replies off silences now, keeps the turn
   }
   mute() { this.setPrefs({ muted: true }); }
   unmute() { this.setPrefs({ muted: false }); }
   toggleMute() { this.setPrefs({ muted: !this.prefs.muted }); }
 
   // ----- turns: a token that goes stale when anything newer happens -----
-  get generation() { return this.gen; }
+  get generation() { return this.turnGen; }
   /** Call when the user sends something: stops current speech and returns a token for the reply. */
-  beginTurn(): number { this.stop(); this.micMessage = null; if (!this.micBusy) this.activity = 'thinking'; this.emit(); return this.gen; }
-  isCurrent(turn: number) { return turn === this.gen; }
+  // The turn token is its own counter: only Stop / navigation / the mic / a new turn make a turn stale. Speaking a
+  // reply (or pausing it) must NOT, or the rest of that same turn (e.g. the real-shop listings after the Demo Shop
+  // chips) was silently dropped whenever spoken replies were on.
+  beginTurn(): number { this.stop(); this.micMessage = null; if (!this.micBusy) this.activity = 'thinking'; this.emit(); return this.turnGen; }
+  isCurrent(turn: number) { return turn === this.turnGen; }
   /** Clear the "thinking" state if a turn ended without speech (error, nothing to say). */
   endThinking() { if (this.activity === 'thinking') { this.activity = null; this.emit(); } }
   // ----- microphone (tap-to-talk). One session at a time; every callback checks its session token. -----
@@ -321,7 +328,7 @@ export class SpeechController {
    * A Promise is awaited first; if anything newer happened meanwhile (stop, navigation, another speak) it is dropped.
    */
   async speak(input: string | string[] | Promise<string | string[]>, opts: { priority?: SpeechPriority; turn?: number; lang?: LangCode } = {}): Promise<boolean> {
-    if (opts.turn !== undefined && opts.turn !== this.gen) return false;
+    if (opts.turn !== undefined && opts.turn !== this.turnGen) return false;
     if (input instanceof Promise) {
       const g = this.gen;
       let v: string | string[];
@@ -398,8 +405,9 @@ export class SpeechController {
   private hardCancel() { try { this.env.synth?.cancel(); } catch { /* */ } }
 
   /** Stop now: cancel, clear the queue, invalidate anything pending. */
-  stop() {
+  stop(invalidateTurn = true) {
     this.gen++;
+    if (invalidateTurn) this.turnGen++;
     this.hardCancel();
     this.queue = []; this.index = 0; this.segTotal = 0;
     this.speaking = false; this.paused = false; this.err = null; this.notice = null;

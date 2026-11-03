@@ -15,7 +15,8 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { db, audit, dbConfig } from './db/index.js';
 import { startDemoHousehold, createPairingCode, redeemPairingCode, requireRole, readSession, sessionOf, logout, newId, pairDemoFamily } from './auth.js';
-import { seedDemoHousehold, seedInfo } from './demo/seed.js';
+import { seedDemoHousehold, seedInfo, migrateSampleData } from './demo/seed.js';
+import { NOT_IN_DEMO } from '../shared/realShops.js';
 import { TRAINING_EXAMPLES, WELCOME_PROMPTS } from '../shared/demoData.js';
 import { buildSummary } from './insights/summary.js';
 const fmtEur = (c: number) => new Intl.NumberFormat('en-IE', { style: 'currency', currency: 'EUR' }).format(c / 100);
@@ -51,7 +52,15 @@ export const AI_RULES_ONLY = 'AI unavailable — rule checks only';
 
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown> | unknown) => (req: Request, res: Response, next: NextFunction) => Promise.resolve(fn(req, res)).catch(next);
 
+/** "Not in the Demo Shop": honest, never promises a search. With Channel3 the app runs the search right after. */
+function notInDemoReply(channel3: boolean) {
+  const cats = [...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ');
+  return `${NOT_IN_DEMO} It sells ${cats} items, such as ${PRODUCTS.slice(0, 4).map((p) => p.name).join(', ')}: tap one below.${channel3 ? " Say 'search real shops' to find real products: you'd buy those on the retailer's own website." : ''}`;
+}
+
 export function createApp() {
+  // Sample data v3: households seeded with real-brand sample names are renamed to the fictional ones (idempotent).
+  try { const n = migrateSampleData(); if (n) console.log(`sample data: renamed ${n} sample rows to fictional names (v3)`); } catch (e) { console.error('sample data migration failed', e); }
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
@@ -320,8 +329,9 @@ export function createApp() {
       if (!demoOffer.length) {
         // Not in the Demo Shop: say what it does sell (server catalogue) before the real listings.
         catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
-        reply = `I can't find that in the Demo Shop. You can buy: ${[...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ')} items such as ${PRODUCTS.slice(0, 4).map((p) => p.name).join(', ')}. Tap one below. I'll also look for it in real shops with Channel3: you'd buy those on the retailer's own website.`;
-        return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover: { ...discover, suggested: true }, catalogue });
+        // No promise here: the app runs the Channel3 search (discover) and then says what it actually found.
+        reply = notInDemoReply(true);
+        return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover: { ...discover, suggested: true }, catalogue, realQuery: buyReal.trim().slice(0, 120) });
       }
       return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, demoOffer });
     }
@@ -338,16 +348,15 @@ export function createApp() {
         if (!products.length) {
           // Never a blank result: say what the Demo Shop sells (from the server catalogue) and where else to look.
           catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
-          const cats = [...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ');
-          reply = `I can't find that in the Demo Shop. You can buy: ${cats} items such as ${PRODUCTS.slice(0, 4).map((p) => p.name).join(', ')}. Tap one below.${channel3Configured() ? " I'll also look for it in real shops with Channel3: you'd buy those on the retailer's own website." : ''}`;
+          reply = notInDemoReply(channel3Configured());
           replyLang = 'en';
-          if (channel3Configured()) discover = { query: said, suggested: true };
+          if (channel3Configured()) discover = { query: (intent.query || said).slice(0, 200), suggested: true };
         }
       }
     }
     // Free model text (chat / confirm / cancel / help…) never claims an effect: the assistant has no write tools.
     if (ai && reply === intent.reply) reply = guardAssistantReply(reply);
-    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, ...(catalogue ? { catalogue } : {}) });
+    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, ...(catalogue ? { catalogue, realQuery: (intent.query || said).slice(0, 120) } : {}) });
   }));
 
   // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------

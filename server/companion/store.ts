@@ -86,7 +86,8 @@ function nextPaymentInDays(nextOn: string | null, now = new Date()): number | nu
 }
 export const subView = (r: any, now = new Date()): SubscriptionT => {
   const demo = r.source === 'paypal_sandbox_subscription';
-  const g = demo ? null : findCancelGuide(r.merchant);
+  // Sample rows are fictional companies: never a real company's page, even if a name ever matched a guide.
+  const g = demo || Number(r.example ?? 0) === 1 ? null : findCancelGuide(r.merchant);
   const status = r.sub_state as SubStatus;
   return {
     id: r.id, merchant: r.merchant, amountCents: Number(r.amount_cents), currency: r.currency, frequency: r.billing_cycle,

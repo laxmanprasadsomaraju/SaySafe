@@ -22,7 +22,8 @@ function fakeEnv(opts: { store?: Record<string, string> } = {}) {
 describe('speech controller', () => {
   let f: ReturnType<typeof fakeEnv>;
   let s: SpeechController;
-  beforeEach(() => { f = fakeEnv(); s = new SpeechController(f.env); });
+  // These tests are about playback behaviour once the person has turned spoken replies on (consent is tested below).
+  beforeEach(() => { f = fakeEnv(); s = new SpeechController(f.env); s.unmute(); });
 
   it('speaks one sentence at a time, in order', () => {
     s.speak('First thing. Second thing.');
@@ -71,6 +72,16 @@ describe('speech controller', () => {
     expect(await s.speak('Fresh reply.', { turn: t2 })).toBe(true);
   });
 
+  it('speaking (or pausing) a reply never makes its own turn stale; Stop does (live bug: Channel3 listings dropped)', async () => {
+    const turn = s.beginTurn();
+    expect(await s.speak('That is not in the Demo Shop.', { turn })).toBe(true); // plays
+    expect(s.isCurrent(turn)).toBe(true); // the rest of the turn (real listings) still shows
+    s.pause(); expect(s.isCurrent(turn)).toBe(true);
+    s.mute(); expect(s.isCurrent(turn)).toBe(true); // turning spoken replies off silences, keeps the turn
+    s.stop(); expect(s.isCurrent(turn)).toBe(false);
+    expect(await s.speak('Late.', { turn })).toBe(false);
+  });
+
   it('pause then resume restarts from the current sentence (no reliance on synth.resume)', () => {
     s.speak('A one. B two. C three.');
     f.finish(); // now on "B two."
@@ -103,7 +114,8 @@ describe('speech controller', () => {
     s.setPrefs({ autoSpeak: true, readAll: true });
     s.mute();
     expect(voiceEffect(s.getSnapshot().prefs)).toMatchObject({ playback: 'muted', autoShort: 'saved-muted', readAll: 'saved-muted' });
-    expect(voiceEffect(s.getSnapshot().prefs).note).toMatch(/saved, but nothing plays until you turn playback on/);
+    expect(voiceEffect(s.getSnapshot().prefs).note).toMatch(/^Spoken replies are off\. .*saved, but nothing plays until you turn on spoken replies/);
+    expect(voiceEffect(s.getSnapshot().prefs).note).not.toMatch(/mute/i);
     expect(await s.speak('Short reply.')).toBe(false);
     const reloaded = new SpeechController(f.env); // persisted exactly as shown
     expect(reloaded.getSnapshot().prefs).toMatchObject({ muted: true, autoSpeak: true, readAll: true });
@@ -132,25 +144,40 @@ describe('speech controller', () => {
     expect(f.log.filter((l) => l.startsWith('speak'))).toEqual(['speak:Short reply.']);
   });
 
-  it('preferences persist; muted persists only when the person chose it; stale/legacy muted flags start On', () => {
-    s.setPrefs({ rate: 1.1, readAll: true });
-    const again = new SpeechController(f.env);
-    expect(again.getSnapshot().prefs).toMatchObject({ rate: 1.1, readAll: true, muted: false });
-    // Fresh visitor: no storage → playback On.
-    expect(new SpeechController(fakeEnv({ store: {} }).env).getSnapshot().prefs.muted).toBe(false);
-    // Legacy "ss-voice" key or an old pref without the person's choice → On (root cause of "off on a fresh visit").
-    expect(new SpeechController(fakeEnv({ store: { 'ss-voice': 'off' } }).env).getSnapshot().prefs.muted).toBe(false);
-    expect(new SpeechController(fakeEnv({ store: { 'ss-voice-prefs': JSON.stringify({ muted: true }) } }).env).getSnapshot().prefs.muted).toBe(false);
-    // The person mutes → remembered.
-    s.mute();
-    expect(new SpeechController(f.env).getSnapshot().prefs.muted).toBe(true);
-    s.unmute();
-    expect(new SpeechController(f.env).getSnapshot().prefs.muted).toBe(false);
+  it('consent: spoken replies are OFF for a fresh visitor and only ON after the person turns them on (persisted)', async () => {
+    // Fresh visitor: no storage → spoken replies off, nothing plays automatically (not even a safety warning).
+    const fresh = fakeEnv({ store: {} });
+    const c = new SpeechController(fresh.env);
+    expect(c.getSnapshot().prefs.muted).toBe(true);
+    expect(await c.speak('Hello Mary.')).toBe(false);
+    expect(await c.speak('Watch out: scam.', { priority: 'critical' })).toBe(false);
+    expect(fresh.log.some((l) => l.startsWith('speak'))).toBe(false);
+    // A button the person presses (Read aloud / Replay) still plays, without turning spoken replies on.
+    expect(await c.speak('Read this.', { priority: 'user' })).toBe(true);
+    expect(c.getSnapshot().prefs.muted).toBe(true);
+    // Old saved prefs that were "on" only by default (no opt-in), stale test profiles and the legacy key → off.
+    for (const store of <Record<string, string>[]>[{ 'ss-voice-prefs': JSON.stringify({ muted: false, autoSpeak: true }) }, { 'ss-voice': 'on' }, { 'ss-voice-prefs': JSON.stringify({ muted: true, mutedByUser: true }) }, { 'ss-voice-prefs': '{not json' }]) {
+      expect(new SpeechController(fakeEnv({ store }).env).getSnapshot().prefs.muted).toBe(true);
+    }
+    // The person turns them on → remembered across reloads; turning off is remembered too.
+    c.unmute();
+    expect(JSON.parse(fresh.store['ss-voice-prefs'])).toMatchObject({ muted: false, spokenOptIn: true });
+    expect(new SpeechController(fresh.env).getSnapshot().prefs.muted).toBe(false);
+    expect(await new SpeechController(fresh.env).speak('Short reply.')).toBe(true);
+    c.mute();
+    expect(JSON.parse(fresh.store['ss-voice-prefs'])).toMatchObject({ muted: true, spokenOptIn: false });
+    expect(new SpeechController(fresh.env).getSnapshot().prefs.muted).toBe(true);
   });
-  it('autoplay block before the first tap shows "needs tap", never Muted', () => {
+  it('preferences persist with the opt-in', () => {
+    s.setPrefs({ rate: 1.1, readAll: true });
+    expect(new SpeechController(f.env).getSnapshot().prefs).toMatchObject({ rate: 1.1, readAll: true, muted: false });
+  });
+  it('autoplay block before the first tap shows "needs tap" (Tap to enable sound) once turned on; never while off', () => {
     let active = false;
     const e = fakeEnv({ store: {} }).env;
     const c = new SpeechController({ ...e, activated: () => active });
+    expect(c.getSnapshot()).toMatchObject({ needsTap: false, prefs: { muted: true } }); // off: nothing to unlock
+    c.unmute();
     expect(c.getSnapshot()).toMatchObject({ needsTap: true, status: 'ready', prefs: { muted: false } });
     active = true; c.activate();
     expect(c.getSnapshot().needsTap).toBe(false);

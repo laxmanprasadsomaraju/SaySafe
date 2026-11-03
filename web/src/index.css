@@ -111,6 +111,7 @@ main .grid > * { min-width: 0; }
    while scrolling. Media-query rem is the browser default (16 px), not SaySafe's "bigger text" setting. */
 @media (max-height: 26rem) {
   header.sticky { position: static; }
+  .assistant-bar.sticky { position: static; }
   /* The bottom stack (composer, voice bar, tabs) would cover two thirds of a 200 px-tall screen: it joins the end of
      the page instead, so content is never trapped in a sliver between fixed bars. */
   [data-testid="bottom-stack"] { position: static; }
@@ -119,3 +120,6 @@ main .grid > * { min-width: 0; }
 }
 /* A standalone underlined link (e.g. a source citation on its own line) is still a 44 px target. */
 .link.inline-block { display: inline-flex; align-items: center; min-height: 2.75rem; }
+/* The Assistant's own sticky bar (title + Menu) sits under the header: keep focused/anchored content clear of both. */
+html:has(.assistant-bar) { scroll-padding-top: calc(var(--header-h, 4rem) + 5.5rem); }
+@media (max-height: 26rem) { html:has(.assistant-bar) { scroll-padding-top: 1rem; } }

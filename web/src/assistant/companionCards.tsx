@@ -27,6 +27,7 @@ import {
   telHref, mailHref, FREQ_LABEL, nextChargeText, isDemo, sourceText, managedText, EXTERNAL_DISCLAIMER, matchesCardText, MATCHES_SCOPE_NOTE,
 } from './companion';
 import { parseServer, type BlockOf, type Block } from './schemas';
+import { SAMPLE_CANCEL_NOTICE } from '../../../shared/demoData';
 import type { BlockActions } from './blocks';
 import { card, btnPrimary, btnSecondary, btnDanger, linkBtn as linkCls, input as inputCls, pill } from '../components/ds';
 
@@ -439,7 +440,7 @@ function SubscriptionsManager({ act, initial, select }: { act: BlockActions; ini
       )}
       {subs === null ? <p className="mt-3 text-ink-soft">Loading…</p> : subs.length === 0 ? <p className="mt-3">You haven’t added any subscriptions yet. Add them yourself and I’ll add up what they cost.</p> : (
         <>
-          <p className="mt-3 text-base text-ink-soft">Tap one to keep it or get help cancelling. You can also say “cancel my Netflix”.</p>
+          <p className="mt-3 text-base text-ink-soft">Tap one to keep it or get help cancelling. You can also say “cancel my streaming subscription”.</p>
           <ul className="mt-1" aria-label="Your subscriptions">
             {subs.map((s) => <SubscriptionRow key={s.id} s={s} act={act} reload={load} selected={sel === s.id} onSelect={() => setSel(sel === s.id ? null : s.id)} />)}
           </ul>
@@ -512,6 +513,13 @@ function SubscriptionHelpCard({ b, act }: { b: BlockOf<'subscription_help'>; act
           {sub?.confirmedOn && <p className="mt-1 text-base">You told SaySafe on {day(sub.confirmedOn)}. Keep the company’s confirmation email.</p>}
         </div>
       )}
+      {sub?.sample ? (
+        <div className="mt-3 rounded-2xl border-2 border-amber/50 bg-amber-soft p-3" role="note" data-testid="sample-cancel-notice">
+          <p className="font-bold">This is sample data</p>
+          <p className="mt-1 text-base">{SAMPLE_CANCEL_NOTICE}</p>
+          <Link to="/help#try-as-mary" className={`${linkCls} mt-1`}>What the sample data is</Link>
+        </div>
+      ) : (<>
       <ScopeBoxes scope={b.cancellationScope} merchant={sub?.merchant ?? b.merchant} />
       {b.guide ? (
         <div className="mt-3 rounded-2xl border-2 border-teal p-3" data-testid="official-link">
@@ -531,6 +539,7 @@ function SubscriptionHelpCard({ b, act }: { b: BlockOf<'subscription_help'>; act
       )}
       <a href={b.paypalAutopayUrl} target="_blank" rel="noopener noreferrer" className={`${linkCls} mt-2`}>PayPal automatic payments (sign in yourself)<ExternalLink className="size-5" aria-hidden /><span className="sr-only"> (opens PayPal in a new tab)</span></a>
       <p className="mt-2 text-base text-ink-soft">{b.disclaimer || EXTERNAL_DISCLAIMER}</p>
+      </>)}
       <Err e={err} />
       {sub && sub.source === 'manual' && !reported && (asking ? (
         <div className="mt-3 rounded-2xl bg-ivory p-3 grid gap-2">
@@ -1072,7 +1081,12 @@ function ShopCatalogueCard({ b, act }: { b: BlockOf<'shop_catalogue'>; act: Bloc
           </div>
         </div>
       ))}
-      <p className="mt-3 text-sm text-ink-soft">Demo Shop items are paid with PayPal Sandbox: no real money. For anything else, ask for it and I’ll search real shops with Channel3 — you’d buy those on the retailer’s own website.</p>
+      {b.channel3 && b.realQuery && b.realFound === false && (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Real shops">
+          <button type="button" onClick={() => act.send?.('Search real shops')} className="inline-flex items-center gap-2 min-h-12 px-4 rounded-full border-2 border-navy text-navy bg-paper font-bold hover:bg-teal-soft" data-testid="search-real-shops"><Search className="size-5" aria-hidden />Search real shops</button>
+        </div>
+      )}
+      <p className="mt-3 text-sm text-ink-soft">Demo Shop items are paid with PayPal Sandbox: no real money.{b.channel3 ? ' For anything else, say “search real shops” and I’ll look with Channel3: you’d buy those on the retailer’s own website.' : ''}</p>
     </div>
   );
 }

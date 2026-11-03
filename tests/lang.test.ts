@@ -46,7 +46,7 @@ describe('fallback to text in another reply language', () => {
   };
   it('never speaks English fallback text automatically when Spanish is selected; shows it instead', async () => {
     const { e, spoken } = env([{ lang: 'es-ES' }, { lang: 'en-GB' }]);
-    const s = new SpeechController(e);
+    const s = new SpeechController(e); s.unmute(); // spoken replies turned on (off by default)
     s.setPrefs({ lang: 'es' });
     expect(await s.speak('This message may be a scam.', { priority: 'critical', lang: 'en' })).toBe(false);
     expect(spoken).toHaveLength(0);
@@ -54,14 +54,14 @@ describe('fallback to text in another reply language', () => {
   });
   it('speaks Spanish text with an es-ES utterance when the device has a Spanish voice', async () => {
     const { e, spoken } = env([{ lang: 'es-ES' }]);
-    const s = new SpeechController(e);
+    const s = new SpeechController(e); s.unmute(); // spoken replies turned on (off by default)
     s.setPrefs({ lang: 'es' });
     expect(await s.speak('Este mensaje puede ser una estafa.', { lang: 'es' })).toBe(true);
     expect(spoken[0]).toEqual({ text: 'Este mensaje puede ser una estafa.', lang: 'es-ES' });
   });
   it('without a voice for that language it stays silent and says so on screen', async () => {
     const { e, spoken } = env([{ lang: 'en-GB' }]);
-    const s = new SpeechController(e);
+    const s = new SpeechController(e); s.unmute(); // spoken replies turned on (off by default)
     s.setPrefs({ lang: 'pl' });
     expect(await s.speak('Ta wiadomość może być oszustwem.', { priority: 'critical', lang: 'pl' })).toBe(false);
     expect(spoken).toHaveLength(0);
@@ -69,7 +69,7 @@ describe('fallback to text in another reply language', () => {
   });
   it('English stays the default and speaks as before', async () => {
     const { e, spoken } = env([]);
-    const s = new SpeechController(e);
+    const s = new SpeechController(e); s.unmute(); // spoken replies turned on (off by default)
     expect(await s.speak('Short reply.')).toBe(true);
     expect(spoken[0].lang).toBe('en-IE');
   });
