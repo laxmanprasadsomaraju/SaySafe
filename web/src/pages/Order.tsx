@@ -4,7 +4,8 @@ import { CheckCircle2, Clock, XCircle, Volume2, Receipt, PackageX } from 'lucide
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, type PaymentRequest, type PaymentState } from '../lib/api';
-import { speak } from '../lib/voice';
+import { speech } from '../lib/voice';
+import { spokenReceipt, spokenFamily } from '../lib/spoken';
 import { useMe } from '../lib/session';
 
 export function stateLabel(s: PaymentState) {
@@ -15,11 +16,7 @@ export function stateLabel(s: PaymentState) {
   } as Record<PaymentState, string>)[s];
 }
 
-export function spokenReceipt(r: PaymentRequest) {
-  if (!r.receipt) return '';
-  const amt = `€${Number(r.receipt.amount).toFixed(Number(r.receipt.amount) % 1 ? 2 : 0)}`;
-  return `Your payment of ${amt} to ${r.receipt.payee.replace(' (sandbox)', '')} was successful. This was a PayPal sandbox payment, so no real money moved.`;
-}
+export { spokenReceipt };
 
 /** Shows one purchase. Also handles the return from PayPal (/checkout/return?rid=..&token=ORDERID). */
 export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) {
@@ -60,8 +57,8 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
 
   useEffect(() => {
     if (!r || spoke.current) return;
-    if (r.state === 'CAPTURED') { speak(spokenReceipt(r)); spoke.current = true; }
-    if (r.state === 'FAMILY_APPROVAL_PENDING') { speak("This purchase is above your protected spending limit. I've sent a review request to your trusted family member."); spoke.current = true; }
+    if (r.state === 'CAPTURED') { speech.speak(spokenReceipt(r), { priority: 'auto' }); spoke.current = true; }
+    if (r.state === 'FAMILY_APPROVAL_PENDING') { speech.speak(spokenFamily(r.state), { priority: 'auto' }); spoke.current = true; }
   }, [r]);
 
   const checkout = async () => {
@@ -118,7 +115,7 @@ export default function Order({ fromPayPal = false }: { fromPayPal?: boolean }) 
           {r.state === 'CANCELLED' && r.approval?.status === 'declined' && <Notice tone="info" title="Your family member said no this time.">{r.approval.reason ?? 'Maybe talk it over together.'}</Notice>}
           {(r.state === 'FAMILY_APPROVED' || r.state === 'PAYER_APPROVAL_PENDING') && <Button className="w-full" onClick={checkout} busy={busy}>Continue to PayPal</Button>}
           {['FAMILY_APPROVAL_PENDING', 'FAMILY_APPROVED', 'PAYER_APPROVAL_PENDING'].includes(r.state) && <Button className="w-full" variant="secondary" onClick={cancel} disabled={busy}>Cancel this purchase</Button>}
-          {paid && <Button className="w-full" variant="secondary" icon={<Volume2 className="size-6" aria-hidden />} onClick={() => speak(spokenReceipt(r))}>Read my receipt</Button>}
+          {paid && <Button className="w-full" variant="secondary" icon={<Volume2 className="size-6" aria-hidden />} onClick={() => speech.speak(spokenReceipt(r), { priority: 'user' })}>Read my receipt</Button>}
           {paid && <Button className="w-full" variant="ghost" icon={<PackageX className="size-6" aria-hidden />} onClick={() => nav('/help', { state: { problem: true, requestId: r.id } })}>Problem with this order?</Button>}
           <Button className="w-full" variant="ghost" onClick={() => nav('/home')}>Back to home</Button>
         </div>

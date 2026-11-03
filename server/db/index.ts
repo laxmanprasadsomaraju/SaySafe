@@ -92,6 +92,12 @@ CREATE TABLE IF NOT EXISTS security_scans (
   shared_with_family INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
+-- Private shopping profile. Only ever read for the signed-in elder it belongs to (never family, never logs).
+CREATE TABLE IF NOT EXISTS user_preferences (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  profile_json TEXT NOT NULL CHECK (length(profile_json) <= 4096),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 CREATE TABLE IF NOT EXISTS audit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   household_id TEXT,

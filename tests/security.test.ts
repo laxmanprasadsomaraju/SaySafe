@@ -172,3 +172,36 @@ describe('prompt injection', () => {
     expect(r.body.verdict).not.toBe('verified_official_contact');
   });
 });
+
+describe('private shopping preferences', () => {
+  it('each elder only reads their own; family and anonymous get nothing', async () => {
+    const a = request.agent(app); await a.post('/api/demo/start').send({});
+    const b = request.agent(app); await b.post('/api/demo/start').send({});
+    const saved = await a.put('/api/preferences').set(H).send({ profile: { colours: ['blue'], brands: ['Panasonic'], budgetMax: 120 } });
+    expect(saved.status).toBe(200);
+    expect(saved.body.profile.colours).toEqual(['blue']);
+    expect((await a.get('/api/preferences')).body.profile.brands).toEqual(['Panasonic']);
+    const other = await b.get('/api/preferences');
+    expect(other.body.profile).toMatchObject({ colours: [], brands: [], budgetMax: null });
+    expect((await request(app).get('/api/preferences')).status).toBe(401);
+    // A paired family member has no read path to it.
+    const { code } = (await a.post('/api/family/invite').set(H).send({})).body;
+    const fam = request.agent(app); await fam.post('/api/family/pair').set(H).send({ code, name: 'Alex' });
+    const fget = await fam.get('/api/preferences');
+    expect(fget.status).toBe(401);
+    const overview = await fam.get('/api/family/overview');
+    expect(JSON.stringify(overview.body)).not.toMatch(/Panasonic|blue/);
+    // Never written to the audit log.
+    const rows = db.prepare("SELECT detail_json FROM audit_log WHERE detail_json LIKE '%Panasonic%'").all();
+    expect(rows).toHaveLength(0);
+    // Clear.
+    expect((await a.delete('/api/preferences')).status).toBe(200);
+    expect((await a.get('/api/preferences')).body.profile.brands).toEqual([]);
+  });
+  it('rejects oversized bodies and sanitises content', async () => {
+    const a = request.agent(app); await a.post('/api/demo/start').send({});
+    expect((await a.put('/api/preferences').set(H).send({ profile: { colours: ['x'.repeat(5000)] } })).status).toBe(413);
+    const r = await a.put('/api/preferences').set(H).send({ profile: { avoid: ['<img src=x onerror=alert(1)>'] } });
+    expect(r.body.profile.avoid[0]).not.toMatch(/[<>]/);
+  });
+});

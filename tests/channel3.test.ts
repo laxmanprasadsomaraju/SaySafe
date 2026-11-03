@@ -32,7 +32,7 @@ describe('Channel3 normalisation', () => {
   });
   it('spoken summary says purchases happen on the retailer site', () => {
     const r = { source: 'channel3' as const, query: 'microwave', maxPrice: 150, currency: 'EUR', country: 'IE', fetchedAt: '', products: normaliseProducts(sample, 'EUR', 150) };
-    expect(describeDiscovery(r)).toMatch(/shop's own website, not through SaySafe/);
+    expect(describeDiscovery(r)).toMatch(/shop's own website/);
     expect(describeDiscovery({ ...r, products: [] })).toMatch(/couldn't find/);
   });
 });

@@ -41,7 +41,7 @@ export function PageTitle({ eyebrow, title, lead }: { eyebrow?: string; title: s
 
 /** Large, labelled mic button with explicit states (never icon-only). */
 export function MicButton({ state, onClick, size = 'lg', label = 'Tap to speak' }: { state: VoiceState; onClick: () => void; size?: 'lg' | 'md'; label?: string }) {
-  if (state === 'unsupported') return null;
+  if (state === 'unsupported') return <p className="max-w-xs text-center text-lg text-ink-soft font-bold">Voice input isn’t available in this browser. Please type instead.</p>;
   const dims = size === 'lg' ? 'size-36 md:size-40' : 'size-20';
   const text = state === 'listening' ? 'Listening… tap to stop' : state === 'processing' ? 'Working it out…' : label;
   return (

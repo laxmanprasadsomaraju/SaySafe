@@ -1,5 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { api } from './api';
+import { speech, type SpeechPriority } from './speech';
+
+export { speech };
+/** React view of the central speech controller. */
+export function useSpeech() { return useSyncExternalStore(speech.subscribe, speech.getSnapshot, speech.getSnapshot); }
 
 export type VoiceState = 'idle' | 'listening' | 'processing' | 'done' | 'error' | 'unsupported';
 
@@ -15,10 +20,12 @@ export function useVoiceInput(onText: (t: string) => void) {
   const stop = useCallback(() => {
     if (timer.current) window.clearTimeout(timer.current);
     if (rec.current && rec.current.state !== 'inactive') rec.current.stop();
+    else speech.setListening(false);
   }, []);
 
   const start = useCallback(async () => {
     setError(null);
+    speech.stop(); // barge-in: tapping the mic always silences SaySafe first
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg'].find((m) => MediaRecorder.isTypeSupported?.(m)) ?? '';
@@ -28,6 +35,8 @@ export function useVoiceInput(onText: (t: string) => void) {
       r.onstop = async () => {
         stream.getTracks().forEach((t) => t.stop());
         setState('processing');
+        speech.setListening(false);
+        speech.setThinking(true);
         try {
           const type = r.mimeType || 'audio/webm';
           const blob = new Blob(chunks.current, { type });
@@ -39,6 +48,7 @@ export function useVoiceInput(onText: (t: string) => void) {
           setState('done');
           onText(text);
         } catch (e: any) {
+          speech.setThinking(false);
           setError(e.message);
           setState('error');
         }
@@ -46,8 +56,10 @@ export function useVoiceInput(onText: (t: string) => void) {
       rec.current = r;
       r.start();
       setState('listening');
+      speech.setListening(true);
       timer.current = window.setTimeout(stop, 15000); // safety: max 15s
     } catch (e: any) {
+      speech.setListening(false);
       setError(e?.name === 'NotAllowedError' ? 'Microphone access is turned off. You can type instead, or allow the microphone in your browser settings.' : 'The microphone is not available. You can type instead.');
       setState('error');
     }
@@ -57,19 +69,8 @@ export function useVoiceInput(onText: (t: string) => void) {
   return { state, error, start, stop, toggle: () => (state === 'listening' ? stop() : start()) };
 }
 
-/** Speaks text aloud with the browser's own voice, and returns the caption to show on screen. */
-export function speak(text: string) {
-  try {
-    if (localStorage.getItem('ss-voice') === 'off') return;
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    synth.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    u.rate = 0.92;
-    u.lang = 'en-IE';
-    const v = synth.getVoices().find((x) => /en-(IE|GB)/.test(x.lang));
-    if (v) u.voice = v;
-    synth.speak(u);
-  } catch { /* speech is optional */ }
+/** Compatibility wrapper: short automatic speech through the central controller. */
+export function speak(text: string, priority: SpeechPriority = 'auto', turn?: number) {
+  return speech.speak(text, { priority, turn });
 }
-export const stopSpeaking = () => { try { window.speechSynthesis?.cancel(); } catch { /* */ } };
+export const stopSpeaking = () => speech.stop();

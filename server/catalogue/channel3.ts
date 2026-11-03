@@ -2,6 +2,8 @@
 // POST https://api.trychannel3.com/v1/search with header x-api-key.
 // Discovery only: SaySafe never completes a retailer purchase. Offers link out to the retailer.
 
+import { recommend, parseRequest, spokenRecommendation, type Recommendation } from '../../shared/shopping.js';
+
 export const CHANNEL3_BASE = process.env.CHANNEL3_API_BASE ?? 'https://api.trychannel3.com';
 export const channel3Configured = () => Boolean(process.env.CHANNEL3_API_KEY);
 
@@ -21,8 +23,13 @@ export interface DiscoveryProduct {
   image: string | null;
   imageAlt: string;
   features: string[];
+  /** Aggregate rating exactly as Channel3 lists it (value/count). Channel3 returns no review text. */
   rating: { value: number; count: number } | null;
   offers: DiscoveryOffer[]; // sorted cheapest first, in-stock first
+  category: string | null;
+  attributes: Record<string, string[]>;
+  description: string | null;
+  dimensions: { label: string; value: string } | null;
 }
 export interface DiscoveryResult {
   source: 'channel3';
@@ -82,12 +89,34 @@ export function normaliseProducts(raw: unknown, currency: string, maxPrice: numb
       brand,
       image,
       imageAlt: typeof main?.alt_text === 'string' && main.alt_text.trim() ? main.alt_text.slice(0, 200) : `Photo of ${p.title.slice(0, 120)}`,
-      features: (Array.isArray(p.key_features) ? p.key_features : []).filter((f: unknown) => typeof f === 'string').slice(0, 3).map((f: string) => f.slice(0, 140)),
+      features: (Array.isArray(p.key_features) ? p.key_features : []).filter((f: unknown) => typeof f === 'string').slice(0, 6).map((f: string) => f.slice(0, 140)),
       rating: rv !== null && rc ? { value: rv, count: rc } : null,
       offers,
+      category: typeof p?.category?.title === 'string' ? p.category.title.slice(0, 80) : null,
+      attributes: attributesOf(p?.structured_attributes),
+      description: typeof p.description === 'string' ? p.description.slice(0, 800) : null,
+      dimensions: dimensionsOf((Array.isArray(p.offers) ? p.offers : []).find((o: any) => o?.dimensions)?.dimensions),
     });
   }
   return out;
+}
+
+function attributesOf(raw: unknown): Record<string, string[]> {
+  const out: Record<string, string[]> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>).slice(0, 12)) {
+    if (!Array.isArray(v)) continue;
+    const vals = v.filter((x): x is string => typeof x === 'string').slice(0, 6).map((x) => x.slice(0, 60));
+    if (vals.length) out[k.slice(0, 40)] = vals;
+  }
+  return out;
+}
+
+function dimensionsOf(d: any): { label: string; value: string } | null {
+  const part = (x: any) => (num(x?.number) !== null && typeof x?.unit === 'string' ? `${x.number} ${x.unit}` : null);
+  const [w, h, l] = [part(d?.width), part(d?.height), part(d?.length)];
+  if (!w || !h || !l) return null;
+  return { label: 'W × H × D', value: `${w} × ${h} × ${l}` };
 }
 
 const cache = new Map<string, { at: number; value: DiscoveryResult }>();
@@ -127,7 +156,7 @@ export async function searchChannel3(
   if (res.status === 422 || res.status === 400) throw new Channel3Error('bad_request', 'That search could not be run.');
   if (!res.ok) throw new Channel3Error('upstream', `Product search failed (${res.status}).`);
   const raw = await res.json().catch(() => null);
-  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: relevant(normaliseProducts(raw, currency, maxPrice), q, new Map(((raw as any)?.products ?? []).filter((p: any) => typeof p?.id === 'string').map((p: any) => [p.id, String(p?.category?.title ?? '')]))).slice(0, 6) };
+  const value: DiscoveryResult = { source: 'channel3', query: q, maxPrice, currency, country, fetchedAt: new Date().toISOString(), products: relevant(normaliseProducts(raw, currency, maxPrice), q, new Map(((raw as any)?.products ?? []).filter((p: any) => typeof p?.id === 'string').map((p: any) => [p.id, String(p?.category?.title ?? '')]))).slice(0, 10) };
   if (!opts.fetchImpl) cache.set(cacheKey, { at: Date.now(), value });
   return value;
 }
@@ -140,9 +169,11 @@ export function relevant(products: DiscoveryProduct[], query: string, categories
   return products.filter((p) => { const hay = `${p.title} ${categories.get(p.id) ?? ''}`.toLowerCase(); return words.some((w) => hay.includes(w)); });
 }
 
-/** Plain spoken summary. Never claims SaySafe sells or guarantees these items. */
-export function describeDiscovery(r: DiscoveryResult): string {
-  if (!r.products.length) return `I couldn't find ${r.query} from shops in Ireland${r.maxPrice ? ` under €${r.maxPrice}` : ''}. Try different words or a higher price.`;
-  const top = r.products.slice(0, 3).map((p, i) => `Option ${i + 1}: ${p.title}, from €${p.offers[0].price.toFixed(2)} at ${p.offers[0].retailer}`);
-  return `I found ${r.products.length} real ${r.products.length === 1 ? 'product' : 'products'} from other shops. ${top.join('. ')}. Prices come from the shops and can change. You would buy on the shop's own website, not through SaySafe.`;
+/**
+ * Short spoken summary: one recommendation, 1-2 reasons, an optional follow-up question.
+ * It never lists every product. Never claims SaySafe sells or guarantees these items.
+ */
+export function describeDiscovery(r: DiscoveryResult, rec?: Recommendation): string {
+  if (!r.products.length) return `I couldn't find ${r.query} in listings for Ireland${r.maxPrice ? ` under €${r.maxPrice}` : ''}. Try different words or a higher price.`;
+  return spokenRecommendation(r.products, rec ?? recommend(r.products, parseRequest(r.query)), r.query);
 }

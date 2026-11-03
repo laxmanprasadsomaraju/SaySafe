@@ -28,7 +28,7 @@ export default function Help() {
       if (loc.state?.problem) {
         const pick = paid.find((x) => x.id === loc.state?.requestId) ?? paid[0] ?? null;
         setSelected(pick);
-        if (pick) speak(`I'm sorry your ${pick.items[0].name} hasn't arrived. Here are your safe options.`);
+        if (pick) speak(`Sorry your ${pick.items[0].name} hasn't arrived. Start by contacting the shop; the steps are on screen.`);
       }
     });
   }, [me]); // eslint-disable-line

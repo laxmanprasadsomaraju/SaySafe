@@ -1,4 +1,7 @@
-import { searchChannel3, describeDiscovery, Channel3Error, channel3Configured } from './catalogue/channel3.js';
+import { searchChannel3, Channel3Error, channel3Configured } from './catalogue/channel3.js';
+import { parseRequest, recommend, spokenRecommendation, sanitizeProfile, profileIsEmpty } from '../shared/shopping.js';
+import { getProfile, saveProfile, clearProfile } from './prefs/store.js';
+import { explainBest } from './ai/explain.js';
 import express, { type Request, type Response, type NextFunction } from 'express';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -178,11 +181,20 @@ export function createApp() {
     const { intent, ai } = await interpret(said, { name, lastResults, step });
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
+    let discover: { query: string; suggested: boolean } | null = null;
     if (intent.action === 'shop') {
-      products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
-      reply = describeOptions(products, name);
+      // Real-product questions go to Channel3 discovery (same rules as /discover). The Demo Shop flow is unchanged.
+      const wantsReal = /\b(real (shops?|products?|listings?|prices?)|retailers?|other shops|currys|harvey norman|argos|did electrical|online shops?|compare (prices|shops)|in ireland)\b/i.test(said);
+      if (wantsReal && channel3Configured()) {
+        discover = { query: said, suggested: false };
+        reply = "I'll look in listings found for Ireland. You'd buy on the shop's own website.";
+      } else {
+        products = searchProducts(intent.query ?? said, intent.max_price_eur ? Math.round(intent.max_price_eur * 100) : null);
+        reply = describeOptions(products, name);
+        if (!products.length && channel3Configured()) { discover = { query: said, suggested: true }; reply = "That isn't in the demo shop. I can look in listings found for Ireland instead."; }
+      }
     }
-    res.json({ intent, products, reply, ai });
+    res.json({ intent, products, reply, ai, discover });
   }));
 
   // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
@@ -210,12 +222,26 @@ export function createApp() {
   app.post('/api/discover', aiLimiter, wrap(async (req, res) => {
     const s = readSession(req, 'elder');
     const said = z.string().trim().min(1).max(400).parse(req.body?.text);
-    const { intent, ai } = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
-    const query = (intent.action === 'shop' && intent.query) ? intent.query : said;
-    const maxPrice = intent.action === 'shop' && intent.max_price_eur ? intent.max_price_eur : null;
+    const overrideMax = z.number().positive().max(100000).nullable().catch(null).parse(req.body?.maxPrice ?? null);
+    // Signed in: the profile comes only from this user's own row. No session: the browser's local copy, sanitised.
+    const profile = s ? getProfile(s.userId) : sanitizeProfile(req.body?.profile);
+    const parsed = parseRequest(said);
+    let query = parsed.productQuery;
+    let ai: boolean | undefined;
+    if (!query) {
+      const r = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
+      ai = r.ai;
+      query = (r.intent.action === 'shop' && r.intent.query) ? r.intent.query : said;
+    }
+    const maxPrice = overrideMax ?? parsed.budget.max;
     try {
       const result = await searchChannel3(query, { maxPrice, userId: s?.householdId });
-      res.json({ ...result, reply: describeDiscovery(result), ai });
+      const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
+      const byId = new Map(result.products.map((p) => [p.id, p]));
+      const products = rec.rankedIds.map((id) => byId.get(id)!);
+      const best = rec.picks.find((p) => p.role === 'best');
+      const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice) : null;
+      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), reply: spokenRecommendation(products, rec, query), ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
       const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
@@ -223,6 +249,21 @@ export function createApp() {
       res.status(status).json({ error: `channel3_${e.code}`, message: `${e.message} The SaySafe Demo Shop still works.` });
     }
   }));
+
+  // ---------- Private shopping profile (elder only; never shared with family, never logged) ----------
+  app.get('/api/preferences', requireRole('elder'), (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.json({ profile: getProfile(sessionOf(req).userId) });
+  });
+  app.put('/api/preferences', requireRole('elder'), (req, res) => {
+    if (JSON.stringify(req.body ?? {}).length > 4096) return res.status(413).json({ error: 'too_large', message: 'That is too much to save. Please shorten your lists.' });
+    res.set('Cache-Control', 'no-store');
+    res.json({ profile: saveProfile(sessionOf(req).userId, req.body?.profile) });
+  });
+  app.delete('/api/preferences', requireRole('elder'), (req, res) => {
+    clearProfile(sessionOf(req).userId);
+    res.json({ ok: true });
+  });
 
   // ---------- Shop ----------
   app.get('/api/products', (req, res) => {

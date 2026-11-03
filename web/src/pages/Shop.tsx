@@ -4,7 +4,7 @@ import { Search, Star, ShieldCheck, Users, ArrowLeft, Lock } from 'lucide-react'
 import { Layout } from '../components/Layout';
 import { Button, Card, PageTitle, MicButton, Caption, Notice, SandboxBadge } from '../components/ui';
 import { api, eur, newKey, type Product } from '../lib/api';
-import { speak, useVoiceInput } from '../lib/voice';
+import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
 
 interface Quote { lines: { productId: string; name: string; unitCents: number; quantity: number; lineCents: number; image: string }[]; totalCents: number; currency: string; merchant: string; needsFamily: boolean; thresholdCents: number; spoken: string }
@@ -23,25 +23,30 @@ export default function Shop() {
   const key = useRef(newKey());
   const reviewRef = useRef<HTMLDivElement>(null);
 
+  const [discoverQuery, setDiscoverQuery] = useState<string | null>(null);
+  const turn = useRef(0);
   const applyAssistant = (r: any) => {
+    setDiscoverQuery(r.discover?.query ?? null);
+    if (r.discover && !r.discover.suggested) { nav('/discover', { state: { query: r.discover.query } }); return; }
     if (r.intent.action === 'shop') { setProducts(r.products); setQuote(null); }
     if (r.intent.action === 'select_product' && r.intent.choice_index && products[r.intent.choice_index - 1]) { choose(products[r.intent.choice_index - 1]); return; }
     if (r.intent.action === 'confirm' && quote) { pay(); return; }
     if (r.intent.action === 'cancel') { setQuote(null); }
     if (r.intent.action === 'check_message') { nav('/check'); return; }
-    setCaption(r.reply); speak(r.reply);
+    setCaption(r.reply); speech.speak(r.reply, { turn: turn.current });
   };
 
   const ask = useCallback(async (text: string) => {
     setBusy(true); setErr(null); setCaption(`You said: “${text}”`);
+    turn.current = speech.beginTurn();
     try {
       const r = await api('/api/assistant', { body: { text, step: quote ? 'review' : products.length ? 'choosing' : 'shop', lastResults: products.map((p) => p.name) } });
       applyAssistant(r);
     } catch (e: any) { setErr(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); speech.endThinking(); }
   }, [products, quote]); // eslint-disable-line
 
-  useEffect(() => { if (loc.state?.result) applyAssistant(loc.state.result); else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))); }, []); // eslint-disable-line
+  useEffect(() => { if (loc.state?.result) { turn.current = speech.generation; applyAssistant(loc.state.result); } else api<Product[]>('/api/products').then((p) => setProducts(p.slice(0, 6))); }, []); // eslint-disable-line
   const voice = useVoiceInput(ask);
 
   const choose = async (p: Product) => {
@@ -51,7 +56,7 @@ export default function Shop() {
       key.current = newKey();
       setQuote(q);
       const extra = q.needsFamily ? ` This is above your protected limit of ${eur(q.thresholdCents)}, so I'll ask your family member to check it first.` : ' Would you like to pay with PayPal?';
-      setCaption(q.spoken + extra); speak(q.spoken + extra);
+      setCaption(q.spoken + extra); speech.speak(q.spoken + extra);
       setTimeout(() => reviewRef.current?.focus(), 50);
     } catch (e: any) { setErr(e.message); }
   };
@@ -61,7 +66,7 @@ export default function Shop() {
     setPaying(true); setErr(null);
     try {
       const r = await api('/api/payments', { body: { items: quote.lines.map((l) => ({ productId: l.productId, quantity: l.quantity })), idempotencyKey: key.current } });
-      if (r.approveUrl) { speak('Taking you to PayPal to approve the payment.'); window.location.assign(r.approveUrl); return; }
+      if (r.approveUrl) { speech.stop(); window.location.assign(r.approveUrl); return; }
       nav(`/order/${r.request.id}`);
     } catch (e: any) { setErr(e.message); setPaying(false); }
   };
@@ -85,7 +90,12 @@ export default function Shop() {
         </div>
       )}
       {err && <div className="mt-6"><Notice tone="danger" title={err} /></div>}
-      {!quote && <p className="mt-6 text-lg text-ink-soft">This is the SaySafe Demo Shop: demo products, real PayPal sandbox payments. <Link to="/discover" className="font-bold text-teal underline underline-offset-4">Compare real shops instead</Link></p>}
+      {!quote && discoverQuery && (
+        <div className="mt-6"><Notice tone="info" title="Not in the demo shop">
+          <Link to="/discover" state={{ query: discoverQuery }} className="font-bold text-teal underline underline-offset-4">Look for “{discoverQuery}” in listings found for Ireland</Link>. You would buy on the shop’s own website.
+        </Notice></div>
+      )}
+      {!quote && <p className="mt-6 text-lg text-ink-soft">This is the SaySafe Demo Shop: demo products, real PayPal sandbox payments. <Link to="/discover" className="font-bold text-teal underline underline-offset-4">Compare real shops instead</Link> · <Link to="/preferences" className="font-bold text-teal underline underline-offset-4">My preferences</Link></p>}
 
       {!quote && products.length > 0 && (
         <section aria-label="Options" className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">

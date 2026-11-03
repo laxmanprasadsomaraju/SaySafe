@@ -4,7 +4,7 @@ import { MessageSquareWarning, ShoppingBag, LifeBuoy, Keyboard, ChevronRight, Cl
 import { Layout } from '../components/Layout';
 import { Card, MicButton, Caption, Button } from '../components/ui';
 import { api, eur, type PaymentRequest } from '../lib/api';
-import { speak, useVoiceInput } from '../lib/voice';
+import { speech, useVoiceInput } from '../lib/voice';
 import { useMe } from '../lib/session';
 import { stateLabel } from './Order';
 
@@ -26,22 +26,24 @@ export default function Home() {
   const handle = useCallback(async (text: string) => {
     setBusy(true);
     setCaption(`You said: “${text}”`);
+    const turn = speech.beginTurn();
     try {
       const r = await api('/api/assistant', { body: { text, step: 'home' } });
       const a = r.intent.action;
+      if (r.discover && !r.discover.suggested) { nav('/discover', { state: { query: r.discover.query } }); return; }
       if (a === 'shop') { nav('/shop', { state: { query: text, result: r } }); return; }
       if (a === 'check_message') { nav('/check', { state: { text: r.intent.message_text && r.intent.message_text !== text ? r.intent.message_text : '' } }); return; }
       if (a === 'trusted_help' || a === 'order_problem') { nav('/help', { state: { problem: a === 'order_problem' } }); return; }
-      setCaption(r.reply); speak(r.reply);
+      setCaption(r.reply); speech.speak(r.reply, { turn });
     } catch (e: any) { setCaption(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); speech.endThinking(); }
   }, [nav]);
   const voice = useVoiceInput(handle);
 
   const actions = [
     { to: '/check', icon: MessageSquareWarning, title: 'Check a message', text: 'Is this text, email or link really from PayPal?' },
     { to: '/shop', icon: ShoppingBag, title: 'Shop by voice', text: 'Find something and pay safely with PayPal.' },
-    { to: '/discover', icon: Store, title: 'Compare real shops', text: 'See real prices from Irish shops. You buy on their site.' },
+    { to: '/discover', icon: Store, title: 'Compare real shops', text: 'Listings found for Ireland (EUR). You buy on the shop’s own site.' },
     { to: '/help', icon: LifeBuoy, title: 'Get trusted help', text: 'Official PayPal help, order problems, or your family.' },
   ];
   if (!me) return <Layout><p>Loading…</p></Layout>;

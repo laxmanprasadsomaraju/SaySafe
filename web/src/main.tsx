@@ -1,6 +1,9 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { speech } from './lib/speech';
+import Preferences from './pages/Preferences';
 import './index.css';
 import Welcome from './pages/Welcome';
 import Home from './pages/Home';
@@ -17,9 +20,18 @@ import Family, { FamilyPair } from './pages/Family';
 if (localStorage.getItem('ss-large') === 'on') document.documentElement.classList.add('large-text');
 if (localStorage.getItem('ss-contrast') === 'on') document.documentElement.classList.add('high-contrast');
 
+/** Any navigation silences SaySafe and makes in-flight replies stale. Rendered BEFORE the routes so its
+ *  effect runs before a new page's own mount effects (which may legitimately start speaking). */
+function RouteSpeechGuard() {
+  const { pathname } = useLocation();
+  useEffect(() => { speech.stop(); }, [pathname]);
+  return null;
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
+      <RouteSpeechGuard />
       <Routes>
         <Route path="/" element={<Welcome />} />
         <Route path="/home" element={<Home />} />
@@ -31,6 +43,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="/help" element={<Help />} />
         <Route path="/guide" element={<Guide />} />
         <Route path="/discover" element={<Discover />} />
+        <Route path="/preferences" element={<Preferences />} />
         <Route path="/family" element={<Family />} />
         <Route path="/family/pair" element={<FamilyPair />} />
         <Route path="*" element={<Navigate to="/" replace />} />
