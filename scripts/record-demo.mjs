@@ -3,8 +3,9 @@
 //
 //   node scripts/record-demo.mjs http://127.0.0.1:8792                 # local build (mock PayPal), for validation
 //   OUT=/path/to/video PAYPAL_BUYER_EMAIL=… PAYPAL_BUYER_PASSWORD=… node scripts/record-demo.mjs https://saysafe.onrender.com
+//   OUT=/path/to/video EXTERNAL_APPROVAL=1 node scripts/record-demo.mjs https://saysafe.onrender.com   # approve $OUT/approve-url.txt yourself
 //
-// Output ($OUT, default ./video-out): saysafe-demo.mp4 · timing.json · narration.md · segments/*.mp4 · raw/*.webm · cards/*.png
+// Output ($OUT, default ./video-out): saysafe-demo.mp4 · timing.json · narration.md · captions.srt · receipt-info.json · segments/*.mp4 · raw/*.webm · cards/*.png
 //
 // How it stays honest:
 //  - Everything on screen is the real app, driven by slow, visible clicks (an injected cursor + click ring) and typing.
@@ -15,6 +16,8 @@
 //  - Local runs use a mock PayPal: every PayPal id is replaced by "[ID hidden · local test]" and a banner says
 //    "Local test build (mock PayPal) — not a real sandbox payment" on every app frame.
 //  - Waiting for the server/AI is cut out of the final video (marked in timing.json), never sped up.
+//  - Known limit: the recorder's frame timestamps can lag the script clock by ~1–2 s, so check the automatic cut points
+//    against the raw footage before publishing (the Nov 2026 final cut was re-cut by hand from raw/*.webm).
 // Requires ffmpeg (libx264). Spoken replies stay off (the app's default), so nothing plays sound.
 import { chromium } from 'playwright';
 import { execFileSync } from 'node:child_process';
@@ -26,11 +29,15 @@ const HOSTED = !/^http:\/\/(127\.0\.0\.1|localhost)/.test(BASE);
 const MOCK = process.env.MOCK_PAYPAL ?? 'http://127.0.0.1:9999';
 const OUT = path.resolve(process.env.OUT ?? 'video-out');
 const W = 1920, H = 1080, FPS = 30, LIMIT = 175; // seconds (2:55)
-// The page is laid out at 1280×720 CSS px and rendered at 1.5× device pixels = a crisp 1920×1080 frame (desktop layout,
-// large enough to read). CSS zoom is not used: it skews element coordinates and clicks.
+// The page is laid out at 1280×720 CSS px (desktop layout, large enough to read). Playwright's recorder captures CSS-px
+// frames (a 1920×1080 recording would put the page in the top-left corner with grey padding), so it records 1280×720
+// and each segment is scaled to 1920×1080 (lanczos). CSS zoom is not used: it skews element coordinates and clicks.
 const VW = 1280, VH = 720, DPR = W / VW;
 const BUYER = { email: process.env.PAYPAL_BUYER_EMAIL, password: process.env.PAYPAL_BUYER_PASSWORD };
-if (HOSTED && !process.env.NARRATE_ONLY && !(BUYER.email && BUYER.password)) { console.error('Hosted recording needs PAYPAL_BUYER_EMAIL and PAYPAL_BUYER_PASSWORD in the environment (sandbox buyer).'); process.exit(2); }
+// EXTERNAL_APPROVAL=1 (hosted): no buyer login here at all. The approval URL is written to $OUT/approve-url.txt for someone
+// to approve on PayPal's own page; the script polls the order's read-only status with Mary's session, then continues.
+const EXTERNAL = Boolean(process.env.EXTERNAL_APPROVAL);
+if (HOSTED && !process.env.NARRATE_ONLY && !EXTERNAL && !(BUYER.email && BUYER.password)) { console.error('Hosted recording needs PAYPAL_BUYER_EMAIL and PAYPAL_BUYER_PASSWORD in the environment (sandbox buyer), or EXTERNAL_APPROVAL=1.'); process.exit(2); }
 for (const d of ['raw', 'segments', 'cards']) fs.mkdirSync(path.join(OUT, d), { recursive: true });
 const PACE = Number(process.env.PACE ?? 0.6); // scales every on-screen pause (1 = slowest); waits for the server are cut instead
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms * PACE));
@@ -39,31 +46,31 @@ const proxyOf = (u) => { if (!u) return undefined; const x = new URL(u); return 
 
 // ---------------- The shot list (narration is timed to the measured cut afterwards) ----------------
 const NARRATION = {
-  open: 'Scammers rarely hack accounts. They talk people into approving payments themselves, and older adults are often the target. SaySafe is a second look before paying, family backup for bigger purchases, and proof afterwards.',
-  landing: 'SaySafe helps people understand payment requests, avoid accidental repeat payments, get trusted assistance and verify payments. Here is how it works for Mary.',
-  scam: 'Mary gets a message: her account is on hold, she owes a hundred and twenty euro, call this number. She pastes it in. The AI reads it and points to the exact warning signs, a number to call and pressure to act. It can make a warning stronger. It never calls a message safe.',
-  paid: 'So, has she already paid a hundred and twenty euro? SaySafe checks her own records and finds a possible match. It is clearly labelled sample data, and SaySafe says plainly that a matching amount is not proof.',
-  shop: 'She would rather buy a new microwave. Real products from Channel3 are bought on the shop’s own website. The SaySafe Demo Shop is where the payment can be protected. The price comes from the server, not the AI. It is over her seventy-five euro limit, so it waits for her family.',
-  alex: 'Alex, her family helper, sees exactly what she wants to buy, from which shop and for how much. He only sees requests sent to him. He approves, but he can never pay for her.',
-  approved: 'Back to Mary. The same card, in the same conversation, now says approved. Family approval is not payment approval: Mary still approves the payment herself, on PayPal’s own page.',
-  paypal: 'This is PayPal’s own sandbox checkout, with test money.',
-  receipt: 'SaySafe captures the payment once and checks it with PayPal before it says paid. PayPal’s signed notice is verified a moment later. When she asks whether her payment went through, she gets the same receipt. Nothing is charged twice.',
-  activity: 'Activity marks it as a real PayPal Sandbox transaction, kept apart from the sample data. Insights gives Mary a calm, read-only summary: what is waiting, what was paid and what she checked. Insights can explain, but it can’t approve, pay or change anything.',
-  arch: 'Under the hood, the AI only interprets and explains. Prices, the family rule and the capture are server code. The payer approves at PayPal, and the server verifies every payment.',
-  docs: 'Step-by-step guides, a judges’ guide and a features page show how to test it, and what it can’t do yet.',
-  end: 'SaySafe. Ask first, pay with confidence. Everything you saw runs in the PayPal Sandbox with test money, and the guides show how to try it yourself.',
+  landing: 'This is SaySafe, a payment safety companion for older adults and the family who help them: a second look before paying, family backup, and proof afterwards. Meet Mary.',
+  search: 'Mary asks the Assistant to find a kettle. These are real listings found with Channel3, with the shop and the price. She would buy these on the shop’s own website. SaySafe also offers a Demo Shop item, where the payment itself can be protected.',
+  scam: 'Then a message arrives: her account is on hold, she owes a hundred and twenty euro, call this number. Mary pastes it in. The AI points to the exact warning signs: a number she can’t verify, and pressure to act. It can make a warning stronger. It never calls a message safe.',
+  paid: 'Has she already paid a hundred and twenty euro? SaySafe checks her own records and finds possible matches. These are sample records, clearly labelled, and a matching amount is not proof.',
+  shop: 'Now Mary buys a microwave from the SaySafe Demo Shop. The price comes from the server, not the AI. It is a hundred and twenty euro, over her seventy-five euro limit, so she taps Allow to ask her family to check first. Nothing is paid yet.',
+  alex: 'Alex, her family helper, opens his own family view. He sees exactly what she wants to buy, from which shop, and for how much. He approves this one purchase. He can never pay for her.',
+  approved: 'Back as Mary, the same card in the same conversation now says approved. But family approval is not payment approval. Mary still approves the payment herself, on PayPal’s own page.',
+  paypal: 'This step happens on PayPal’s own Sandbox checkout, with test money.',
+  receipt: 'PayPal sends her back. SaySafe captures the payment once and checks it with PayPal before it says paid. PayPal’s signed webhook notice is verified too, and every step is listed as payment evidence on the receipt.',
+  insights: 'Mary’s Insights page is a calm, read-only summary. Real Sandbox payments and sample data are kept apart. It can explain, but it can’t approve, pay or cancel anything.',
+  family: 'Alex has his own insights page. He sees the purchase Mary asked him to check, and its Sandbox confirmation. Her other purchases stay private.',
+  end: 'SaySafe. Ask first, pay with confidence. PayPal Sandbox only, so no real money moved. The code is on GitHub.',
 };
 const ONSCREEN = {
-  open: 'Title card: who it is for and why', landing: 'Landing page: headline, value proposition, How it works', scam: 'Assistant: scam message pasted → “Suspicious” with quoted warning signs',
-  paid: '“Have I already paid €120?” → possible match, labelled Sample data', shop: 'Real Channel3 listings (brief) → Demo Shop microwave €120 → Allow → Family review: Pending',
-  alex: 'Try as Alex too → Alex’s review card → Approve', approved: 'Profile › Back to Mary → Assistant: Approved → Continue to PayPal', paypal: 'Title card: PayPal Sandbox checkout — buyer approves on PayPal',
-  receipt: 'Receipt: Captured, checked with PayPal → “Did my payment go through?” → same receipt card', activity: 'Activity (Real PayPal Sandbox transaction) → Insights', arch: 'Architecture slide',
-  docs: 'Learn SaySafe, Judges’ Guide, Features pages', end: 'End card: name, URLs, sandbox and independence notes',
+  landing: 'Landing page → Try as Mary', search: 'Assistant: “Find me a kettle” → real Channel3 listings (product cards) + Demo Shop alternative',
+  scam: 'Message check: scam text pasted → result with quoted warning signs', paid: '“Have I already paid €120?” → possible match, labelled Sample data',
+  shop: '“Let’s buy the demo microwave” → Review purchase €120 (Family check: above €75) → Allow → Family review: Pending', alex: 'Try as Alex too → Alex’s review card → Approve',
+  approved: 'Profile › Back to Mary → Assistant: Approved → Continue to PayPal', paypal: 'Title card: PayPal Sandbox checkout (PayPal’s page is not shown)',
+  receipt: 'Receipt page: Captured · Webhook verified → Webhook verification: Verified — signed PayPal notice → Payment evidence timeline', insights: 'Mary’s Insights page (masonry cards, Real PayPal Sandbox vs Sample data)',
+  family: 'Profile › Try as Alex too → Alex’s family Insights: “Her other purchases stay private”, 1 approved, €120 sandbox capture, webhook confirmed', end: 'End card: github.com/laxmanprasadsomaraju/SaySafe · PayPal Sandbox, no real money',
 };
 const CAPTIONS = {
-  open: 'For older adults and the family who help them', landing: 'Ask first. Pay with confidence.', scam: 'AI explains. Rules decide. It can’t pay.', paid: 'A match is not proof',
-  shop: 'Over €75 → family review first', alex: 'Alex approves this exact purchase only', approved: 'Family approval ≠ PayPal approval', paypal: 'PayPal Sandbox — test money, no real payment',
-  receipt: '“Paid” only after PayPal confirms', activity: 'Real sandbox and sample data kept apart', arch: 'AI interprets · Rules evaluate · Payer approves at PayPal · Server verifies', docs: 'saysafe.onrender.com/learn · /judges · /features', end: 'Independent project · not affiliated with PayPal',
+  landing: 'For older adults and the family who help them', search: 'Real listings from Channel3', scam: 'AI explains. It never calls a message safe.', paid: 'Sample data · a match is not proof',
+  shop: 'Over €75 → family check first', alex: 'Alex approves this exact purchase only', approved: 'Family approval ≠ PayPal approval', paypal: 'PayPal Sandbox · test money',
+  receipt: '“Paid” only after PayPal confirms', insights: 'Read-only · real sandbox and sample kept apart', family: 'Family sees only what Mary sends', end: 'PayPal Sandbox, no real money · not affiliated with PayPal',
 };
 
 
@@ -83,11 +90,22 @@ function writeNarration({ shotsOut, total, probe, raw, ranges, recordedAt, base 
     '| Time | On screen | Say | Caption |', '|---|---|---|---|',
     ...rows.map((r) => `| ${r.from}–${r.to} | ${r.onScreen} | ${r.say} | ${r.caption} |`), '',
     '## Notes', '',
-    '- The PayPal login page is not in the video (it shows the buyer’s email). The 5 s card stands in for it; everything after it is the real return and receipt.',
+    '- The PayPal login page is not in the video (it shows the buyer’s email). The title card stands in for it; everything after it is the real return and receipt.',
+    '- `captions.srt` carries the same words, cued sentence by sentence inside each shot.',
     '- Keep the in-app “PayPal Sandbox · no real money” and “Sample data” labels visible. Don’t claim PayPal endorses SaySafe, proven fraud prevention, or user-test results.',
     '- Upload to YouTube as **Public**, title “SaySafe: AI payment safety companion (PayPal AI Hackathon)”; description: demo URL, repo URL, “PayPal Sandbox only — test money. Not affiliated with or endorsed by PayPal.”',
   ].join('\n');
   fs.writeFileSync(path.join(OUT, 'narration.md'), md + '\n');
+  // captions.srt: each shot's narration split into sentence-sized cues, timed in proportion to their length inside the shot.
+  const ts = (t) => { const ms = Math.round(t * 1000); const h = Math.floor(ms / 3600000), m = Math.floor(ms / 60000) % 60, sec = Math.floor(ms / 1000) % 60; return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')},${String(ms % 1000).padStart(3, '0')}`; };
+  const cues = [];
+  for (const r of rows) {
+    const parts = r.say.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((x) => x.trim()).filter(Boolean) ?? [r.say];
+    const chunks = parts.flatMap((x) => { const w = x.split(/\s+/); if (w.length <= 16) return [x]; const half = Math.ceil(w.length / 2); return [w.slice(0, half).join(' '), w.slice(half).join(' ')]; });
+    const span = Math.max(0.5, r.end - r.start - 0.3), total = chunks.reduce((n, c) => n + c.length, 0); let t = r.start + 0.15;
+    for (const c of chunks) { const d = span * c.length / total; cues.push({ a: t, b: t + d - 0.05, text: c }); t += d; }
+  }
+  fs.writeFileSync(path.join(OUT, 'captions.srt'), cues.map((c, i) => `${i + 1}\n${ts(c.a)} --> ${ts(c.b)}\n${c.text}\n`).join('\n'));
   return timing;
 }
 
@@ -118,7 +136,7 @@ async function card(name, html, seconds) {
 }
 
 // ---------------- The recorded browser ----------------
-const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR, locale: 'en-IE', timezoneId: 'Europe/Dublin', recordVideo: { dir: path.join(OUT, 'raw'), size: { width: W, height: H } } });
+const ctx = await browser.newContext({ viewport: { width: VW, height: VH }, deviceScaleFactor: DPR, locale: 'en-IE', timezoneId: 'Europe/Dublin', recordVideo: { dir: path.join(OUT, 'raw'), size: { width: VW, height: VH } } });
 await ctx.addInitScript(({ local }) => {
   if (!localStorage.getItem('ss-voice-prefs')) localStorage.setItem('ss-voice-prefs', JSON.stringify({ muted: true, mutedByUser: true, autoSpeak: false, rate: 0.95, readAll: false, lang: 'en' }));
   const boot = () => {
@@ -174,12 +192,13 @@ async function type(text, cardKind) {
 async function show(loc, ms = 2500) { const el = loc.first(); await el.waitFor({ timeout: 40000 }); await el.evaluate((e) => e.scrollIntoView({ behavior: 'smooth', block: 'start' })); await sleep(700); await p.evaluate(() => scrollBy({ top: -120, behavior: 'smooth' })); await sleep(ms); }
 async function scrollSlow(px, ms = 2200) { await p.evaluate((y) => scrollBy({ top: y, behavior: 'smooth' }), px); await sleep(ms); }
 const last = (k) => p.locator(`[data-card="${k}"]`).last();
-const leaveIfAsked = async () => { const b = p.getByRole('button', { name: 'Leave, keep it saved' }); if (await b.waitFor({ timeout: 2500 }).then(() => true).catch(() => false)) await click(b, 400); };
+// The leave guard can open after the Alex session call returns; answered off camera (inside a cut).
+const leaveIfAsked = async () => { const b = p.getByRole('button', { name: 'Leave, keep it saved' }); if (await Promise.race([b.waitFor({ timeout: 10000 }).then(() => true).catch(() => false), p.waitForURL(/\/family\//, { timeout: 10000 }).then(() => false).catch(() => false)])) await b.click(); };
 
 // A short lead-in that is cut, so the first frame is already the page.
 await p.goto(BASE + '/', { waitUntil: 'networkidle', timeout: 120000 }); await sleep(800);
 
-// LANDING
+// LANDING → TRY AS MARY
 begin('landing');
 await sleep(3000); await scrollSlow(420, 2500); await scrollSlow(-420, 1000);
 await click(p.locator('button:visible', { hasText: 'Try as Mary' }), 300);
@@ -187,40 +206,45 @@ await cut(async () => { await p.waitForURL(/\/assistant/, { timeout: 90000 }); a
 await sleep(1500);
 end();
 
-// SCAM CHECK (pasted message; Check a message mode from Home is the documented path, here the composer mode chip)
+// REAL CHANNEL3 SEARCH
+begin('search');
+await type('Find me a kettle');
+await cut(() => p.getByRole('list', { name: 'Shop listings' }).last().waitFor({ timeout: 60000 }));
+await show(p.getByRole('list', { name: 'Shop listings' }).last(), 4500);
+await scrollSlow(420, 3200);
+end();
+
+// SCAM CHECK (composer mode chip "Check a message")
 begin('scam');
 await p.goto(BASE + '/assistant?mode=check'); await p.waitForSelector('#assistant-input'); await sleep(1200);
 await type('PayPal: your account is on hold. You owe €120 for a microwave order. Call 01 555 0199 to cancel.', 'scam_result');
 await show(last('scam_result'), 6500);
 end();
 
-// HAVE I ALREADY PAID?
+// HAVE I ALREADY PAID? (sample data)
 begin('paid');
-// “Have I already paid …” is a payment-memory question in any composer mode (looksCompanion), even straight after a message check.
 await type('Have I already paid €120?', 'payment_matches');
 await sleep(800); await show(last('payment_matches'), 5500);
 end();
 
-// SHOP → DEMO SHOP → FAMILY REVIEW
+// DEMO SHOP → OVER LIMIT → FAMILY REVIEW
 begin('shop');
-await type('Can you help me buy a microwave instead?');
-await cut(() => p.getByRole('list', { name: 'Shop listings' }).last().waitFor({ timeout: 60000 }));
-await show(p.getByRole('list', { name: 'Shop listings' }).last(), 2600);
 await type("Let's buy the demo microwave.", 'payment_prep');
-await show(last('payment_prep'), 3000);
+await show(last('payment_prep'), 3500);
 await click(last('payment_prep').getByRole('button', { name: /^Allow/ }), 300);
 await cut(() => last('family_status').getByText('Pending').waitFor({ timeout: 30000 }));
 await show(last('family_status'), 3000);
 end();
+const rid = (await last('family_status').locator('a[href^="/order/"]').last().getAttribute('href').catch(() => null))?.split('/').pop() ?? null;
 
-// ALEX
+// ALEX (his own family session in this browser)
 begin('alex');
-await click(last('family_status').getByTestId('try-as-alex-card'), 200); await leaveIfAsked();
-await cut(async () => { await p.waitForURL(/\/family\/assistant/, { timeout: 30000 }); await last('family_review').waitFor({ timeout: 30000 }); });
+await click(last('family_status').getByTestId('try-as-alex-card'), 200);
+await cut(async () => { await leaveIfAsked(); await p.waitForURL(/\/family\/assistant/, { timeout: 30000 }); await last('family_review').waitFor({ timeout: 30000 }); });
 await show(last('family_review'), 3500);
 await click(last('family_review').getByRole('button', { name: 'Approve' }), 300);
 await cut(() => last('family_review').getByText('Approved').first().waitFor({ timeout: 20000 }));
-await sleep(2200);
+await sleep(2000);
 end();
 
 // BACK TO MARY → APPROVED → CONTINUE TO PAYPAL
@@ -232,80 +256,91 @@ await show(last('family_status'), 3000);
 await click(last('family_status').getByRole('button', { name: 'Continue to PayPal' }), 200);
 end();
 
-// PAYPAL (not recorded: a separate, non-recording context with the same session)
+// PAYPAL (never recorded). Hosted: the buyer approves in a separate, non-recording browser.
+let receiptInfo = {};
 await (async () => {
   await p.waitForURL(/sandbox\.paypal\.com/, { timeout: 30000 }).catch(() => {});
   if (!payUrl && /sandbox\.paypal\.com/.test(p.url())) payUrl = p.url();
   if (!payUrl) { await p.screenshot({ path: path.join(OUT, 'fail-paypal.png') }); await ctx.close(); throw new Error(`Continue to PayPal did not reach PayPal (page at ${p.url()}); see fail-paypal.png`); }
-  const state = await ctx.storageState();
-  const side = await browser.newContext({ storageState: state, viewport: { width: 1280, height: 900 } }); const s = await side.newPage();
+  const token = new URL(payUrl).searchParams.get('token');
   let returnUrl;
   if (!HOSTED) {
-    const token = new URL(payUrl).searchParams.get('token');
     returnUrl = (await (await fetch(`${MOCK}/mock/approve/${token}`, { method: 'POST' })).json()).returnUrl.replace(/^https?:\/\/[^/]+/, BASE);
+  } else if (EXTERNAL) {
+    // EXTERNAL_APPROVAL=1: someone else approves at PayPal (the URL is written to $OUT/approve-url.txt). We poll the
+    // owner-only, read-only order status with Mary's own session until PayPal says APPROVED, then follow the return.
+    fs.writeFileSync(path.join(OUT, 'approve-url.txt'), payUrl + '\n');
+    log(`WAITING_FOR_BUYER ${payUrl}`);
+    const limitMin = Number(process.env.APPROVAL_WAIT_MIN ?? 20); let st = null;
+    for (let i = 0; i < limitMin * 6; i++) {
+      const r = await ctx.request.get(`${BASE}/api/paypal/orders/${token}/status`).catch(() => null);
+      st = r && r.ok() ? await r.json() : st;
+      if (/APPROVED|COMPLETED/.test(st?.orderStatus ?? '')) break;
+      await new Promise((r) => setTimeout(r, 10000));
+    }
+    if (!/APPROVED|COMPLETED/.test(st?.orderStatus ?? '')) { await ctx.close(); throw new Error(`PayPal order not approved within ${limitMin} min (last status ${st?.orderStatus ?? 'unknown'})`); }
+    log(`APPROVED at PayPal (${st.orderStatus})`);
+    returnUrl = `${BASE}/checkout/return?${rid ? `rid=${encodeURIComponent(rid)}&` : ''}token=${encodeURIComponent(token)}`;
   } else {
+    const state = await ctx.storageState();
+    const side = await browser.newContext({ storageState: state, viewport: { width: 1280, height: 900 } }); const s = await side.newPage();
     await s.goto(payUrl, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await s.locator('#email').fill(BUYER.email, { timeout: 45000 }).catch(() => {});
     await s.locator('#btnNext').click({ timeout: 8000 }).catch(() => {});
     await s.locator('#password').fill(BUYER.password, { timeout: 45000 }); await s.locator('#btnLogin').click();
     await s.locator('#payment-submit-btn, [data-testid="submit-button-initial"]').first().click({ timeout: 90000 });
     await s.waitForURL((u) => u.href.startsWith(BASE), { timeout: 120000 });
-    returnUrl = s.url();
+    returnUrl = s.url(); await side.close();
   }
-  await side.close();
-  // The recorded page follows the same return (hosted: SaySafe already captured, the page shows the receipt).
+  await ctx.unroute('https://www.sandbox.paypal.com/**').catch(() => {});
+  // The recorded page follows the return: with Mary's session SaySafe confirms and captures once, then shows the receipt.
   await p.goto(returnUrl);
-  await p.getByTestId('order-state').waitFor({ timeout: 60000 });
+  await p.getByTestId('order-state').waitFor({ timeout: 90000 });
   await p.locator('main').getByText(/Verification pending|Verified — signed/).first().waitFor({ timeout: 60000 });
-  if (HOSTED) { await sleep(15000); await p.reload(); await p.getByTestId('order-state').waitFor({ timeout: 60000 }); }
+  if (HOSTED) { // wait (cut) for the signed webhook to be verified, up to ~2.5 min
+    for (let i = 0; i < 10 && !(await p.locator('main').getByText('Verified — signed').count()); i++) { await new Promise((r) => setTimeout(r, 15000)); await p.reload(); await p.getByTestId('order-state').waitFor({ timeout: 60000 }); }
+  }
+  const orderId = rid ?? new URL(p.url()).pathname.split('/').pop();
+  const pr = await ctx.request.get(`${BASE}/api/payments/${orderId}`).then((r) => r.json()).catch(() => ({}));
+  receiptInfo = { requestId: orderId, state: pr.state, captureId: pr.receipt?.captureId ?? pr.paypalCaptureId ?? null, webhookConfirmed: pr.receipt?.webhookConfirmed ?? null, onScreenVerified: (await p.locator('main').getByText('Verified — signed').count()) > 0 };
+  fs.writeFileSync(path.join(OUT, 'receipt-info.json'), JSON.stringify(receiptInfo, null, 2));
+  log('RECEIPT', JSON.stringify(receiptInfo));
   await sleep(600);
 })();
 
-// RECEIPT → "Did my payment go through?"
+// RECEIPT (webhook verification row)
 begin('receipt');
-await sleep(4500); await scrollSlow(380, 3500);
-await p.goto(BASE + '/assistant'); await p.waitForSelector('#assistant-input'); await sleep(600);
-await type('Did my payment go through?', 'receipt');
-await show(last('receipt'), 4500);
+await sleep(3500);
+await moveTo(p.locator('main').getByText(/Verified — signed|Verification pending/));
+await sleep(3500); await scrollSlow(380, 3000);
 end();
 
-// ACTIVITY → INSIGHTS
-begin('activity');
-await click(p.locator('header').getByRole('link', { name: 'Activity' }), 300);
-await cut(() => p.waitForLoadState('networkidle'));
-await sleep(3200);
+// MARY'S INSIGHTS (masonry)
+begin('insights');
 await click(p.locator('header').getByRole('link', { name: 'Insights' }), 300);
-await cut(async () => { await p.locator('#spending').waitFor({ timeout: 30000 }); });
-await sleep(4200);
+await cut(async () => { await p.locator('#spending').waitFor({ timeout: 30000 }); await sleep(800); });
+await sleep(3500); await scrollSlow(520, 3200); await scrollSlow(520, 3200);
 end();
 
-// DOCS (optional, DOCS=1; not in the submission flow)
-if (process.env.DOCS) {
-begin('docs');
-await p.goto(BASE + '/learn'); await p.waitForSelector('h1'); await sleep(2600);
-await click(p.getByRole('link', { name: 'Judges’ Guide' }).first(), 300); await p.waitForSelector('h1'); await sleep(2600);
-await click(p.getByRole('link', { name: 'Features' }).first(), 300); await p.waitForSelector('h1'); await sleep(2200);
+// ALEX'S FAMILY INSIGHTS (privacy)
+begin('family');
+await cut(async () => { await p.goto(BASE + '/profile'); await p.getByTestId('try-as-alex').waitFor({ timeout: 30000 }); await p.evaluate(() => scrollTo(0, 0)); });
+await click(p.getByTestId('try-as-alex'), 300);
+await cut(async () => { await p.waitForURL(/\/family\/assistant/, { timeout: 30000 }); await p.locator('header').getByRole('link', { name: 'Insights' }).waitFor({ timeout: 20000 }); });
+await click(p.locator('header').getByRole('link', { name: 'Insights' }), 300);
+await cut(async () => { await p.waitForURL(/\/family\/insights/, { timeout: 30000 }); await p.locator('main').getByText(/stay private/).first().waitFor({ timeout: 30000 }); await sleep(600); });
+await moveTo(p.locator('main').getByText(/stay private/)); await sleep(4000); await scrollSlow(400, 3000);
 end();
-}
-
 await p.close(); const raw = await p.video().path(); await ctx.close();
 
 // ---------------- Cards ----------------
 const cards = {
-  open: await card('open', `<h1>SaySafe</h1><p>Scammers rarely hack accounts.<br>They talk people into approving payments themselves.</p><p class="s">A second look before paying · family backup · proof afterwards</p><span class="tag">For older adults and the family who help them</span>`, 10),
   paypal: await card('paypal', `<h1 style="font-size:72px">PayPal Sandbox checkout</h1><p>Mary approves the payment herself, on PayPal’s own page.</p><span class="tag">Sandbox · test money · no real payment</span>`, 5),
-  arch: await card('arch', `<div class="arch">
-      <div class="box"><b>Mary &amp; Alex</b>Phone, voice or text.<br>Alex approves or declines requests over Mary’s limit.</div>
-      <div class="box"><b>SaySafe server (rules)</b>Prices from the catalogue · family limit · approval bound to the exact basket, single use, 30 min · capture once</div>
-      <div class="box"><b>PayPal Sandbox</b>Orders v2 · Payments v2 · signed webhooks · Subscriptions</div>
-    </div>
-    <div class="row"><div class="box" style="width:520px"><b>Groq AI</b>Whisper · LLM · vision. Interprets and explains. No tools, can’t pay.</div><div class="arrow">→ receipt + timeline → Activity / Insights</div></div>
-    <p class="s" style="margin-top:36px">AI interprets. Rules evaluate. The payer approves at PayPal. The server verifies.</p>`, 15),
-  end: await card('end', `<h1>SaySafe</h1><p>Ask first. Pay with confidence.</p><p class="s">saysafe.onrender.com · github.com/laxmanprasadsomaraju/SaySafe</p><span class="tag">PayPal Sandbox only · independent project, not affiliated with or endorsed by PayPal</span>`, 6),
+  end: await card('end', `<h1>SaySafe</h1><p>Ask first. Pay with confidence.</p><p class="s">saysafe.onrender.com</p><p>github.com/laxmanprasadsomaraju/SaySafe</p><span class="tag">PayPal Sandbox, no real money · independent project, not affiliated with or endorsed by PayPal</span>`, 7),
 };
 
 // ---------------- Cut + stitch ----------------
-const order = ['open', 'landing', 'scam', 'paid', 'shop', 'alex', 'approved', 'paypal', 'receipt', 'activity', 'arch', ...(process.env.DOCS ? ['docs'] : []), 'end'];
+const order = ['landing', 'search', 'scam', 'paid', 'shop', 'alex', 'approved', 'paypal', 'receipt', 'insights', 'family', 'end'];
 const enc = ['-r', String(FPS), '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-an'];
 const pieces = []; let k = 0;
 const shotsOut = [];
@@ -320,7 +355,7 @@ for (const name of order) {
     for (const r of ranges.filter((x) => x.name === name)) {
       const d = r.b - r.a; if (d < 0.25) continue;
       const f = path.join(OUT, 'segments', `${String(++k).padStart(2, '0')}-${name}.mp4`);
-      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', r.a.toFixed(3), '-i', raw, '-t', d.toFixed(3), '-vf', `scale=${W}:${H},fps=${FPS}`, ...enc, f]);
+      execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', r.a.toFixed(3), '-i', raw, '-t', d.toFixed(3), '-vf', `scale=${W}:${H}:flags=lanczos,fps=${FPS}`, ...enc, f]);
       const real = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString());
       pieces.push(f); tl += real;
     }
