@@ -24,7 +24,7 @@ const Tag = ({ k }: { k: keyof typeof TAG }) => <span className={`inline-flex it
 
 function Section({ id, icon: Icon, title, children }: { id: string; icon: typeof Wallet; title: string; children: ReactNode }) {
   return (
-    <Card className="p-5 scroll-mt-24" id={id} aria-labelledby={`${id}-h`}>
+    <Card className="p-5 scroll-mt-24 mb-5 break-inside-avoid [display:inline-block] w-full align-top" id={id} aria-labelledby={`${id}-h`}>
       <h2 id={`${id}-h`} className="text-2xl flex items-center gap-2"><Icon className="size-6 text-teal shrink-0" aria-hidden />{title}</h2>
       <div className="mt-3">{children}</div>
     </Card>
@@ -81,7 +81,7 @@ export function InsightsBody({ d }: { d: InsightsSummaryT }) {
       <li><Tile href="#safety" label="Flagged as possibly risky" value={flagged} note={d.scamChecks.real.total ? `of ${plural(d.scamChecks.real.total, 'message')} you checked` : 'No suspicious checks yet'} /></li>
       {d.contacts && <li><Tile href="#contacts" label="Trusted contacts" value={d.contacts.total} note={d.contacts.sample ? `${d.contacts.own} yours · ${d.contacts.sample} sample` : 'saved by you'} /></li>}
     </ul>
-    <div className="grid gap-5 lg:grid-cols-2 items-start">
+    <div className="columns-1 md:columns-2 xl:columns-3 gap-5" data-layout="masonry">
       <Section id="spending" icon={Wallet} title="Payments, by kind of record">
         <ul className="divide-y divide-line">
           <Row label={<><Tag k="sandbox" />Demo Shop, paid</>} value={sb.captured.count ? fmtMoneyList(sb.captured.totals) : 'None yet'} sub={sb.captured.count ? `${sb.captured.count} payment${sb.captured.count === 1 ? '' : 's'} · ${sb.webhookVerified} with a verified PayPal notice` : 'No real money: PayPal Sandbox'} />
