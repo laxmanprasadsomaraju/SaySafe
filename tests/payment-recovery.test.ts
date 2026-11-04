@@ -58,6 +58,7 @@ import { buildTimeline } from '../server/payments/timeline';
 import * as client from '../server/paypal/client';
 import { db } from '../server/db/index';
 import { createApp } from '../server/app';
+import { sha } from '../server/auth';
 
 const app = createApp();
 const H = { 'Content-Type': 'application/json' };
@@ -72,6 +73,11 @@ function household(threshold = 7500) {
   db.prepare('INSERT INTO households (id, elder_id) VALUES (?,?)').run(hh, u);
   db.prepare('INSERT INTO spending_policies (household_id, approval_threshold_cents) VALUES (?,?)').run(hh, threshold);
   return { hh, u };
+}
+function sessionCookie(hh: string, userId: string, role: 'elder' | 'family' = 'elder') {
+  const tok = 'tok_' + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  db.prepare('INSERT INTO sessions (token_hash, user_id, household_id, expires_at) VALUES (?,?,?,?)').run(sha(tok), userId, hh, Date.now() + 3_600_000);
+  return `${role === 'family' ? 'ss_family' : 'ss_elder'}=${tok}`;
 }
 const row = (id: string) => db.prepare('SELECT * FROM payment_requests WHERE id=?').get(id) as any;
 const stateOf = (id: string) => row(id).state as string;
@@ -231,8 +237,31 @@ describe('reconcile(requestId)', () => {
     await expect(reconcile('pay_doesnotexist')).rejects.toThrow(/not found/);
     const oid = 'ORDERORPHAN12345';
     orders.set(oid, { id: oid, status: 'APPROVED', purchase_units: [{ custom_id: 'pay_orphan1234567', amount: { currency_code: 'EUR', value: '32.00' } }] });
-    const res = await request(app).get(`/api/paypal/orders/${oid}/status`).expect(200);
-    expect(res.body.localRecord).toBe(false);
+    // Owner-only route (P1): no local record = not one of the caller's purchases, so 404; never a capture either way.
+    const { hh, u } = household();
+    expect((await request(app).get(`/api/paypal/orders/${oid}/status`)).status).toBe(401);
+    expect((await request(app).get(`/api/paypal/orders/${oid}/status`).set('Cookie', sessionCookie(hh, u))).status).toBe(404);
+    expect(capturesFor(oid).length).toBe(0);
+  });
+
+  it('P1: the order status route answers only the signed-in owner household (and its linked family helper)', async () => {
+    const { hh, u, id, oid, order } = await started();
+    order.status = 'APPROVED';
+    // No session: 401, PayPal is not even asked.
+    expect((await request(app).get(`/api/paypal/orders/${oid}/status`)).status).toBe(401);
+    // Someone else's session: 404, nothing about the order is revealed.
+    const other = household();
+    const r404 = await request(app).get(`/api/paypal/orders/${oid}/status`).set('Cookie', sessionCookie(other.hh, other.u));
+    expect(r404.status).toBe(404);
+    expect(JSON.stringify(r404.body)).not.toContain(id);
+    // The owner: 200 with PayPal's view (ReturnGate keeps working for her).
+    const ok = await request(app).get(`/api/paypal/orders/${oid}/status`).set('Cookie', sessionCookie(hh, u)).expect(200);
+    expect(ok.body).toMatchObject({ source: 'paypal', orderId: oid, orderStatus: 'APPROVED', requestId: id, localRecord: true });
+    // Her linked family helper (same household) may read it too.
+    const fam = 'usr_' + Math.random().toString(36).slice(2);
+    db.prepare("INSERT INTO users (id,name,role) VALUES (?,?,'family')").run(fam, 'Alex');
+    db.prepare("INSERT INTO family_links (household_id, family_id, status) VALUES (?,?,'active')").run(hh, fam);
+    expect((await request(app).get(`/api/paypal/orders/${oid}/status`).set('Cookie', sessionCookie(hh, fam, 'family'))).status).toBe(200);
     expect(capturesFor(oid).length).toBe(0);
   });
 });

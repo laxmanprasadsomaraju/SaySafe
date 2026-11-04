@@ -184,10 +184,10 @@ const TOPICS: Topic[] = [
     shots: [{ src: '/screens/receipt.webp', alt: 'SaySafe receipt: Paid, Easy-Pour Electric Kettle, €32.00 EUR, Receipt confirmed by PayPal, with order and transaction numbers.', cap: 'A real sandbox receipt (test money)' }],
   },
   {
-    id: 'insights', title: 'Insights', summary: 'A calm summary of your payments, approvals and scam checks.',
+    id: 'insights', title: 'Insights', summary: 'A calm summary of what you bought, cancelled and checked, and who you trust.',
     steps: [
       'Mary: open Home and choose “View insights”, choose “Insights” at the top of the screen on a computer, or ask the Assistant “Show my insights”. The page is at /insights.',
-      'It shows payments by kind of record, purchases waiting for approval, possible repeat payments, subscriptions, what is coming out next, the messages you checked and your PayPal Sandbox outcomes.',
+      'It shows payments by kind of record, purchases by outcome (paid, waiting, cancelled, declined, failed, refunded; real and sample counted apart), what you looked at and bought, cancelled orders and subscriptions, your trusted contacts, purchases waiting for approval, possible repeat payments, subscriptions, what is coming out next and the messages flagged as possibly risky.',
       'Each kind of record is kept apart: “Real PayPal Sandbox”, “Recorded by you” and “Sample data” are never added together.',
       'Alex (the family helper): open the Family page and choose “View insights”, or “Insights” at the top on a computer. The page is at /family/insights.',
       'Alex’s dashboard shows purchases waiting for a decision, decisions made, sandbox captures confirmed by PayPal, signed webhooks, shared scam checks, a 14-day chart with a table version, and a searchable ledger. Example rows are labelled and not counted in the PayPal totals.',

@@ -42,6 +42,9 @@ async function token(): Promise<string> {
 /** Network failure or timeout: PayPal may or may not have acted. Callers must re-read, never assume failure. */
 export function isUnknownOutcome(e: any) { return !e?.status || e.status >= 500; }
 
+/** A request body that is already JSON text and must be sent byte-for-byte (used for webhook verification). */
+export class RawJsonBody { constructor(readonly text: string) {} }
+
 async function call(method: string, path: string, body?: unknown, extraHeaders: Record<string, string> = {}, retried = false, timeoutMs = 20000): Promise<any> {
   const op = `${method} ${path.replace(/\/[A-Z0-9]{10,30}(?=\/|$)/g, '/:id')}`; // no ids in metric names
   count('paypal.calls');
@@ -50,7 +53,7 @@ async function call(method: string, path: string, body?: unknown, extraHeaders: 
     res = await fetch(`${BASE}${path}`, {
       method,
       headers: { Authorization: `Bearer ${await token()}`, 'Content-Type': 'application/json', ...extraHeaders },
-      body: body ? JSON.stringify(body) : undefined,
+      body: body instanceof RawJsonBody ? body.text : body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (e: any) {
@@ -130,20 +133,33 @@ export const refundCapture = (captureId: string, paypalRequestId: string, custom
 export const getRefund = (refundId: string, opts: { timeoutMs?: number } = {}) =>
   call('GET', `/v2/payments/refunds/${encodeURIComponent(refundId)}`, undefined, {}, false, opts.timeoutMs ?? 20000);
 
-/** Verify a webhook via PayPal's verify-webhook-signature API. */
-export async function verifyWebhook(headers: Record<string, string | string[] | undefined>, rawBody: string): Promise<boolean> {
-  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
-  if (!webhookId) return false;
+/**
+ * The verify-webhook-signature request body, with `webhook_event` spliced in as the EXACT raw bytes PayPal sent.
+ * PayPal signs the raw body (CRC32 of it is in the signed string); re-serialising a parsed copy can change number
+ * formatting, escapes or whitespace and make a genuine event fail (or verify a different text than the one we act on).
+ * Throws if the raw body is not a single JSON object.
+ */
+export function verifyRequestBody(headers: Record<string, string | string[] | undefined>, rawBody: string, webhookId: string): string {
+  const raw = rawBody.trim();
+  const parsed = JSON.parse(raw);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('webhook body is not a JSON object');
   const h = (k: string) => String(headers[k] ?? '');
-  const data = await call('POST', '/v1/notifications/verify-webhook-signature', {
+  const envelope = JSON.stringify({
     auth_algo: h('paypal-auth-algo'),
     cert_url: h('paypal-cert-url'),
     transmission_id: h('paypal-transmission-id'),
     transmission_sig: h('paypal-transmission-sig'),
     transmission_time: h('paypal-transmission-time'),
     webhook_id: webhookId,
-    webhook_event: JSON.parse(rawBody),
   });
+  return `${envelope.slice(0, -1)},"webhook_event":${raw}}`;
+}
+
+/** Verify a webhook via PayPal's verify-webhook-signature API, sending the event as the raw body it arrived with. */
+export async function verifyWebhook(headers: Record<string, string | string[] | undefined>, rawBody: string): Promise<boolean> {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  if (!webhookId) return false;
+  const data = await call('POST', '/v1/notifications/verify-webhook-signature', new RawJsonBody(verifyRequestBody(headers, rawBody, webhookId)));
   return data?.verification_status === 'SUCCESS';
 }
 

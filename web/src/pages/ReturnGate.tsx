@@ -10,8 +10,8 @@ interface Status { orderId: string; orderStatus: string; requestId: string; amou
 
 /**
  * Return from PayPal. With a live session, the normal confirm-and-capture flow runs.
- * Without one (e.g. the free server restarted and lost its database), we never capture:
- * we only ask PayPal what really happened and show that.
+ * Without Mary's session we never capture. Her linked family helper (same household) can still see what PayPal says;
+ * anyone else is asked to sign in (the status route is owner-only).
  */
 export default function ReturnGate() {
   const [sp] = useSearchParams();
@@ -32,7 +32,7 @@ export default function ReturnGate() {
   const paid = st?.capture?.status === 'COMPLETED';
   return (
     <Layout>
-      <PageTitle eyebrow="Payment check" title={paid ? 'PayPal confirms this payment' : st ? 'No payment was taken' : 'Checking with PayPal'} lead="This browser isn't signed in to SaySafe (for example a different browser, a private window, or an expired session), so I asked PayPal directly. Nothing is charged from this page. Sign in on the device you started on to finish." />
+      <PageTitle eyebrow="Payment check" title={paid ? 'PayPal confirms this payment' : st ? 'No payment was taken' : err ? 'Sign in to see this payment' : 'Checking with PayPal'} lead={st ? "This browser isn't signed in as the buyer, so I asked PayPal directly. Nothing is charged from this page. Sign in on the device you started on to finish." : "This browser isn't signed in to SaySafe (for example a different browser, a private window, or an expired session). Nothing is charged from this page. Open SaySafe on the device you started on to finish; your purchase is kept there."} />
       <Card className="p-6 md:p-8 max-w-2xl">
         {err && <p className="flex gap-2 text-danger font-bold"><CircleAlert className="size-6 shrink-0" aria-hidden />{err}</p>}
         {st && (
