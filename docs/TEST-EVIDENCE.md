@@ -10,13 +10,17 @@ _What was run, on which build, where, and what kind of test it is. Times are GMT
 
 Nothing below is a test on a physical phone or with a real person. Those are listed under [Not yet done](#not-yet-done).
 
+## Current automated test count
+
+**1034 passed, 0 failed (55 files)** — `vitest run` on 2026-11-04 14:19 GMT, commit `727efd6` (Node 22, vitest, in-memory SQLite; PayPal, AI and Channel3 mocked). `tsc --noEmit` 0 errors; `vite build` built. Includes `tests/leave-guard.test.ts` (3 tests). The counts in the dated sections below are the historical results on the commits named there.
+
 ## Flagship release (3 November 2026, branch `flagship`)
 
 Three kinds of evidence, kept apart on purpose. None of it is a test on a physical phone or with a real person.
 
 | Kind | What ran | What it proves | What it does **not** prove |
 |---|---|---|---|
-| **Mocked** (Node, test doubles) | `vitest run`: **759 passed, 0 failed (42 files)**, incl. `tests/flagship.test.ts` (29 tests, PayPal replaced by a test double and labelled so); `tsc --noEmit` 0 errors; `vite build` built. Local run 2026-11-03 ~16:40 GMT on `61fec46` | Our logic: state machine, family-approval binding, capture idempotency, webhook verification paths, isolation, labels, insights totals | PayPal's real behaviour, real models, real browsers |
+| **Mocked** (Node, test doubles) | `vitest run`: **1034 passed, 0 failed (55 files)** — `vitest run` on 2026-11-04 14:19 GMT, commit `727efd6`, incl. `tests/flagship.test.ts` (37 tests, PayPal replaced by a test double and labelled so); `tsc --noEmit` 0 errors; `vite build` built | Our logic: state machine, family-approval binding, capture idempotency, webhook verification paths, isolation, labels, insights totals | PayPal's real behaviour, real models, real browsers |
 | **Local browser** (Playwright Chromium headless, local build, **mock PayPal** :9999 + **recorded Channel3** response :9998, no AI key) | `scripts/e2e-flagship.mjs`: **49/49 passed**; axe-core (wcag2a/aa, 21a/aa, 22aa) **0 violations on the 20 screens that script visits**, no horizontal overflow on them. `scripts/visual-regression.mjs`: **22/22 screenshots match** baselines, run twice in a row (2026-11-03 ~17:00 GMT) | The flagship UI journey clicks through end to end; one capture after repeated questions and reload; role and household isolation from the browser; header/insights layout at 390, 1280 and 1440 px | The mock PayPal cannot sign webhooks, so locally the receipt correctly stays **Verification pending**; the buyer step on PayPal's real page is not exercised; axe is a floor, not a screen-reader test; other screens are covered by `scripts/a11y-audit.mjs`, not re-run for this release |
 | **Hosted + real PayPal Sandbox** (https://saysafe.onrender.com, real sandbox buyer logging in on www.sandbox.paypal.com, test money) | Two full flagship runs by browser automation with the buyer step done on PayPal's page (§F below) | The real money path: family approval → buyer approval at PayPal → one capture → Payments v2 check → **signed webhook verified** → same receipt after reloads → Activity label | Builds after `d630e97` (the `flagship` branch has **not** been deployed by this release; the user deploys); physical phones; two physical devices |
 | **Live Channel3** | `scripts/channel3-live-check.mjs` against the hosted app, 2026-11-03 16:06 GMT: query "microwave" → 10 listings; 8/8 checks passed (title, price + currency, retailer, https link, images, specs, no invented rating) | The real Channel3 integration returns usable listings | Retailer stock or prices beyond that moment |
@@ -44,8 +48,7 @@ Run notes (project workspace, not in the repo): `work/flagship/hosted-buyer-jour
 
 Code commit **`922641c`** (merged to `main`; the merge commit and the GitHub Actions run are listed in
 [§ CI](#ci-github-actions)). Local run 2026-11-03 ~15:20 GMT, Node 22.23.3, vitest 5.1, in-memory SQLite:
-**713 passed, 0 failed (40 files)**; `tsc --noEmit` 0 errors; `vite build` built. Previous baseline on `7cf3b1e`:
-485/485 (35 files).
+all passed, 0 failed (historical count on that commit; current count: 1034 passed, 55 files, see [Current automated test count](#current-automated-test-count)); `tsc --noEmit` 0 errors; `vite build` built.
 
 Labels: **Real sandbox** = real calls to PayPal Sandbox · **Hosted** = the deployed demo · **Mocked** = PayPal / Groq /
 Channel3 replaced by test doubles · **Untested** = not done.
@@ -76,14 +79,14 @@ Channel3 replaced by test doubles · **Untested** = not done.
 
 | # | Suite | Date (GMT) | Commit | Result | Kind | Environment |
 |---|---|---|---|---|---|---|
-| H1 | vitest unit / integration / security (QA-fix commit) | 2026-11-03 12:34 | working tree committed as the QA-fix commit on `main` (parent `8a6a794`) | **473 passed, 0 failed** (34 files) | Mocked | Node 22.23.3, vitest 5.1 |
+| H1 | vitest unit / integration / security (QA-fix commit) | 2026-11-03 12:34 | working tree committed as the QA-fix commit on `main` (parent `8a6a794`) | **all passed, 0 failed** (historical; current: 1034 passed, 55 files on `727efd6`, 2026-11-04) | Mocked | Node 22.23.3, vitest 5.1 |
 | H2 | TypeScript + production build (QA-fix commit) | 2026-11-03 12:35 | same | **0 errors; built** | Static / Build | `tsc --noEmit`, Vite 8 |
 | H3 | Hosted `/api/health` | 2026-11-03 12:14 and 12:25 | `8a6a794` deployed | **ok**: PayPal sandbox configured, Groq ok, Channel3 configured, Turso replica persistent | Hosted API | https://saysafe.onrender.com |
 | H4 | Hosted `scripts/e2e-browser.mjs` + axe | 2026-11-03 12:16–12:17 | `8a6a794` deployed | **17/17 passed; axe 0 violations on 7 screens** | Hosted browser + real PayPal sandbox (order create + redirect only) | Playwright Chromium headless via the sandbox egress proxy |
 | H5 | Hosted Assistant family flow (`scripts/e2e-hosted.mjs`, port of `e2e-assistant-family.mjs`) | 2026-11-03 12:25–12:31 | `8a6a794` deployed | **16 passed, 2 failed** (see §H5) | Hosted browser + real PayPal sandbox + live Groq + live Channel3 | as H4 |
 | H6 | Hosted companion flow (port of `e2e-companion.mjs`) | 2026-11-03 | — | **Not completed** (stopped by a script error, then paused by instruction while demo data is seeded) | — | — |
 | H7 | PayPal Subscriptions API cancel proof | 2026-11-03 10:37 | script `scripts/paypal-setup-plan.ts --cancel` | **Sandbox buyer approved I-BY…W7; cancel → 204; GET → CANCELLED** | Real PayPal sandbox (API, **not through the app UI**) | raw responses in project `work/subs-probe/` |
-| 1 | vitest unit / integration / security | 2026-11-03 10:02 | `d062acb` (branch `docs-site`; app code identical to `main` `d71bcac` except the landing and Help pages) | **376 passed, 0 failed** (28 files) | Mocked | Node 22.23.3, vitest 5.1, Linux sandbox |
+| 1 | vitest unit / integration / security | 2026-11-03 10:02 | `d062acb` (branch `docs-site`; app code identical to `main` `d71bcac` except the landing and Help pages) | **all passed, 0 failed** (historical; current: 1034 passed, 55 files on `727efd6`, 2026-11-04) | Mocked | Node 22.23.3, vitest 5.1, Linux sandbox |
 | 2 | TypeScript | 2026-11-03 10:03 | `d062acb` | **0 errors** | Static | `tsc --noEmit`, TypeScript 7 |
 | 3 | Production build | 2026-11-03 10:03 | `d062acb` | **Built** | Build | Vite 8 |
 | 4 | Landing + Help accessibility and overflow | 2026-11-03 09:58 | working tree of `d062acb` | **axe 0 violations, no horizontal overflow** on 9 page states | Real browser, local server | Playwright 1.56.1 Chromium headless, `reducedMotion: reduce`, local production server |
@@ -114,7 +117,7 @@ Real sandbox orders created: a few unapproved sandbox orders (no capture), e.g. 
 ## 1. vitest (mocked)
 
 - **Command:** `npx vitest run --reporter=dot` (same as `npm test`)
-- **Result:** Test Files 28 passed (28) · Tests 376 passed (376), started 10:02:26, 58.6 s. An earlier run on the base commit `d71bcac` at 09:41 also gave 376/376 in 38 s.
+- **Result (current):** Test Files 55 passed (55) · Tests 1034 passed (1034), 2026-11-04 14:19 GMT on `727efd6`, 100.7 s. (Historical: all files and tests passed on `d062acb` and `d71bcac` on 3 November.)
 - **Covers:** scam rules and verdicts, AI output contracts and adversarial outputs, payment state machine, family approval binding, expiry, replay and idempotency, tamper and currency checks, capture timeout handling, webhook verification and dedup (PayPal test double), refunds (admin-only), HTTP security (anonymous, cross-site, cross-household, self-approval), Turso driver row normalisation, insights metrics, voice transcript filters, Assistant block registry.
 - **Not covered:** real PayPal behaviour, real models, real browsers.
 
