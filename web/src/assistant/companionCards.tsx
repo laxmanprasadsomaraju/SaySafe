@@ -1058,7 +1058,7 @@ function InsightsSummaryCard({ b, act }: { b: BlockOf<'insights_summary'>; act: 
       <InsightLines d={b.summary} focus={b.focus} />
       <p className="mt-2 text-sm text-ink-soft">Each kind of record is shown on its own and never added together. Sample data is illustrative.</p>
       <Link to={`/insights${b.focus !== 'overview' ? `#${b.focus}` : ''}`} className="mt-2 inline-flex items-center justify-center gap-2 min-h-12 px-5 rounded-full bg-teal text-white font-bold hover:bg-teal-deep" data-testid="view-full-insights"><BarChart3 className="size-5" aria-hidden />Open Insights</Link>
-      <p className="mt-2 text-sm text-ink-soft flex items-start gap-1.5"><ShieldCheck className="size-4 mt-0.5 shrink-0 text-teal" aria-hidden />Your records and subscriptions are private to you. Your family member sees only Demo Shop purchases, reviews and checks you share.</p>
+      <p className="mt-2 text-sm text-ink-soft flex items-start gap-1.5"><ShieldCheck className="size-4 mt-0.5 shrink-0 text-teal" aria-hidden />Your records and subscriptions are private to you. Your family helper sees only purchases sent for review and what you choose to share.</p>
     </div>
   );
 }

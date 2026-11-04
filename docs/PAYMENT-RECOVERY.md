@@ -25,7 +25,10 @@ currency, PayPal status and family approval. Retries reuse `PayPal-Request-Id: c
 capture twice.
 
 A missing local record never triggers anything: `reconcile` throws `not_found`, and `/checkout/return`
-without a session (`ReturnGate`) stays read-only via `GET /api/paypal/orders/:orderId/status`.
+without Mary's session (`ReturnGate`) never captures. `GET /api/paypal/orders/:orderId/status` is read-only and
+owner-only (since 2026-11-04): it needs a SaySafe session (Mary, or her linked family helper) whose household owns
+the payment request with that PayPal order id; no session → 401, anyone else → 404. A browser with no session sees
+"Sign in to see this payment" and nothing is charged.
 
 ## When it runs
 

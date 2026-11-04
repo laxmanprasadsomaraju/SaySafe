@@ -46,6 +46,38 @@ export const Duplicate = z.object({
 
 export const PendingReview = z.object({ id: z.string().max(80), item: z.string().max(300), amountCents: z.number().int(), currency: z.string().max(3), expiresAt: z.string().max(40) });
 
+const N = z.number().int().min(0);
+/** Purchase outcomes for one kind of record (sandbox or sample). Kinds are never added together. */
+export const StatusCounts = z.object({ paid: N, waiting: N, cancelled: N, declined: N, failed: N, refunded: N, expired: N });
+
+/** Approvals asked of the family helper (over-limit purchases). Real and sample are counted apart. */
+export const ApprovalCounts = z.object({ requested: N, pending: N, approved: N, declined: N, expired: N });
+
+/**
+ * Shopping funnel, derived from what SaySafe already records (no extra tracking):
+ *  - products/searches: recent_products (the short conversation context: one row per product shown, newest
+ *    MAX_PRODUCTS within CONTEXT_DAYS), so this is a recent window, not all-time;
+ *  - purchases: payment_requests (real app-flow purchases only, all-time; sample purchases excluded).
+ */
+export const Shopping = z.object({
+  windowDays: N, maxProducts: N,
+  productsLooked: N, channel3Products: N, demoProducts: N, searches: N,
+  purchasesStarted: N, purchasesPaid: N,
+  /** Demo Shop products looked at in the window that are in a paid real purchase. Channel3 listings open the shop's own site, so they are never counted as bought. */
+  lookedAndBought: N,
+  notTracked: z.array(z.string().max(200)).max(5),
+});
+
+export const ContactsSummary = z.object({
+  total: N, own: N, sample: N,
+  list: z.array(z.object({ name: z.string().max(60), relation: z.string().max(60).nullable(), sample: z.boolean() })).max(12),
+});
+
+export const CancelledSummary = z.object({
+  orders: z.array(z.object({ id: z.string().max(80), title: z.string().max(300), at: z.string().max(40), kind: z.enum(['sandbox', 'sample']), how: z.enum(['cancelled', 'declined', 'blocked']) })).max(10),
+  subscriptions: z.array(z.object({ merchant: z.string().max(120), kind: z.enum(['sample', 'user_entered', 'sandbox']), how: z.enum(['you_reported', 'paypal_confirmed', 'stopped_tracking']), on: z.string().max(40).nullable() })).max(10),
+});
+
 export const InsightsSummary = z.object({
   role: z.enum(['elder', 'family']),
   generatedAt: z.string().max(40),
@@ -68,7 +100,9 @@ export const InsightsSummary = z.object({
       refundRequested: z.number().int().min(0),
     }),
     /** Illustrative "Try as Mary" shop purchases: no PayPal record. */
-    sample: z.object({ count: z.number().int().min(0), captured: Totals }),
+    sample: z.object({ count: z.number().int().min(0), captured: Totals, byStatus: StatusCounts.optional() }),
+    /** Outcomes per kind (optional for older clients). */
+    sandboxByStatus: StatusCounts.optional(),
     recent: z.array(RecentPayment).max(6),
   }),
   /** Payments Mary typed in herself (and sample ones). Null for family. */
@@ -87,6 +121,12 @@ export const InsightsSummary = z.object({
     training: z.number().int().min(0),
     recent: z.array(z.object({ verdict: z.string().max(40), headline: z.string().max(200), at: z.string().max(40) })).max(5),
   }),
+  /** Family approvals for the purchases this viewer can see (family: permission-filtered rows only). */
+  approvals: z.object({ real: ApprovalCounts, sample: ApprovalCounts }).optional(),
+  /** Elder only (null for family): private to Mary. */
+  shopping: Shopping.nullable().optional(),
+  contacts: ContactsSummary.nullable().optional(),
+  cancelled: CancelledSummary.nullable().optional(),
 });
 export type InsightsSummaryT = z.infer<typeof InsightsSummary>;
 

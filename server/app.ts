@@ -445,14 +445,20 @@ export function createApp() {
   // ---------- What SaySafe remembers (elder-only, user-scoped; family gets 404) ----------
   registerMemory(app);
 
-  // ---------- Recovery after a server restart (Render Free wipes SQLite) ----------
-  // Read-only: asks PayPal what actually happened to an order this app created. Never captures, never creates.
+  // ---------- Read-only PayPal order status (owner only) ----------
+  // Asks PayPal what actually happened to an order this app created. Never captures, never creates.
+  // Signed-in only: the order must belong to a payment request in the caller's own household (Mary, or her linked
+  // family helper). Anyone else gets 404, so an order id alone reveals nothing about someone else's purchase.
   app.get('/api/paypal/orders/:orderId/status', recoverLimiter, wrap(async (req, res) => {
     const orderId = z.string().regex(/^[A-Z0-9]{10,30}$/).parse(req.params.orderId);
+    const who = readSession(req, 'elder') ?? readSession(req, 'family');
+    if (!who) return res.status(401).json({ error: 'unauthenticated', message: 'Sign in to SaySafe on the device you started on to see this payment.' });
+    const owned = db.prepare('SELECT id FROM payment_requests WHERE paypal_order_id=? AND household_id=?').get(orderId, who.householdId) as { id: string } | undefined;
+    if (!owned) return res.status(404).json({ error: 'not_found', message: 'This order is not one of your SaySafe purchases.' });
     let order: any;
     try { order = await getPayPalOrder(orderId); } catch { return res.status(404).json({ error: 'not_found', message: 'PayPal does not know this order.' }); }
     const pu = order?.purchase_units?.[0];
-    if (typeof pu?.custom_id !== 'string' || !/^pay_[A-Za-z0-9_-]{6,40}$/.test(pu.custom_id)) return res.status(404).json({ error: 'not_found', message: 'This is not a SaySafe order.' });
+    if (typeof pu?.custom_id !== 'string' || pu.custom_id !== owned.id) return res.status(404).json({ error: 'not_found', message: 'This is not a SaySafe order.' });
     const cap = pu?.payments?.captures?.[0];
     res.json({
       source: 'paypal',
@@ -461,7 +467,7 @@ export function createApp() {
       requestId: pu.custom_id,
       amount: pu.amount?.value, currency: pu.amount?.currency_code,
       capture: cap ? { id: cap.id, status: cap.status, amount: cap.amount?.value, currency: cap.amount?.currency_code, time: cap.create_time } : null,
-      localRecord: Boolean(db.prepare('SELECT 1 FROM payment_requests WHERE id=?').get(pu.custom_id)),
+      localRecord: true,
     });
   }));
 

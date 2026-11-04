@@ -37,6 +37,11 @@ Rules that hold everywhere: the household id always comes from the session, neve
 prices come from the catalogue; money state comes from PayPal's answer; a model can never cause a write that moves
 money, approves, cancels or records anything.
 
+Webhook signatures: the verify-webhook-signature call carries the event as the exact raw bytes PayPal sent
+(spliced into the request body, never a re-serialised copy), so what is verified is byte-for-byte what is then acted
+on (`verifyRequestBody` in `server/paypal/client.ts`, tests in `tests/insights-v2.test.ts`). The read-only
+`GET /api/paypal/orders/:orderId/status` answers only a session whose household owns that order (401 / 404 otherwise).
+
 ## AI tool permission matrix
 
 The models have **no function calling**. "Tools" below are the intents a model may return and the model-backed
