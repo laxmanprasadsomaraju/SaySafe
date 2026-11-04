@@ -54,6 +54,8 @@ const SUGGEST: Partial<Record<Block['kind'], string[]>> = {
   receipt: ['Refund options', 'Show my payments'],
 };
 const mid = () => Math.random().toString(36).slice(2, 10);
+/** Marks the Demo Shop alternative shown after real listings, so "the cheaper one" / "compare" refer to the real listings. */
+const DEMO_OFFER_NOTE = 'Demo Shop alternative: PayPal Sandbox, no real money.';
 const fresh = (mode: Mode = 'chat'): Thread => ({ v: 1, mode, focusId: null, messages: [{ id: mid(), role: 'assistant', text: PROMPT[mode], blocks: [] }] });
 const load = (): Thread => { try { return restoreThread(sessionStorage.getItem(KEY)) ?? fresh(); } catch { return fresh(); } };
 
@@ -64,7 +66,7 @@ function fromDemo(p: { id: string; name: string; priceCents: number; currency: s
 function fromChannel3(p: ShopItem, rec?: Recommendation): unknown {
   const o = p.offers[0];
   const pick = rec?.picks.find((k) => k.id === p.id);
-  return { id: p.id, title: p.title, brand: p.brand, image: p.image, imageAlt: p.imageAlt || '', features: p.features.slice(0, 12), price: o?.price ?? 0, compareAt: o?.compareAt ?? null, currency: o?.currency ?? 'EUR', retailer: o?.retailer ?? 'Shop', url: o?.url || null, availability: o?.availability ?? 'Unknown', attributes: p.attributes, description: p.description ? p.description.slice(0, 2000) : null, rating: p.rating, role: pick?.role, reasons: pick?.reasons.slice(0, 5) };
+  return { id: p.id, title: p.title, brand: p.brand, image: p.image, imageAlt: p.imageAlt || '', features: p.features.slice(0, 12), price: o?.price ?? 0, compareAt: o?.compareAt ?? null, currency: o?.currency ?? 'EUR', retailer: o?.retailer ?? 'Shop', url: o?.url || null, availability: o?.availability ?? 'Unknown', attributes: p.attributes, description: p.description ? p.description.slice(0, 2000) : null, rating: p.rating, role: pick?.role, ...(p.variants?.length ? { variants: p.variants.slice(0, 3).map((v) => ({ name: v.name.slice(0, 30), values: v.values.slice(0, 12).map((x) => x.slice(0, 30)) })) } : {}), reasons: [...(p.why ?? []), ...(pick?.reasons ?? [])].slice(0, 5) };
 }
 
 export default function Assistant() {
@@ -135,17 +137,17 @@ export default function Assistant() {
   const offerDemo = (demo: any[], query: string) => {
     const items = productItems(demo.map(fromDemo));
     if (!items.length) return;
-    add('assistant', 'Want to see the safe purchase steps instead? The SaySafe Demo Shop has a similar item. It is paid with PayPal Sandbox, so no real money moves, and you can say “let’s buy the demo ' + query.replace(/^(a|an|the)\s+/i, '') + '”.', [{ kind: 'product_cards', source: 'demo', query, items, fetchedAt: null, note: null }]);
+    add('assistant', 'Want to see the safe purchase steps instead? The SaySafe Demo Shop has a similar item. It is paid with PayPal Sandbox, so no real money moves, and you can say “let’s buy the demo ' + query.replace(/^(a|an|the)\s+/i, '') + '”.', [{ kind: 'product_cards', source: 'demo', query, items, fetchedAt: null, note: DEMO_OFFER_NOTE }]);
   };
   /** Channel3 search. Returns what happened, so a caller never claims listings that aren't on screen. With `quiet`,
    *  a miss or an error adds nothing (the caller says it, honestly) and listings are shown without being spoken. */
-  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[], quiet = false, ignoreMemory = false): Promise<{ status: 'shown' | 'none' | 'error' | 'stale'; message?: string }> => {
+  const discover = async (text: string, turn: number, maxPrice?: number, label?: string, demo?: any[], quiet = false, ignoreMemory = false, lead?: string): Promise<{ status: 'shown' | 'none' | 'error' | 'stale'; message?: string }> => {
     try {
       const r = await api<{ products: ShopItem[]; recommendation: Recommendation; reply: string; fetchedAt: string; searchQuery: string; personalisation?: { line: string } | null }>('/api/discover', { body: { text, maxPrice: maxPrice ?? null, profile: localProfileForRequest(), ...(ignoreMemory ? { ignoreMemory: true } : {}) } });
       if (!speech.isCurrent(turn)) return { status: 'stale' };
       const items = productItems(r.products.map((p) => fromChannel3(p, r.recommendation)));
       if (!items.length) { const msg = label ? `${label}, I found no other listings for ${r.searchQuery}.` : r.reply || 'I found no matching listings.'; if (!quiet) { add('assistant', msg); say(msg, turn); } return { status: 'none', message: msg }; }
-      const reply = demo || quiet ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
+      const reply = lead ? `${lead} ${r.reply}` : demo || quiet ? `${r.reply} These are real listings: you would buy them on the retailer’s own website, not through SaySafe or its PayPal Sandbox checkout.` : r.reply;
       // "Shown first because you prefer red…" (remembered preferences; only when memory is on).
       const why = typeof r.personalisation?.line === 'string' ? r.personalisation.line.slice(0, 380) : null;
       add('assistant', why ? `${reply} ${why}` : reply, [{ kind: 'product_cards', source: 'channel3', query: r.searchQuery || text, items, fetchedAt: r.fetchedAt ?? null, note: why }]);
@@ -163,13 +165,13 @@ export default function Assistant() {
    * Not in the Demo Shop: run the real-shop search FIRST (Channel3), show any real listings, then the Demo Shop chips,
    * and say only what actually happened. No listings / an error → said plainly, with a "Search real shops" chip.
    */
-  const notInDemoShop = async (catalogue: any[], realQuery: string | null, channel3: boolean, turn: number) => {
+  const notInDemoShop = async (catalogue: any[], realQuery: string | null, channel3: boolean, turn: number, lead?: string, maxPrice?: number) => {
     const chips = (realFound?: boolean) => [{ kind: 'shop_catalogue' as const, items: catalogue, channel3, ...(realQuery ? { realQuery: realQuery.slice(0, 120) } : {}), ...(realFound !== undefined ? { realFound } : {}) }];
     if (!channel3 || !realQuery) {
       const t = `${NOT_IN_DEMO} Pick a demo item below: it is paid with PayPal Sandbox, so no real money.`;
       add('assistant', t, chips()); return say(`${NOT_IN_DEMO} Pick a demo item.`, turn);
     }
-    const r = await discover(realQuery, turn, undefined, undefined, undefined, true);
+    const r = await discover(realQuery, turn, maxPrice, undefined, undefined, true, false, lead);
     if (r.status === 'stale' || !speech.isCurrent(turn)) return;
     if (r.status === 'shown') {
       add('assistant', `${NOT_IN_DEMO} The real listings above are bought on the retailer’s own website. Or pick a demo item below (PayPal Sandbox, no real money).`, chips(true));
@@ -329,7 +331,18 @@ export default function Assistant() {
     setBusy(true);
     const turn = speech.beginTurn();
     const mode = threadRef.current.mode;
-    const ctx = lastBlock('product_cards');
+    // The products the conversation is about: the newest product cards, skipping a Demo Shop alternative that was only
+    // offered after real listings in the same turn.
+    const ctx = (() => {
+      const ms = threadRef.current.messages; let offer: BlockOf<'product_cards'> | null = null;
+      for (let i = ms.length - 1; i >= 0; i--) for (let j = ms[i].blocks.length - 1; j >= 0; j--) {
+        const bl = ms[i].blocks[j];
+        if (bl.kind !== 'product_cards') continue;
+        if (bl.note === DEMO_OFFER_NOTE) { offer = offer ?? bl; continue; }
+        return bl;
+      }
+      return offer;
+    })();
     try {
       // A Demo Membership cancel card is waiting: a spoken or typed "yes" never cancels, in any mode (only the tap does).
       if (/^(yes|yeah|yep|ok|okay|sure|go ahead|confirm|do it|cancel it|please do)\b[\s.!]*$/i.test(text) && lastBlock('demo_cancel_intent')?.phase === 'confirm') { add('assistant', TAP_ONLY_REPLY); return say(TAP_ONLY_REPLY, turn); }
@@ -352,12 +365,24 @@ export default function Assistant() {
       if (f.kind === 'search') return await showHistory(turn, f.q);
       // "Show my last payment" is answered by the server from every source (Demo Shop, records, sample data).
       if (f.kind === 'last_payment' && /\breceipt\b/i.test(text)) return await showLastPayment(turn);
-      if (f.kind === 'payments') return await showHistory(turn);
+      // "Show my payments / all my transactions / purchases above €50": answered by the server (every record she can
+      // see, counted by kind, newest 10 shown) — not the first page of Demo Shop rows.
       if (ctx) {
         const focus = ctx.items.find((i) => i.id === threadRef.current.focusId) ?? ctx.items[0];
         if (f.kind === 'age') { const a = ageAnswer(ctx.items, f.age, shortTitle); add('assistant', a); return say(a, turn); }
         if (f.kind === 'seller') { const a = sellerAnswer(sellerFacts(focus, ctx.items, ctx.source === 'demo')); add('assistant', a); return say(a, turn); }
-        if (f.kind === 'compare') return compare(ctx);
+        if (f.kind === 'compare') {
+          const two = /\b(first|top) two\b|\b(1|one) and (2|two)\b/i.test(text);
+          return compare(two ? { ...ctx, items: ctx.items.slice(0, 2) } : ctx);
+        }
+        // "Show me the cheaper one": pick it from what is ALREADY on screen (no new search, real product id).
+        if (f.kind === 'cheaper' && /\bthe (cheaper|cheapest|less expensive) one\b|^(the )?(cheaper|cheapest) one[?.!]*$/i.test(text)) {
+          const pick = [...ctx.items].sort((a, b) => a.price - b.price)[0];
+          setThread((t) => ({ ...t, focusId: pick.id }));
+          const a = `The cheapest one shown is ${shortTitle(pick.title)}: ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: pick.currency }).format(pick.price)} at ${pick.retailer}.${ctx.source === 'channel3' ? ' You’d buy it on the retailer’s website.' : ''}`;
+          add('assistant', a, [{ kind: 'product_cards', source: ctx.source, query: ctx.query, items: [pick], fetchedAt: ctx.fetchedAt, note: 'From the listings above. Prices can change.' }]);
+          return say(a, turn);
+        }
         if (f.kind === 'cheaper') {
           const cheapest = Math.min(...ctx.items.map((i) => i.price));
           const best = ctx.items[0];
@@ -381,13 +406,13 @@ export default function Assistant() {
         const sub = listCard.subscriptions.find((x) => x.id === hid);
         if (sub) sendText = `cancel ${sub.merchant}`;
       }
-      if (mode === 'payments' && !looksCompanion(text)) return await showHistory(turn);
       const r = await api<any>('/api/assistant', { body: { text: sendText, via, step: mode === 'find' ? (ctx ? 'choosing' : 'shop') : mode === 'help' ? 'help' : 'home', lastResults: ctx?.items.slice(0, 5).map((i) => i.title) ?? [] } });
       if (!speech.isCurrent(turn)) return;
       const a = r.intent?.action;
       // Payment companion: the server answered from Mary's own records (template reply + one card). Spoken reply stays short.
-      if (r.companion) {
-        add('assistant', r.reply, [r.companion], 'en');
+      if (r.clientAction === 'latest_receipt') return await showLastPayment(turn);
+      if (r.companion || (Array.isArray(r.blocks) && r.blocks.length)) {
+        add('assistant', r.reply, [...(r.companion ? [r.companion] : []), ...(Array.isArray(r.blocks) ? r.blocks.slice(0, 3) : [])], 'en');
         return say(shortSpoken(r.reply), turn);
       }
       if (a === 'payment_status') return await showPaymentStatus(turn);
@@ -400,9 +425,9 @@ export default function Assistant() {
         setMode('find');
         // Not in the Demo Shop: say so and list what it sells (server catalogue), then look in real shops if available.
         if (Array.isArray(r.catalogue) && r.catalogue.length) {
-          return await notInDemoShop(r.catalogue, typeof r.realQuery === 'string' ? r.realQuery : r.discover?.query ?? null, Boolean(r.discover), turn);
+          return await notInDemoShop(r.catalogue, typeof r.realQuery === 'string' ? r.realQuery : r.discover?.query ?? null, Boolean(r.discover), turn, typeof r.discover?.lead === 'string' ? r.discover.lead.slice(0, 300) : undefined, typeof r.discover?.maxPrice === 'number' ? r.discover.maxPrice : undefined);
         }
-        if (r.discover) return await discover(r.discover.query ?? text, turn, undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined, false, r.discover.ignoreMemory === true);
+        if (r.discover) return await discover(r.discover.query ?? text, turn, typeof r.discover.maxPrice === 'number' ? r.discover.maxPrice : undefined, undefined, Array.isArray(r.demoOffer) ? r.demoOffer : undefined, false, r.discover.ignoreMemory === true, typeof r.discover.lead === 'string' ? r.discover.lead.slice(0, 300) : undefined);
         if (r.buyNow && Array.isArray(r.products) && r.products.length === 1) {
           const item = productItems(r.products.map(fromDemo))[0];
           if (item) return await prepare(item, r.reply);
@@ -567,7 +592,8 @@ export default function Assistant() {
   const lastKind = lastMsg?.blocks[lastMsg.blocks.length - 1]?.kind;
   const suggestions = !busy && lastMsg?.role === 'assistant' && lastKind ? SUGGEST[lastKind] ?? [] : [];
   // With nothing else to suggest (a text-only reply, e.g. the greeting), offer the companion questions.
-  const chips = !busy && lastMsg?.role === 'assistant' && !lastKind && suggestions.length === 0 && thread.mode !== 'check' ? COMPANION_CHIPS : [];
+  // Starter questions only for a brand-new conversation, never after a reply in an established one.
+  const chips = !busy && thread.messages.length === 1 && lastMsg?.role === 'assistant' && !lastKind && thread.mode !== 'check' ? COMPANION_CHIPS : [];
   return (
     <Layout dock={composer} footer={false}>
       <LeaveGuard when={prepReady.length > 0 || famWaiting.length > 0} id={guardId}

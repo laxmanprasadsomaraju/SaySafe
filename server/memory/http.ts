@@ -19,6 +19,7 @@ import * as store from './store.js';
 import { extractMemory, type MemoryFact } from './extract.js';
 import { isProductReference, resolveProductRef, referencedNoun } from './context.js';
 import { shortenText } from '../../shared/shopping.js';
+import { listContacts } from '../companion/store.js';
 
 export const WHY_PERSONALISED = 'Memory is on unless you turn it off. SaySafe remembers only what you clearly tell it about shopping — like a colour, a brand you like or avoid, or your usual budget — so search results suit you. It never remembers health, money you owe, other people, or contact details. Your family can’t see it. It never pays or approves anything. You can change, remove or clear it here at any time, or turn it off.';
 const PROFILE_PATH = 'Profile → What SaySafe remembers';
@@ -34,7 +35,7 @@ export function itemFromDemo(p: any) {
 export function itemFromChannel3(p: any, rec?: any) {
   const o = p.offers?.[0];
   const pick = rec?.picks?.find((k: any) => k.id === p.id);
-  return { id: p.id, title: p.title, brand: p.brand ?? null, image: p.image ?? null, imageAlt: p.imageAlt || '', features: (p.features ?? []).slice(0, 12), price: o?.price ?? 0, compareAt: o?.compareAt ?? null, currency: o?.currency ?? 'EUR', retailer: o?.retailer ?? 'Shop', url: o?.url || null, availability: o?.availability ?? 'Unknown', attributes: p.attributes, description: p.description ? String(p.description).slice(0, 600) : null, rating: p.rating ?? null, ...(pick?.role ? { role: pick.role } : {}), ...(pick?.reasons ? { reasons: pick.reasons.slice(0, 5) } : {}) };
+  return { id: p.id, title: p.title, brand: p.brand ?? null, image: p.image ?? null, imageAlt: p.imageAlt || '', features: (p.features ?? []).slice(0, 12), price: o?.price ?? 0, compareAt: o?.compareAt ?? null, currency: o?.currency ?? 'EUR', retailer: o?.retailer ?? 'Shop', url: o?.url || null, availability: o?.availability ?? 'Unknown', attributes: p.attributes, description: p.description ? String(p.description).slice(0, 600) : null, rating: p.rating ?? null, ...(p.variants?.length ? { variants: p.variants.slice(0, 3) } : {}), ...(pick?.role ? { role: pick.role } : {}), ...((p.why?.length || pick?.reasons) ? { reasons: [...(p.why ?? []), ...(pick?.reasons ?? [])].slice(0, 5) } : {}) };
 }
 
 function elderOnly404(req: Request, res: Response, next: NextFunction) {
@@ -49,6 +50,9 @@ const ses = (req: Request) => (req as any).memSession as Session;
 function memoryReply(s: Session, said: string, via: 'voice' | 'text'): { reply: string; memory: Record<string, unknown> } | null {
   const ex = extractMemory(said);
   if (!ex) return null;
+  // "I like Alex" / "I don't trust Bob": a PERSON (a saved contact), never a brand preference. People are not remembered;
+  // the Assistant's trusted-contact tool answers instead (see the hook below).
+  if (ex.kind === 'save' && ex.facts.some((f) => (f.category === 'brand_like' || f.category === 'brand_avoid') && listContacts(s.householdId).some((c) => c.name.toLowerCase().split(/\s+/)[0] === f.value.toLowerCase().split(/\s+/)[0]))) return null;
   const hh = s.householdId, uid = s.userId;
   const on = store.isEnabled(hh, uid);
   if (ex.kind === 'refuse') {
@@ -106,7 +110,7 @@ export function assistantHook(req: Request, res: Response, next: NextFunction) {
     if (/^(please )?(ignore|skip|without) my (preferences|memory)\b|\bwithout my preferences\b/i.test(said)) {
       const last = store.recentProducts(hh, uid).find((p) => p.origin === 'channel3' && p.query);
       const reply = last ? 'Here they are without your saved preferences.' : 'There’s no recent search to show again.';
-      return done({ intent: { action: last ? 'shop' : 'chat', reply }, products: [], reply, replyLang: 'en', ai: false, discover: last ? { query: last.query, suggested: false, ignoreMemory: true } : null });
+      return done({ intent: { action: last ? 'shop' : 'chat', reply }, products: [], reply, replyLang: 'en', ai: false, discover: last ? { query: last.query, suggested: false, ignoreMemory: true, lead: reply } : null });
     }
     // 2. Explicit memory statements (same path for typed text and the voice transcript).
     const mem = memoryReply(s, said, via);

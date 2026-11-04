@@ -23,6 +23,8 @@ export function looksLikeMessageToCheck(text: string): boolean {
 export function isPaymentStatusQuestion(text: string): boolean {
   const s = text.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
   if (!s || s.length > 200 || looksLikeMessageToCheck(text)) return false;
+  // "Was I charged twice?" is a duplicate check across captured payments (Assistant tool duplicate_check), not one receipt.
+  if (/\b(twice|two times|double|more than once|duplicate)\b/.test(s)) return false;
   const end = s.replace(/[?.!]+$/, '');
   // "Did my payment to John go through?" / "Did I pay John back?" are about a person: the records companion answers.
   if (/\b(john|pay [a-z]+ back)\b/.test(s) || /\b(to|for)\s+(?!the shop|demo|it\b|the microwave|my order|the order)[a-z]+\b.{0,3}$/.test(end)) return false;

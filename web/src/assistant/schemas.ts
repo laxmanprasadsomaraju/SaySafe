@@ -35,6 +35,8 @@ export const ProductItem = z.object({
   role: z.enum(['best', 'cheaper', 'another']).optional(),
   reasons: z.array(Str(200)).max(5).optional(),
   rating: z.object({ value: z.number().min(0).max(5), count: z.number().int().min(0) }).nullable().optional(),
+  /** Listed variant options (e.g. Size: S, M, L). */
+  variants: z.array(z.object({ name: Str(30), values: z.array(Str(30)).max(12) })).max(3).optional(),
 });
 export type ProductItem = z.infer<typeof ProductItem>;
 

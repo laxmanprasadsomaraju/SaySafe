@@ -1,0 +1,439 @@
+{
+ "what": "Live Channel3 evidence for the SaySafe Assistant repair (branch assistant-repair). Real API (api.trychannel3.com) via the server, key injected on the wire, never logged. Recorded by a QA-only fetch wrapper (bodies + responses, no headers). Responses trimmed to 5 products each.",
+ "country": "IE",
+ "currency": "EUR",
+ "apiContractCheckedAgainst": "https://api.trychannel3.com/openapi.json (SearchFilters: brand_ids, gender, age, price{min_price,max_price}, website_ids, colors{palette}[beta], …; SearchConfig: country, currency, language). Top-level locale is not sent.",
+ "liveCallBudget": {
+  "searches": 11,
+  "brandLookups": 3,
+  "note": "2 direct exploratory searches (filters check, colors.palette beta check), 6 in a first app run of which 3 were wasted by a refinement bug (fixed: a new product request is a new search, not a refinement of the last one), 3 in the final browser run (kettle, black women’s Nike T-shirts under €40, PS5)."
+ },
+ "colorsPaletteEvaluation": {
+  "request": {
+   "query": "t-shirt",
+   "filters": {
+    "gender": "female",
+    "brand_ids": [
+     "MpZS"
+    ],
+    "price": {
+     "max_price": 40
+    },
+    "colors": {
+     "palette": [
+      {
+       "hex": "#000000"
+      }
+     ]
+    }
+   }
+  },
+  "results": 0,
+  "withoutColorsFilter": 12,
+  "decision": "Not used. A pure-black palette (default match \"standard\") returned 0 listings that plainly exist. Colour is ranked locally from listing text and Channel3’s measured photo colours, and a card says \"Listed as black\" or \"Main colour in the photo looks black\". It never claims more than that."
+ },
+ "finalBrowserRun": {
+  "when": "2026-11-04T10:11:23.084Z",
+  "screenshots": {
+   "kettle": "/workspace/projects/a8a23fa1-087e-4298-98cb-7033528fb21c/work/assistant-repair/e2e-live/live-1-cards-1440.png",
+   "blackWomensNikeUnder40": "/workspace/projects/a8a23fa1-087e-4298-98cb-7033528fb21c/work/assistant-repair/e2e-live/live-3-cards-1440.png",
+   "ps5": "/workspace/projects/a8a23fa1-087e-4298-98cb-7033528fb21c/work/assistant-repair/e2e-live/live-ps5-cards-1440.png"
+  },
+  "scenarios": [
+   {
+    "userRequest": "Find a kettle",
+    "assistantTool": "channel3_search",
+    "assistantAi": false,
+    "discoverQueryFromAssistant": "kettle",
+    "sanitisedChannel3Request": {
+     "query": "kettle",
+     "filters": {},
+     "config": {
+      "country": "IE",
+      "currency": "EUR",
+      "language": "en"
+     }
+    },
+    "validResultsAfterNormalisation": 9,
+    "renderedCardsInChat": 3,
+    "cardImagesFromCdnTrychannel3": 3,
+    "topCardTitles": [
+     "Best matchEclettica KettleDe Longhi · currys.ieWhy: €54.99 at currys.ie, within your €150 budget; listed as in stockAnti-scale filter · 360°",
+     "Traditional KettleKitchenAid · currys.co.ukWhy: €89.99 at currys.co.uk, within your €150 budget; listed as in stockRetro domed shape · 1.25 ",
+     "Russell Hobbs Bronte Jug Kettlecurrys.ieColor: Black, Soft Navy, Stone25 kg/m second pressure · 3.3M 2.90M 150kg 1320€79.99. Open details"
+    ]
+   },
+   {
+    "userRequest": "Find black women's Nike T-shirts under €40",
+    "assistantTool": "channel3_search",
+    "assistantAi": false,
+    "discoverQueryFromAssistant": "black women's Nike t-shirt under €40",
+    "sanitisedChannel3Request": {
+     "query": "black women's Nike t-shirt",
+     "filters": {
+      "price": {
+       "max_price": 40
+      },
+      "gender": "female",
+      "age": [
+       "adult"
+      ],
+      "brand_ids": [
+       "MpZS"
+      ],
+      "brand": "Nike"
+     },
+     "config": {
+      "country": "IE",
+      "currency": "EUR",
+      "language": "en"
+     }
+    },
+    "validResultsAfterNormalisation": 7,
+    "renderedCardsInChat": 3,
+    "cardImagesFromCdnTrychannel3": 3,
+    "topCardTitles": [
+     "Best matchNike SSNL Boy T Women's Sports T-Shirtdecathlon.ieWhy: Nike, as you asked; Listed for womenLoose cut for complete freedom of movem",
+     "Nike Dri-Fit Trail T-Shirt Women'sdecathlon.ieWhy: Nike, as you asked; Listed for womenLoose fit throughout · Nike Dri-FIT technology wicks ",
+     "Nike Academy 16 Top T-shirtdecathlon.ieWhy: Nike, as you asked; Listed for womenDesigned for sport and leisure · Dri-FIT moisture-wicking fa"
+    ]
+   },
+   {
+    "userRequest": "I want to buy a PS5 for my grandson",
+    "assistantTool": "channel3_search",
+    "assistantAi": false,
+    "discoverQueryFromAssistant": "ps5",
+    "sanitisedChannel3Request": {
+     "query": "ps5",
+     "filters": {},
+     "config": {
+      "country": "IE",
+      "currency": "EUR",
+      "language": "en"
+     }
+    },
+    "validResultsAfterNormalisation": 1,
+    "renderedCardsInChat": 1,
+    "cardImagesFromCdnTrychannel3": 1,
+    "topCardTitles": [
+     "Best matchPLAYSTATION PS5 DualSense Wireless Controller - Techno Redcurrys.co.ukWhy: €79.99 at currys.co.uk, within your €150 budget; listed"
+    ]
+   }
+  ],
+  "constraintsMet": {
+   "kettle": "Yes: every card is a kettle; IE/EUR offers only; real retailer links (currys.ie, currys.co.uk); prices as listed. The remembered sample colour and budget were applied only in ranking, with a line explaining it.",
+   "blackWomensNikeUnder40": "Yes for women’s, Nike and ≤ €40: Channel3 filters gender=female, age=adult, brand_ids=[Nike], max_price=40, and every card is ≤ €40 and Nike. Black was ranked locally; Channel3 does not guarantee colour.",
+   "ps5": "Partly, in the live run: 1 card (a PS5 controller), because the remembered sample budget of €150 filtered out every console (€599–€1,015). Fixed after this run: a remembered budget now narrows results only when at least 3 (or half) of the listings fit, and accessories rank after the main product. Re-checked on the RECORDED live response (tests/fixtures/channel3-ps5.json, mock replay): PlayStation 5 Digital Edition Console €599 at currys.ie comes first. No extra live call was spent on this. The gift recipient (\"grandson\") was never sent to Channel3."
+  }
+ },
+ "calls": [
+  {
+   "at": "2026-11-04T10:11:04.054Z",
+   "method": "POST",
+   "path": "/v1/search",
+   "status": 200,
+   "request": {
+    "query": "kettle",
+    "limit": 12,
+    "config": {
+     "country": "IE",
+     "currency": "EUR",
+     "language": "en"
+    }
+   },
+   "rawProducts": 12,
+   "sample": [
+    {
+     "title": "Eclettica Kettle",
+     "brand": "De Longhi",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 54.99,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/5e"
+    },
+    {
+     "title": "Traditional Kettle",
+     "brand": "Le Creuset",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "lecreuset.fr",
+       "price": 145,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/c6"
+    },
+    {
+     "title": "Traditional Kettle",
+     "brand": "Le Creuset",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "lecreuset.co.uk",
+       "price": 145,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/91"
+    },
+    {
+     "title": "Kettle",
+     "brand": "SMEG",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 149.99,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/92"
+    },
+    {
+     "title": "Traditional Kettle",
+     "brand": "KitchenAid",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.co.uk",
+       "price": 89.99,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/6b"
+    }
+   ]
+  },
+  {
+   "at": "2026-11-04T10:11:09.874Z",
+   "method": "GET",
+   "path": "/v1/brands/search?query=…",
+   "status": 200,
+   "response": {
+    "brands": [
+     {
+      "id": "MpZS",
+      "name": "Nike"
+     },
+     {
+      "id": "QcbK",
+      "name": "Nike SB"
+     },
+     {
+      "id": "kiZU",
+      "name": "Nike Strength"
+     }
+    ]
+   }
+  },
+  {
+   "at": "2026-11-04T10:11:11.666Z",
+   "method": "POST",
+   "path": "/v1/search",
+   "status": 200,
+   "request": {
+    "query": "black women's Nike t-shirt",
+    "limit": 12,
+    "config": {
+     "country": "IE",
+     "currency": "EUR",
+     "language": "en"
+    },
+    "filters": {
+     "price": {
+      "max_price": 40
+     },
+     "gender": "female",
+     "age": [
+      "adult"
+     ],
+     "brand_ids": [
+      "MpZS"
+     ]
+    }
+   },
+   "rawProducts": 11,
+   "sample": [
+    {
+     "title": "Nike Dri-Fit Trail T-Shirt Women's",
+     "brand": "Nike",
+     "gender": "female",
+     "offers": [
+      {
+       "domain": "decathlon.ie",
+       "price": 38.85,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/b5"
+    },
+    {
+     "title": "Nike SSNL Boy T Women's Sports T-Shirt",
+     "brand": "Nike",
+     "gender": "female",
+     "offers": [
+      {
+       "domain": "decathlon.ie",
+       "price": 37.8,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/67"
+    },
+    {
+     "title": "Wmns NSW Ribbed Tank Top",
+     "brand": "Nike",
+     "gender": "female",
+     "offers": [
+      {
+       "domain": "decathlon.ie",
+       "price": 38.42,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/b3"
+    },
+    {
+     "title": "Shorts",
+     "brand": "Nike",
+     "gender": "female",
+     "offers": [
+      {
+       "domain": "giglio.com",
+       "price": 38,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/1a"
+    },
+    {
+     "title": "Full Zip Top",
+     "brand": "Nike",
+     "gender": "female",
+     "offers": [
+      {
+       "domain": "jdsports.ie",
+       "price": 30,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/bc"
+    }
+   ]
+  },
+  {
+   "at": "2026-11-04T10:11:19.505Z",
+   "method": "POST",
+   "path": "/v1/search",
+   "status": 200,
+   "request": {
+    "query": "ps5",
+    "limit": 12,
+    "config": {
+     "country": "IE",
+     "currency": "EUR",
+     "language": "en"
+    }
+   },
+   "rawProducts": 12,
+   "sample": [
+    {
+     "title": "PlayStation 5 Digital Edition",
+     "brand": "Sony",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 665,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/18"
+    },
+    {
+     "title": "PlayStation 5 Digital Edition Console",
+     "brand": "Sony",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 599,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/d1"
+    },
+    {
+     "title": "PlayStation 5 Pro",
+     "brand": "Sony",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 949,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/0b"
+    },
+    {
+     "title": "PlayStation 5 Pro, Twin Docking Station & PS5 DualSense Wireless Controller Bundle",
+     "brand": "Sony",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 1015,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/4c"
+    },
+    {
+     "title": "PlayStation 5 Console 1TB - Marvel's Spider-Man 2 Standard Edition Bundle",
+     "brand": "Sony",
+     "gender": null,
+     "offers": [
+      {
+       "domain": "currys.ie",
+       "price": 699.99,
+       "currency": "EUR"
+      }
+     ],
+     "imageHost": "https://cdn.trychannel3.com/69"
+    }
+   ]
+  }
+ ],
+ "firstAppRunSuperseded": "Run 1 (09:55–10:00 GMT) sent \"black kettle\", \"black women’s Nike kettle\" ×2 (refinement bug), \"black kettle\" under €150 and \"black ps5\". That was the old behaviour of putting the remembered colour into the query text, which this repair removed. Kept only as a count.",
+ "directExploratory": [
+  {
+   "request": {
+    "query": "t-shirt",
+    "limit": 12,
+    "config": {
+     "country": "IE",
+     "currency": "EUR",
+     "language": "en"
+    },
+    "filters": {
+     "gender": "female",
+     "brand_ids": [
+      "MpZS"
+     ],
+     "price": {
+      "max_price": 40
+     }
+    }
+   },
+   "rawProducts": 12,
+   "allFemaleNike": true
+  }
+ ]
+}

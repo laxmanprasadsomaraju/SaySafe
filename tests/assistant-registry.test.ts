@@ -13,7 +13,9 @@ describe('assistant component registry', () => {
       // "Try as Mary" demo: subscriptions list, send money handoff, welcome, training examples, error with Retry
       'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error',
       // Insights summary card (flagship + Insights discoverability)
-      'insights_summary', 'shop_catalogue'].sort());
+      'insights_summary', 'shop_catalogue',
+      // Assistant repair: read-only tool answers, and the "add trusted contact?" confirm card (nothing saved until a tap)
+      'assistant_facts', 'contact_suggest'].sort());
   });
   it('rejects unknown kinds and markup-shaped payloads', () => {
     expect(parseBlock({ kind: 'html', html: '<img src=x onerror=alert(1)>' })).toBeNull();

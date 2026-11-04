@@ -10,7 +10,7 @@ import { parseFollowup } from '../web/src/assistant/followups';
 
 const STATUS = [
   'Did my payment go through?', 'did it go through', 'Did it go through?', 'Has the payment gone through?', 'Is my payment complete?',
-  'Did my purchase work?', 'Was I charged?', 'was i charged', 'Have I been charged?', 'Was I charged twice?', 'Did I get charged?',
+  'Did my purchase work?', 'Was I charged?', 'was i charged', 'Have I been charged?', 'Did I get charged?',
   'Did PayPal charge me?', "Where's my receipt?", 'Where is my receipt', 'where’s my receipt?', 'Where is the receipt?', 'Did I get a receipt?',
   'Did the payment go through for the microwave?', 'did my order go through',
   // audit fix 7
@@ -20,6 +20,8 @@ const NOT_STATUS = [
   'Did I already pay John €80?', 'Did I pay the plumber?', 'I received a message saying I owe €120. Can you check whether I already paid?',
   'Show my last payment', 'What do I pay every month?', 'Help me buy a microwave', 'Did my payment to Sarah go through?',
   'Have I paid anyone twice?', 'Cancel my subscription',
+  // Assistant repair: a duplicate check across captured payments (tool duplicate_check), not one receipt.
+  'Was I charged twice?',
 ];
 const SCAM = 'Dear customer, your payment did not go through and your account will be suspended today. To avoid being charged a penalty fee, verify your card details now at http://secure-paypa1-verify.xyz/login or call +353 85 123 4567 before midnight.';
 const SCAM_IBAN = 'Hi Mam, it is me, new number. Was I charged for the rent? My payment did not go through, can you transfer €480 to my friend now to IE29 AIBK 9311 5212 3456 78 please, I will explain everything later tonight, thanks, love you.';

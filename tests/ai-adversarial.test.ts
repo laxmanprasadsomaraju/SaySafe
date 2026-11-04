@@ -84,14 +84,18 @@ describe('the model can only produce intents', () => {
   it('a model that sets a price, amount and currency changes nothing: products and totals come from the catalogue', async () => {
     const e = await elder();
     modelReplies = [say({ action: 'shop', query: 'kettle', max_price_eur: null, choice_index: null, message_text: null, reply: 'Kettle is €0.01 today!', price_cents: 1, amount: '0.01', currency: 'USD', unit_amount: { value: '0.01', currency_code: 'USD' } })];
-    const r = await e.post('/api/assistant').set(H).send({ text: 'find me a kettle' }).expect(200);
+    // Assistant repair: "find me a kettle" is now routed without the model (to real shops); "the demo kettle" text that
+    // the rules don't route still goes to the model, and the Demo Shop prices still come from the catalogue.
+    const r = await e.post('/api/assistant').set(H).send({ text: 'a kettle, the cheap one' }).expect(200);
     expect(r.body.ai).toBe(true);
     expect(Object.keys(r.body.intent).sort()).not.toContain('price_cents');
     expect(r.body.intent).not.toHaveProperty('currency');
     expect(r.body.intent).not.toHaveProperty('amount');
     expect(r.body.reply).not.toMatch(/0\.01/); // model reply replaced by catalogue description
     for (const p of r.body.products) expect(p.priceCents).toBe(priceOf(p.id));
-    const first = r.body.products[0];
+    // Real-shop listings carry no model price either: the search is sent with the product words only.
+    if (r.body.discover) expect(JSON.stringify(r.body.discover)).not.toMatch(/0\.01|USD/);
+    const first = r.body.products[0] ?? (await e.get('/api/products?q=kettle').expect(200)).body[0];
     const pay = await e.post('/api/payments').set(H).send({ items: [{ productId: first.id, quantity: 1, priceCents: 1, currency: 'USD' }], amountCents: 1, currency: 'USD', idempotencyKey: key() }).expect(200);
     expect(pay.body.request.amountCents).toBe(priceOf(first.id));
     expect(pay.body.request.currency).toBe('EUR');

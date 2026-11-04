@@ -32,6 +32,10 @@ export interface ShopItem {
   /** Listing description (not shown in full; used only to check that a preference word is really in the data). */
   description?: string | null;
   dimensions?: { label: string; value: string } | null;
+  /** Listed variant options (e.g. Size: S, M, L), as Channel3 returns them. */
+  variants?: { name: string; values: string[] }[];
+  /** Why this listing matches the request, built only from listed data (server/app.ts /api/discover). */
+  why?: string[];
 }
 
 export interface ShoppingProfile {
@@ -59,6 +63,8 @@ export interface Recommendation {
   usedProfileBudget: number | null;
   /** The usual budget would have removed everything, so it was not applied. */
   profileBudgetRelaxed: boolean;
+  /** When relaxed: how many listings did fit the remembered budget (too few to narrow by it). */
+  profileBudgetFits?: number;
 }
 
 // ---------- Text helpers ----------
@@ -232,9 +238,13 @@ export function recommend(items: ShopItem[], req: ParsedRequest, profile: Shoppi
   let effMax = req.budget.max;
   let usedProfileBudget: number | null = null;
   let profileBudgetRelaxed = false;
+  let profileBudgetFits = 0;
   if (effMax === null && profile.budgetMax !== null) {
-    if (pool.some((p) => priceOf(p) <= profile.budgetMax!)) { effMax = profile.budgetMax; usedProfileBudget = profile.budgetMax; }
-    else if (pool.length) profileBudgetRelaxed = true;
+    // A remembered budget is a soft preference: it narrows results only when enough listings fit (at least 3, or half).
+    // Otherwise ("a PS5" with a usual budget of €150 leaves one controller) everything is shown and the note says so.
+    const fit = pool.filter((p) => priceOf(p) <= profile.budgetMax!).length;
+    if (fit && fit >= Math.min(3, Math.ceil(pool.length / 2))) { effMax = profile.budgetMax; usedProfileBudget = profile.budgetMax; }
+    else if (pool.length) { profileBudgetRelaxed = true; profileBudgetFits = fit; }
   }
   if (effMax !== null) pool = pool.filter((p) => priceOf(p) <= effMax!);
   if (req.budget.min !== null) pool = pool.filter((p) => priceOf(p) >= req.budget.min!);
@@ -260,7 +270,7 @@ export function recommend(items: ShopItem[], req: ParsedRequest, profile: Shoppi
     const another = scored.find((s) => s !== best && s !== cheaper && relevantEnough(s));
     if (another) picks.push({ role: 'another', id: another.p.id, score: another.score, reasons: another.reasons.length ? another.reasons.slice(0, 3) : ['also matches your search'] });
   }
-  return { picks, rankedIds: scored.map((s) => s.p.id), avoidedCount, usedProfileBudget, profileBudgetRelaxed };
+  return { picks, rankedIds: scored.map((s) => s.p.id), avoidedCount, usedProfileBudget, profileBudgetRelaxed, ...(profileBudgetFits ? { profileBudgetFits } : {}) };
 }
 
 // ---------- Specs (only what the listing text states) ----------

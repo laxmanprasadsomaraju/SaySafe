@@ -48,7 +48,12 @@ function factsFrom(rest: string, positive: boolean): MemoryFact[] | null {
   const style = styleIn(raw);
   const feature = !positive ? AVOID_FEATURES.find((f) => raw.toLowerCase().includes(f)) ?? null : null;
   if (feature) return [{ category: 'brand_avoid', key: feature, value: feature, label: `you don't want ${feature}` }];
-  if (positive && colour) return [{ category: 'shopping', key: 'colour', value: colour === 'gray' ? 'grey' : colour, label: `you prefer ${colour}` }];
+  if (positive && colour) {
+    // "I like red, blue" / "red and blue": one colour preference holding both (personalise uses the first for search).
+    const all = COLOURS.filter((c) => new RegExp(`\\b${c}\\b`).test(raw.toLowerCase())).map((c) => (c === 'gray' ? 'grey' : c)).filter((c, i, a) => a.indexOf(c) === i).slice(0, 3);
+    const v = all.length > 1 ? all.join(', ') : (colour === 'gray' ? 'grey' : colour);
+    return [{ category: 'shopping', key: 'colour', value: v, label: `you prefer ${all.length > 1 ? all.join(' and ') : colour}` }];
+  }
   if (positive && style) return [{ category: 'shopping', key: `style:${style}`, value: style, label: `you prefer ${style}` }];
   const term = tidy(raw.replace(STRIP, ' '));
   if (!term || term.length < 2 || term.split(' ').length > 3 || /\d/.test(term)) return null;

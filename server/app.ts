@@ -49,6 +49,11 @@ import { registerMemory, assistantHook, discoverHook } from './memory/http.js';
 import { effectiveProfile, personalisedQuery, personalisationLine } from './memory/personalise.js';
 import { clearAll as clearMemory, seedSampleMemory, wantsShortReplies } from './memory/store.js';
 import { answerCompanion, isCompanionAction } from './companion/assistant.js';
+import { routeAssistant, ASSISTANT_TOOLS, type AssistantTool } from './assistant/route.js';
+import { runTool } from './assistant/tools.js';
+import { parseShopping, channel3Query, channel3Filters, specText, refineSpec, looksLikeProductSearch, photoColourMatches } from './assistant/shopping.js';
+import { recentProducts } from './memory/store.js';
+import { clarifyQuestion } from './ai/agent.js';
 import { listContacts } from './companion/store.js';
 import type { SavedContact } from './scam/contactMismatch.js';
 
@@ -102,7 +107,7 @@ export function createApp() {
   const apiLimiter = rateLimit({ windowMs: 60_000, limit: Number(process.env.API_LIMIT_PER_MIN ?? 120), standardHeaders: true, legacyHeaders: false });
   const recoverLimiter = rateLimit({ windowMs: 60_000, limit: 10, standardHeaders: true, legacyHeaders: false });
   // Questions about Mary's own records are answered by rules without calling the AI, so they don't count against the AI limits.
-  const rulesOnly = (req: Request) => req.path === '/api/assistant' && typeof req.body?.text === 'string' && req.body.text.length <= 4000 && routeCompanion(req.body.text) != null;
+  const rulesOnly = (req: Request) => req.path === '/api/assistant' && typeof req.body?.text === 'string' && req.body.text.length <= 4000 && (routeAssistant(req.body.text) != null || routeCompanion(req.body.text) != null);
   const aiLimiter = rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: true, legacyHeaders: false, skip: rulesOnly, message: { error: 'rate_limited', message: 'Please wait a moment before asking again.' } });
   // Per-session limit on AI routes on top of the per-IP one (several people can share an IP; one session cannot bypass by rotating IPs).
   const aiSessionKey = (req: Request) => String(req.cookies?.ss_elder ?? req.cookies?.ss_family ?? '');
@@ -304,11 +309,53 @@ export function createApp() {
       const r2 = `The Demo Shop sells ${[...new Set(PRODUCTS.map((p) => p.category.toLowerCase()))].join(', ')} items, paid with PayPal Sandbox (no real money). Tap one below. For anything else, ask for it and I'll search real shops with Channel3: you'd buy those on the retailer's own website.`;
       return res.json({ intent: { action: 'shop', reply: r2 }, products: [], reply: r2, replyLang: 'en', ai: false, discover: null, catalogue });
     }
+    // ----- Read-only tools (preferences, memory, conversation, transactions, duplicates, limits, transfers, evidence,
+    // trusted contacts). Deterministic routing first; the model can also pick them below. Answers come from the
+    // signed-in elder's own records only; a family session gets a privacy answer and no data.
+    const familySession = !s && Boolean(readSession(req, 'family'));
+    const sendTool = async (tool: AssistantTool, params: Record<string, unknown>, ai: boolean) => {
+      const out = await runTool(tool, params as any, s, { familySession, said });
+      return res.json({ intent: { action: tool, reply: out.reply }, tool, products: [], reply: out.reply, replyLang: 'en', ai, discover: null, ...(out.card ? { companion: out.card } : {}), ...(out.blocks?.length ? { blocks: out.blocks.slice(0, 3) } : {}), ...(out.clientAction ? { clientAction: out.clientAction } : {}), toolRead: out.read ?? {} });
+    };
+    const direct = routeAssistant(said);
+    if (direct) return sendTool(direct.tool, direct.params, false);
+
+    // ----- Follow-ups that refine the LAST real-shop search ("only Nike", "under €30", "a red version", "size medium",
+    // "a women's version instead", "more like the second one"). Uses the stored recent products (ids + query).
+    const lastC3 = s && channel3Configured() ? recentProducts(s.householdId, s.userId).find((x) => x.origin === 'channel3' && x.query) ?? null : null;
+    if (lastC3 && !routeCompanion(said)) {
+      const like = said.match(/\b(?:more|others?|something|ones?) like (?:the )?(first|second|third|1st|2nd|3rd|last) one\b/i);
+      if (like) {
+        const batch = recentProducts(s!.householdId, s!.userId).filter((x) => x.batch === lastC3.batch).sort((a, b) => a.rank - b.rank);
+        const idx = ({ first: 0, '1st': 0, second: 1, '2nd': 1, third: 2, '3rd': 2, last: batch.length - 1 } as Record<string, number>)[like[1].toLowerCase()];
+        const ref = batch[idx];
+        if (ref) {
+          const q = ref.title.replace(/\s*[,|(].*$/, '').split(/\s+/).slice(0, 6).join(' ');
+          const reply = `Here are listings like “${q}” (${ref.retailer}, ${new Intl.NumberFormat('en-IE', { style: 'currency', currency: ref.currency }).format(ref.price)}).`;
+          return res.json({ intent: { action: 'shop', reply }, tool: 'channel3_search', products: [], reply, replyLang: 'en', ai: false, discover: { query: q, suggested: false, lead: reply, refinedFrom: ref.productId } });
+        }
+      }
+      const refined = refineSpec(said, parseShopping(lastC3.query!));
+      if (refined) {
+        const q = specText(refined.spec);
+        const reply = `Here’s the same search with ${refined.changed.join(', ')}.`;
+        return res.json({ intent: { action: 'shop', reply }, tool: 'channel3_search', products: [], reply, replyLang: 'en', ai: false, discover: { query: q, suggested: false, lead: reply, ...(refined.spec.maxPrice ? { maxPrice: refined.spec.maxPrice } : {}) } });
+      }
+    }
+
     const routed = routeCompanion(said)
       ?? (demoItem ? { action: 'shop' as const, query: 'demo item', reply: 'Here are some items from the Demo Shop.' } : null)
       ?? (demoPick.length ? { action: 'shop' as const, query: demoNamed, reply: '' } : null)
-      ?? (buyReal ? { action: 'shop' as const, query: buyReal.trim(), reply: '' } : null);
-    const { intent, ai, replyLang: aiLang } = routed ? { intent: routed, ai: false as const, replyLang: 'en' as const } : await interpret(said, { name, lastResults, step, lang });
+      ?? (buyReal ? { action: 'shop' as const, query: buyReal.trim(), reply: '' } : null)
+      // A plain product request ("find a kettle", "show me women's Nike T-shirts", "I want to buy a PS5 for my grandson")
+      // is a search without asking the model (saves a Groq call and can't be misread).
+      ?? (looksLikeProductSearch(said) && parseShopping(said).product ? { action: 'shop' as const, query: channel3Query(parseShopping(said)), max_price_eur: parseShopping(said).maxPrice, reply: '' } : null);
+    const { intent, ai, replyLang: aiLang } = routed ? { intent: routed, ai: false as const, replyLang: 'en' as const } : await interpret(said, { name, lastResults, step, lang, lastSearch: lastC3?.query ?? null });
+    if ((ASSISTANT_TOOLS as readonly string[]).includes(intent.action)) return sendTool(intent.action as AssistantTool, intent as Record<string, unknown>, ai);
+    if (intent.action === 'clarify') {
+      const q = ai ? guardAssistantReply(intent.reply, clarifyQuestion(said)) : intent.reply;
+      return res.json({ intent: { action: 'clarify', reply: q }, tool: 'clarify', products: [], reply: q, replyLang: ai ? aiLang : 'en', ai, discover: null });
+    }
     let products: ReturnType<typeof searchProducts> = [];
     let reply = intent.reply;
     let replyLang = aiLang;
@@ -321,7 +368,10 @@ export function createApp() {
       // The AI only chose the intent and extracted parameters. The server queries this elder's own records and
       // writes the reply from a template: the model's own reply is discarded (it can't claim "marked as paid").
       const out = await answerCompanion(intent.action, intent, s);
-      return res.json({ intent: { action: intent.action, reply: out.reply }, products, reply: out.reply, replyLang: 'en', ai, discover, companion: out.card });
+      // "Send Alex €50": the hand-off card plus evidence from her own records (contact? paid before? usual amount?).
+      const evBlocks = intent.action === 'send_money' && s && (intent.contact_name || intent.relation)
+        ? (await runTool('payment_check', { person: intent.contact_name ?? null, relation: intent.relation ?? null, amount: intent.amount ?? null }, s)).card : null;
+      return res.json({ intent: { action: intent.action, reply: out.reply }, tool: intent.action, products, reply: out.reply, replyLang: 'en', ai, discover, companion: out.card, ...(evBlocks ? { blocks: [evBlocks] } : {}) });
     }
     let demoOffer: ReturnType<typeof searchProducts> = [];
     let catalogue: { productId: string; name: string; category: string; priceCents: number; currency: string }[] | null = null;
@@ -334,6 +384,24 @@ export function createApp() {
       reply = buyNow ? `Here is the Demo Shop ${one.name}: ${fmtEur(one.priceCents)}, paid with PayPal Sandbox, so no real money.` : describeOptions(products, name);
       replyLang = 'en';
       return res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover: null, buyNow });
+    }
+    // Every product request goes to REAL shops (Channel3) when it is configured. The Demo Shop (PayPal Sandbox) is
+    // offered separately, never mixed in, and only a named demo item / "demo shop" goes straight to the Demo Shop.
+    if (intent.action === 'shop' && !demoItem && !buyReal && channel3Configured()) {
+      const sp = parseShopping(looksLikeProductSearch(said) ? said : intent.query || said);
+      if (!sp.product && intent.query) Object.assign(sp, { product: intent.query.toLowerCase() });
+      if (!sp.maxPrice && intent.max_price_eur) sp.maxPrice = intent.max_price_eur;
+      const q = specText(sp) || (intent.query || said).slice(0, 200);
+      const gift = sp.recipient && sp.recipient !== 'someone' ? ` for your ${sp.recipient}` : sp.recipient ? ' as a gift' : '';
+      const lead = `Here are real ${channel3Query(sp) || sp.product} listings${gift} from shops in Ireland and nearby. You’d buy on the retailer’s own website, not with SaySafe’s PayPal Sandbox checkout.`;
+      const demoMatch = searchProducts(sp.product || q, null, 1);
+      if (!demoMatch.length) {
+        catalogue = PRODUCTS.map((p) => ({ productId: p.id, name: p.name, category: p.category, priceCents: p.priceCents, currency: p.currency }));
+        reply = notInDemoReply(true);
+        return res.json({ intent: { ...intent, reply }, tool: 'channel3_search', products, reply, replyLang: 'en', ai, discover: { query: q, suggested: true, lead, ...(sp.maxPrice ? { maxPrice: sp.maxPrice } : {}) }, catalogue, realQuery: q.slice(0, 120) });
+      }
+      reply = lead;
+      return res.json({ intent: { ...intent, reply }, tool: 'channel3_search', products, reply, replyLang: 'en', ai, discover: { query: q, suggested: false, lead, ...(sp.maxPrice ? { maxPrice: sp.maxPrice } : {}) }, demoOffer: demoMatch });
     }
     if (intent.action === 'shop' && buyReal && channel3Configured()) {
       discover = { query: buyReal.trim(), suggested: false };
@@ -369,7 +437,7 @@ export function createApp() {
     }
     // Free model text (chat / confirm / cancel / help…) never claims an effect: the assistant has no write tools.
     if (ai && reply === intent.reply) reply = guardAssistantReply(reply);
-    res.json({ intent: { ...intent, reply }, products, reply, replyLang, ai, discover, ...(catalogue ? { catalogue, realQuery: (intent.query || said).slice(0, 120) } : {}) });
+    res.json({ intent: { ...intent, reply }, tool: intent.action === 'shop' ? (discover ? 'channel3_search' : 'demo_shop') : intent.action, products, reply, replyLang, ai, discover, ...(catalogue ? { catalogue, realQuery: (intent.query || said).slice(0, 120) } : {}) });
   }));
 
   // ---------- Payment companion (elder-only, household-scoped; see docs/COMPANION.md) ----------
@@ -409,36 +477,68 @@ export function createApp() {
     const personal = s ? effectiveProfile(s.householdId, s.userId, said, { ignoreMemory }) : null;
     const profile = personal ? personal.profile : sanitizeProfile(req.body?.profile);
     const parsed = parseRequest(said);
-    let query = parsed.productQuery;
+    // Structured request (brand, audience, colour, size, retailer, price range). A gift recipient is noted for the
+    // reply only and never sent to Channel3.
+    const spec = parseShopping(said);
+    let query = channel3Query(spec) || parsed.productQuery;
     let ai: boolean | undefined;
     if (!query) {
       const r = await interpret(said, { name: s?.name ?? 'Mary', step: 'discover' });
       ai = r.ai;
       query = (r.intent.action === 'shop' && r.intent.query) ? r.intent.query : said;
     }
-    const maxPrice = overrideMax ?? parsed.budget.max;
+    const maxPrice = overrideMax ?? spec.maxPrice ?? parsed.budget.max;
+    const filters = channel3Filters(spec);
+    // Relevance: the product words the person asked for (+ the console's own name for "PS5").
+    const relevanceQuery = spec.product ? `${spec.product}${/\bps5\b/.test(spec.product) ? ' playstation' : ''}` : query;
     try {
       // No user id is sent to Channel3: its optional x-user-id is only for click/commission attribution and is
       // appended to every buy URL, so it would leak an internal id to retailers (docs.trychannel3.com/api-reference/v1/search).
       // Only product terms go to Channel3: at most a remembered colour is added to the query, never anything personal.
-      let result = await searchChannel3(personal ? personalisedQuery(query, personal) : query, { maxPrice, relevanceQuery: query });
-      if (personal && !result.products.length && personalisedQuery(query, personal) !== query) result = await searchChannel3(query, { maxPrice });
+      let result = await searchChannel3(personal ? personalisedQuery(query, personal) : query, { maxPrice, relevanceQuery, filters });
+      if (personal && !result.products.length && personalisedQuery(query, personal) !== query) result = await searchChannel3(query, { maxPrice, relevanceQuery, filters });
       count('channel3.searches');
-      const rec = recommend(result.products, { ...parsed, budget: { max: maxPrice, min: parsed.budget.min } }, profile);
+      // "Buy a PS5": the console first, accessories (controllers, cases, drives…) after, unless an accessory was asked for.
+      const ACCESSORY = /\b(controllers?|case|cover|skin|cables?|charger|charging|stand|dock|docking|mount|strap|ssd|drive|headset|remote|adapter|bag|sleeve|screen protector|replacement|spare)\b/i;
+      const mainItems = ACCESSORY.test(spec.product) ? result.products : result.products.filter((p) => !ACCESSORY.test(p.title));
+      const accessories = mainItems.length && mainItems.length < result.products.length ? result.products.filter((p) => !mainItems.includes(p)) : [];
+      const rec = recommend(accessories.length ? mainItems : result.products, { ...parsed, budget: { max: maxPrice, min: spec.minPrice ?? parsed.budget.min } }, profile);
       const byId = new Map(result.products.map((p) => [p.id, p]));
-      const products = rec.rankedIds.map((id) => byId.get(id)!);
+      let products = [...rec.rankedIds.map((id) => byId.get(id)!), ...accessories.filter((p) => !maxPrice || (p.offers[0]?.price ?? Infinity) <= maxPrice)];
+      // Why each listing matches, only from what Channel3 lists (brand, audience, price, colour words or measured photo
+      // colours, listed sizes). Nothing is assumed: an unknown attribute is simply not mentioned.
+      const colourOf = (p: typeof products[number]) => (spec.colour ? (new RegExp(`\\b${spec.colour}\\b`, 'i').test(`${p.title} ${Object.values(p.attributes ?? {}).flat().join(' ')}`) ? 'text' : photoColourMatches(spec.colour, p.colours) ? 'photo' : null) : null);
+      if (spec.colour) products = [...products.filter((p) => colourOf(p)), ...products.filter((p) => !colourOf(p))];
+      products = products.map((p) => {
+        const why: string[] = [];
+        const o = p.offers[0];
+        if (spec.brand && p.brand && p.brand.toLowerCase().startsWith(spec.brand.toLowerCase())) why.push(`${p.brand}, as you asked`);
+        if (spec.gender && p.gender === spec.gender) why.push(spec.gender === 'female' ? 'Listed for women' : 'Listed for men');
+        if (maxPrice && o && o.price <= maxPrice) why.push(`${new Intl.NumberFormat('en-IE', { style: 'currency', currency: o.currency }).format(o.price)}, within your €${maxPrice}`);
+        const c = colourOf(p);
+        if (c === 'text') why.push(`Listed as ${spec.colour}`); else if (c === 'photo') why.push(`Main colour in the photo looks ${spec.colour}`);
+        if (spec.size) { const sz = (p.variants ?? []).find((v) => /size/i.test(v.name)); if (sz) why.push(sz.values.some((x) => x.toUpperCase() === spec.size!.toUpperCase() || x.toUpperCase().startsWith(`${spec.size!.toUpperCase()} `)) ? `Size ${spec.size} is listed` : `Size ${spec.size} not listed (sizes: ${sz.values.slice(0, 6).join(', ')})`); }
+        return why.length ? { ...p, why } : p;
+      });
       const best = rec.picks.find((p) => p.role === 'best');
       // "Keep answers short" (remembered, memory on): one-sentence explanation and a short spoken reply.
       const short = s ? wantsShortReplies(s.householdId, s.userId) : false;
       const explanation = best ? await explainBest(byId.get(best.id)!, best.reasons, profile, maxPrice, { short }) : null;
       const personalisation = personal ? personalisationLine(rec, products, personal) : null;
-      res.json({ ...result, query: said.slice(0, 200), searchQuery: query, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), personalisation, channel3Query: result.query, reply: spokenRecommendation(products, rec, query, { short }), shortReplies: short, ai: ai ?? false });
+      res.json({ ...result, query: said.slice(0, 200), searchQuery: spec.product ? specText(spec) : query, spec: { product: spec.product, brand: spec.brand, gender: spec.gender, age: spec.age, colour: spec.colour, maxPrice, minPrice: spec.minPrice, size: spec.size, retailer: spec.retailer }, products, recommendation: rec, explanation, profileApplied: !profileIsEmpty(profile), personalisation, channel3Query: result.query, reply: spokenRecommendation(products, rec, query, { short }), shortReplies: short, ai: ai ?? false });
     } catch (e) {
       if (!(e instanceof Channel3Error)) throw e;
       count(`channel3.errors.${e.code}`);
       const status = e.code === 'not_configured' ? 503 : e.code === 'rate_limited' ? 429 : e.code === 'bad_request' ? 400 : 502;
       if (e.retryAfter) res.setHeader('Retry-After', String(e.retryAfter));
-      res.status(status).json({ error: `channel3_${e.code}`, products: [], message: `I couldn't get recommendations right now. ${e.message} The SaySafe Demo Shop still works.` });
+      const what = e.code === 'unauthorized' ? 'The real-shop search key was refused, so the server needs its Channel3 key checked.'
+        : e.code === 'rate_limited' ? `${e.message} Please try again in ${e.retryAfter ?? 'a few'} seconds.`
+        : e.code === 'timeout' ? 'The real-shop search took too long to answer. Please try again in a moment.'
+        : e.code === 'malformed' ? 'The real-shop search sent back data I couldn’t read, so I’m not showing anything from it.'
+        : e.code === 'bad_request' ? 'That search couldn’t be run. Try fewer or simpler words.'
+        : e.code === 'not_configured' ? 'Real-shop search isn’t set up on this server.'
+        : `${e.message} Please try again in a moment.`;
+      res.status(status).json({ error: `channel3_${e.code}`, products: [], message: `I couldn't search real shops just now. ${what} I haven't shown any made-up products. The SaySafe Demo Shop still works.` });
     }
   }));
 

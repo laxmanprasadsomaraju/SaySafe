@@ -146,7 +146,8 @@ describe('honest fallbacks when the model fails', () => {
     channel3 = 'down';
     const r = await e.post('/api/discover').set(H).send({ text: 'toaster' });
     expect(r.status).toBeGreaterThanOrEqual(500);
-    expect(r.body.message).toMatch(/I couldn't get recommendations right now/);
+    expect(r.body.message).toMatch(/I couldn't search real shops just now/); // Assistant repair: says what failed and what to do
+    expect(r.body.message).toMatch(/haven't shown any made-up products/);
     expect(r.body.products).toEqual([]);
   });
 });
