@@ -7,7 +7,7 @@
  */
 import { z } from 'zod';
 
-export const ASSISTANT_TOOLS = ['preferences', 'memory_recall', 'conversation_recall', 'transactions', 'duplicate_check', 'spending_limit', 'transfer_check', 'payment_check', 'trust_contact', 'capabilities'] as const;
+export const ASSISTANT_TOOLS = ['preferences', 'memory_recall', 'conversation_recall', 'transactions', 'duplicate_check', 'spending_limit', 'transfer_check', 'payment_check', 'trust_contact', 'capabilities', 'account_balance'] as const;
 export type AssistantTool = (typeof ASSISTANT_TOOLS)[number];
 
 export const ToolParams = z.object({
@@ -52,6 +52,9 @@ export function routeAssistant(said: string): ToolIntent | null {
 
   // ----- Capabilities (the ONLY place starter examples are offered) -----
   if (/^(what can (you|i) (do|ask|say|try)|what do you do|how can you help( me)?|help|what are you able to do|what can you help (me )?with)[?.!]*$/.test(s)) return P('capabilities');
+
+  // ----- Account / bank / PayPal balance: SaySafe can't see it. Never a product search. -----
+  if (/\b(account|bank|paypal|card|wallet|current|available) balance\b|\bmy balance\b|\b(check|see|know|what('s| is)|show( me)?|tell me)\b.{0,20}\bbalance\b|\bhow much (money )?(do i have|is) (in|on) (my )?(account|bank|paypal|card|wallet)\b|\bhow much money do i have\b/.test(s.replace(/\bnew balance\b/g, 'nb'))) return P('account_balance');
 
   // ----- Memory and preferences (answered from saved memory + Profile; never guessed) -----
   if (/\bwhat (do|did) you (remember|know|save[d]?|keep) about me\b|\bwhat have you (remembered|saved)\b|\bwhat do you remember\b|\bwhat('s| is) in (my )?memory\b/.test(s)) return P('memory_recall');

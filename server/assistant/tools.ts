@@ -124,6 +124,10 @@ export async function runTool(tool: AssistantTool, p: ToolParamsT, s: Session | 
     const reply = 'I can find real products in Irish shops with Channel3 and compare them, show your payments and receipts, explain your approval limit, check a suspicious message or payment against your own records, help with subscriptions, and remember shopping preferences you tell me. I never send or approve money myself.';
     return { reply, card: s ? { kind: 'demo_welcome', prompts: [...WELCOME_PROMPTS] } : null };
   }
+  if (tool === 'account_balance') {
+    const reply = "I can't see your bank or PayPal balance: SaySafe never connects to your bank or PayPal account. To check it, open the PayPal app or your bank's own app. I can show the payments you made in SaySafe. Just ask “show my transactions”.";
+    return { reply, card: null };
+  }
   if (!s) return opts.familySession ? { reply: PRIVATE_TO_ELDER, card: { kind: 'companion_sign_in', message: PRIVATE_TO_ELDER }, read: { privateRefused: true } } : { reply: SIGN_IN, card: { kind: 'companion_sign_in', message: SIGN_IN } };
   const hh = s.householdId, uid = s.userId;
 

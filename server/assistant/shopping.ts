@@ -130,7 +130,9 @@ export function specText(sp: ShoppingSpec): string {
 export function looksLikeProductSearch(text: string): boolean {
   const s = text.toLowerCase().replace(/[’]/g, "'").trim();
   if (s.length > 200 || /https?:|www\./.test(s)) return false;
-  if (/\b(pay|paid|payment|transaction|receipt|subscription|contact|scam|message|limit|preferences?|remember|charged|refund|send money|transfer)\b/.test(s)) return false;
+  if (/\b(pay|paid|payment|transaction|receipt|subscription|contact|scam|message|limit|preferences?|remember|charged|refund|send money|transfer|balance|account|bank|statement|password|log ?in|sign ?in|settings?|profile|paypal|money|scammed|fraud|police)\b/.test(s.replace(/\bnew balance\b/g, 'nb'))) return false;
+  // "I want to check / know / talk / cancel ..." is a task, not a product.
+  if (/^(?:(?:hi|hello|ok|okay|so|please)[, ]+)*(?:(?:can|could) you |please |i(?:'d| would) like to |i want to |i need to |help me |how (?:do|can) i )(?:check|see|know|find out|talk|speak|cancel|change|update|delete|reset|report|understand|learn|ask|open|close|stop|turn|set|sign|log|call|contact|pay|send|move|add|remove)\b/.test(s)) return false;
   const verb = /^(?:(?:hi|hello|ok|okay|so|please)[, ]+)*(?:(?:can|could) you |please |i(?:'d| would) like |i want |i need |i'm looking for |i am looking for |help me |do you have |have you got |are there |is there |show me |find me |get me |buy me |looking for |search for |look for |find |show |search |get |buy |shop for |order |purchase |any )/.test(s);
   return verb || /\b(for my (grandson|granddaughter|son|daughter|husband|wife|friend))\b.*\b(present|gift|buy|get)\b|\b(present|gift)\b.*\bfor my\b/.test(s);
 }

@@ -49,7 +49,7 @@ const PROMPT: Record<Mode, string> = {
   chat: 'I can check a message, find a product, get trusted help, or show your payments.',
 };
 const SUGGEST: Partial<Record<Block['kind'], string[]>> = {
-  product_cards: ['Show cheaper ones', 'Is it suitable for a four-year-old?', 'Is this seller trustworthy?'],
+  product_cards: ['Show cheaper ones', 'Compare them', 'Is this seller trustworthy?'],
   payment_history: ['Show my last payment'],
   receipt: ['Refund options', 'Show my payments'],
 };
@@ -174,7 +174,7 @@ export default function Assistant() {
     const r = await discover(realQuery, turn, maxPrice, undefined, undefined, true, false, lead);
     if (r.status === 'stale' || !speech.isCurrent(turn)) return;
     if (r.status === 'shown') {
-      add('assistant', `${NOT_IN_DEMO} The real listings above are bought on the retailer’s own website. Or pick a demo item below (PayPal Sandbox, no real money).`, chips(true));
+      add('assistant', 'That’s not in the Demo Shop, but I found it at real shops. You’d buy the listings above on the retailer’s own website. Or pick a demo item below (PayPal Sandbox, no real money).', chips(true));
       return say(NOT_IN_DEMO_FOUND_SPOKEN, turn);
     }
     const why = r.status === 'error' ? `I couldn’t reach the real-shop search just now (${(r.message ?? '').replace(/\s*The SaySafe Demo Shop still works\.?/, '').slice(0, 160)})` : `I searched real shops for “${realQuery}” and found no matching listings`;

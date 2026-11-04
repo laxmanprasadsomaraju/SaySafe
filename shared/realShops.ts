@@ -19,4 +19,4 @@ export const NOT_IN_DEMO = "That's not in the Demo Shop.";
 /** What SaySafe SAYS when the product isn't in the Demo Shop and no real listings are on screen. */
 export const NOT_IN_DEMO_SPOKEN = "That's not in the Demo Shop. Say 'search real shops' to find real products, or pick a demo item.";
 /** Spoken when real listings were found and shown above the Demo Shop chips. */
-export const NOT_IN_DEMO_FOUND_SPOKEN = "That's not in the Demo Shop. I found real listings, which you'd buy on the retailer's own website, or you can pick a demo item.";
+export const NOT_IN_DEMO_FOUND_SPOKEN = "That's not in the Demo Shop, but I found it at real shops. You'd buy those on the retailer's own website, or you can pick a demo item.";
