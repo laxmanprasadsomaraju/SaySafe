@@ -142,7 +142,7 @@ describe('5. Channel3 personalisation from remembered budget and colour', () => 
   it('remembered budget filters and ranks (nothing over €150 shown when listings under it exist) and the line says so, marked as sample', async () => {
     const { a } = await elder('on');
     const d = (await discover(a, 'find me a microwave' + uniq()).expect(200)).body;
-    expect(c3.at(-1)!.body.query).toMatch(/^black microwave/);
+    expect(c3.at(-1)!.body.query).not.toMatch(/black/); // Assistant repair: remembered colour ranks, never widens/narrows the query
     expect(d.recommendation.usedProfileBudget).toBe(150);
     expect(d.products.length).toBeGreaterThan(0);
     expect(d.products.every((p: any) => priceOf(p) <= 150)).toBe(true);
@@ -179,7 +179,7 @@ describe('5. Channel3 personalisation from remembered budget and colour', () => 
   it('a remembered colour added to the query never makes an unrelated listing relevant (black microwave ≠ garden gnome)', async () => {
     const { a } = await elder('on');
     const d = (await discover(a, 'find me a garden gnome').expect(200)).body;
-    expect(c3.some((c) => /^black garden gnome/.test(c.body.query))).toBe(true);
+    expect(c3.some((c) => /black/.test(c.body.query))).toBe(false); // the remembered colour is not even sent any more
     expect(d.products).toEqual([]);
   });
 

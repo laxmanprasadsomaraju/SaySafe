@@ -1092,7 +1092,61 @@ function ShopCatalogueCard({ b, act }: { b: BlockOf<'shop_catalogue'>; act: Bloc
 }
 
 /** Registry entries for the companion kinds (merged into REGISTRY in blocks.tsx). */
+// ---------- Assistant tool answers ----------
+function AssistantFactsCard({ b, act }: { b: BlockOf<'assistant_facts'>; act: BlockActions }) {
+  if (!elderOnly(act)) return null;
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="assistant_facts">
+      <Head icon={Info}>{b.title}</Head>
+      <ul className="mt-2 divide-y divide-line">
+        {b.items.map((it, i) => (
+          <li key={i} className="py-2 flex items-start gap-2">
+            {it.tone === 'warn' ? <AlertTriangle className="size-5 shrink-0 mt-0.5 text-amber" aria-hidden /> : it.tone === 'ok' ? <CheckCircle2 className="size-5 shrink-0 mt-0.5 text-teal" aria-hidden /> : <Info className="size-5 shrink-0 mt-0.5 text-ink-soft" aria-hidden />}
+            <span className="min-w-0"><span className="block font-bold break-words">{it.label}</span>{it.detail && <span className="block text-base text-ink-soft break-words">{it.detail}</span>}</span>
+            <span className="sr-only">{it.tone === 'warn' ? ' (check this)' : ''}</span>
+          </li>
+        ))}
+      </ul>
+      {b.note && <p className="mt-2 text-sm text-ink-soft">{b.note}</p>}
+      {b.link && ('to' in b.link
+        ? <p className="mt-2"><Link to={b.link.to} className={linkCls}>{b.link.label}</Link></p>
+        : <p className="mt-2"><a href={b.link.href} target="_blank" rel="noopener noreferrer" className={linkCls}>{b.link.label}<ExternalLink className="inline size-4 ml-1" aria-hidden /><span className="sr-only"> (opens in a new tab)</span></a></p>)}
+    </div>
+  );
+}
+function ContactSuggestCard({ b, act }: { b: BlockOf<'contact_suggest'>; act: BlockActions }) {
+  const cur = useRef(b); cur.current = b;
+  if (!elderOnly(act)) return null;
+  const add = async () => {
+    act.replace(cur.current, { ...cur.current, state: 'saving', error: null });
+    try {
+      await api('/api/companion/contacts', { body: { name: b.name, ...(b.relation ? { relation: b.relation } : {}), note: 'Added from the Assistant after you said you trust them' } });
+      act.replace(cur.current, { ...cur.current, state: 'saved', error: null });
+    } catch (e) { act.replace(cur.current, { ...cur.current, state: 'error', error: errMsg(e) }); }
+  };
+  return (
+    <div className={`${cardCls} p-4 sm:p-5`} data-card="contact_suggest" data-state={b.state}>
+      <Head icon={UserRound}>Add a trusted contact?</Head>
+      <p className="mt-2 font-bold break-words">{b.name}{b.relation ? <span className="font-normal text-ink-soft"> · your {b.relation}</span> : null}</p>
+      {b.state === 'saved' ? <p className="mt-2 flex items-center gap-2 font-bold text-teal" role="status"><CheckCircle2 className="size-5" aria-hidden />Added to your trusted contacts. Saved by you, not verified.</p>
+        : b.state === 'dismissed' ? <p className="mt-2 text-ink-soft" role="status">Not added. Nothing was changed.</p>
+        : (
+          <>
+            <p className="mt-1 text-base text-ink-soft">Nothing is saved until you tap Add. SaySafe can’t check who they are: it only remembers that you trust them.</p>
+            {b.error && <p role="alert" className="mt-2 text-danger font-bold">{b.error}</p>}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button type="button" onClick={() => void add()} disabled={b.state === 'saving'} className={btnPrimary}>{b.state === 'saving' ? 'Adding…' : `Add ${b.name}`}</button>
+              <button type="button" onClick={() => act.replace(cur.current, { ...cur.current, state: 'dismissed' })} className={btnSecondary}>Not now</button>
+            </div>
+          </>
+        )}
+    </div>
+  );
+}
+
 export const COMPANION_REGISTRY = {
+  assistant_facts: ({ b, act }: { b: BlockOf<'assistant_facts'>; act: BlockActions }) => <AssistantFactsCard b={b} act={act} />,
+  contact_suggest: ({ b, act }: { b: BlockOf<'contact_suggest'>; act: BlockActions }) => <ContactSuggestCard b={b} act={act} />,
   payment_matches: ({ b, act }: { b: BlockOf<'payment_matches'>; act: BlockActions }) => <PaymentMatchesCard b={b} act={act} />,
   last_payment: ({ b, act }: { b: BlockOf<'last_payment'>; act: BlockActions }) => <LastPaymentCard b={b} act={act} />,
   monthly_costs: ({ b, act }: { b: BlockOf<'monthly_costs'>; act: BlockActions }) => <MonthlyCostsCard b={b} act={act} />,

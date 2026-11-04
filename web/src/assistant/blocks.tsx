@@ -121,7 +121,9 @@ function ProductCardsBlock({ b, act }: { b: BlockOf<'product_cards'>; act: Block
               <span className="min-w-0 flex-1">
                 {p.role === 'best' && i === 0 && <span className="block text-sm font-bold uppercase tracking-wider text-teal">Best match</span>}
                 <span className="block font-bold leading-snug line-clamp-2 break-words">{p.title}</span>
-                <span className="block text-base text-ink-soft truncate">{p.retailer}</span>
+                <span className="block text-base text-ink-soft truncate">{p.brand && !p.title.toLowerCase().startsWith(p.brand.toLowerCase()) ? `${p.brand} · ` : ''}{p.retailer}</span>
+                {b.source === 'channel3' && p.variants?.[0] && <span className="block text-sm text-ink-soft line-clamp-1 break-words">{p.variants[0].name}: {p.variants[0].values.slice(0, 6).join(', ')}</span>}
+                {b.source === 'channel3' && p.reasons?.[0] && <span className="block text-sm text-teal-deep line-clamp-1 break-words">Why: {p.reasons.slice(0, 2).join('; ')}</span>}
                 {b.source === 'channel3' && p.features.length > 0 && <span className="block text-sm text-ink-soft line-clamp-1 break-words">{p.features.slice(0, 2).join(' · ')}</span>}
                 <span className="block font-bold">{money(p.price, p.currency)}{p.compareAt && p.compareAt > p.price ? <span className="font-normal text-base text-ink-soft"> · was {money(p.compareAt, p.currency)}</span> : null}</span>
                 <span className="sr-only">. Open details</span>

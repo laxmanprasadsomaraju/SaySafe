@@ -110,7 +110,8 @@ describe('default ON and saving', () => {
     const v = await say(a, 'show me real shops for a microwave', 'voice').expect(200);
     expect(v.body.discover).toBeTruthy();
     const d = await discover(a, v.body.discover.query + uniq()).expect(200);
-    expect(calls.at(-1)!.body.query).toMatch(/^black /);
+    // Assistant repair: a remembered colour is applied in ranking only, never added to the Channel3 query text.
+    expect(calls.at(-1)!.body.query).not.toMatch(/black/);
     const best = d.body.recommendation.picks.find((k: any) => k.role === 'best');
     expect(best.reasons.join(' ')).toMatch(/preference for black/);
     expect(JSON.stringify(d.body.products.find((p: any) => p.id === best.id)).toLowerCase()).toContain('black');
@@ -250,7 +251,9 @@ describe('conversation context across reload / new session / days', () => {
 
   it('"I changed my mind" goes back to the previous search', async () => {
     const { a } = await elder();
-    await a.post('/api/assistant').set(H).send({ text: 'find a kettle' }).expect(200); // Demo Shop kettles
+    // Assistant repair: "find a kettle" now goes to real shops (Channel3); this fixture only has microwaves, so the
+    // first search here is the Demo Shop kettle by name (still recorded as conversation context).
+    await a.post('/api/assistant').set(H).send({ text: 'show me the demo kettle' }).expect(200);
     await discover(a, 'find me a microwave' + uniq()).expect(200);
     const r = await say(a, 'I changed my mind').expect(200);
     expect(r.body.memory?.resolvedFrom).toBe('conversation');
@@ -361,6 +364,6 @@ describe('isolation and reset', () => {
     const raw = JSON.stringify(c.body);
     for (const secret of [hh, uid, 'Mary', 'Byrne', 'budget']) expect(raw).not.toContain(secret);
     expect(Object.keys(c.headers).map((h) => h.toLowerCase())).not.toContain('x-user-id');
-    expect(c.body.query).toMatch(/^black microwave/);
+    expect(c.body.query).toBe('microwave'); // only the request's own product words (remembered colour ranks locally)
   });
 });

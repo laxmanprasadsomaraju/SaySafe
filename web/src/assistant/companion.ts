@@ -111,8 +111,18 @@ const ShopCatalogueB = z.object({ kind: z.literal('shop_catalogue'), items: z.ar
   /** Real listings for realQuery are on screen (true), or the search found nothing / failed (false). */
   realFound: z.boolean().optional() });
 
-export const COMPANION_BLOCKS = [PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB, ShopCatalogueB] as const;
-export const COMPANION_KINDS = ['payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary', 'shop_catalogue'] as const;
+/** Read-only answer facts from the Assistant tools (preferences, memory, limits, payment evidence, duplicate check).
+ *  Plain text only; the link is an internal route or one https link (e.g. PayPal's own Send money page). */
+const AssistantFactsB = z.object({
+  kind: z.literal('assistant_facts'), title: Str(80),
+  items: z.array(z.object({ label: Str(200), detail: Str(300).nullable().default(null), tone: z.enum(['ok', 'warn', 'info', 'muted']).default('info') })).min(1).max(12),
+  link: z.union([z.object({ label: Str(80), to: z.string().max(200).regex(/^\/[A-Za-z0-9/_?=&.-]*$/) }), z.object({ label: Str(80), href: z.string().max(300).regex(/^https:\/\/www\.paypal\.com\//) })]).nullable().default(null),
+  note: Str(400).nullable().default(null),
+});
+/** "I trust Pat": a suggestion only. Nothing is saved until Mary taps Add (POST /api/companion/contacts). */
+const ContactSuggestB = z.object({ kind: z.literal('contact_suggest'), name: Str(60).min(1), relation: Str(40).nullable().default(null), state: z.enum(['ask', 'saving', 'saved', 'dismissed', 'error']).default('ask'), error: Str(300).nullable().default(null) });
+export const COMPANION_BLOCKS = [AssistantFactsB, ContactSuggestB, PaymentMatchesB, LastPaymentB, MonthlyCostsB, SubscriptionHelpB, DemoCancelB, ContactCardB, SignInB, RecordsB, DemoMembershipB, SubscriptionsListB, SendMoneyB, DemoWelcomeB, TrainingExamplesB, RetryErrorB, InsightsSummaryB, ShopCatalogueB] as const;
+export const COMPANION_KINDS = ['assistant_facts', 'contact_suggest', 'payment_matches', 'last_payment', 'monthly_costs', 'subscription_help', 'demo_cancel_intent', 'contact_card', 'companion_sign_in', 'companion_records', 'demo_membership', 'subscriptions_list', 'send_money', 'demo_welcome', 'training_examples', 'retry_error', 'insights_summary', 'shop_catalogue'] as const;
 export type CompanionKind = (typeof COMPANION_KINDS)[number];
 export const isCompanionKind = (k: string): k is CompanionKind => (COMPANION_KINDS as readonly string[]).includes(k);
 

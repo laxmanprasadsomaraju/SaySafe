@@ -11,7 +11,7 @@ import { getProfile } from '../prefs/store.js';
 import { COLOURS } from './extract.js';
 import * as store from './store.js';
 
-export interface MemoryUse { colour: string | null; budget: number | null; brands: string[]; avoid: string[]; styles: string[]; /** which of these came from demo SAMPLE rows */ samples?: ('colour' | 'budget' | 'brand' | 'avoid' | 'style')[] }
+export interface MemoryUse { colour: string | null; colours?: string[]; budget: number | null; brands: string[]; avoid: string[]; styles: string[]; /** which of these came from demo SAMPLE rows */ samples?: ('colour' | 'budget' | 'brand' | 'avoid' | 'style')[] }
 export interface Personalised { profile: ShoppingProfile; memoryUsed: MemoryUse; memoryOn: boolean; queryColour: string | null }
 
 const has = (s: string, w: string) => new RegExp(`(^|[^a-z0-9])${w.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`, 'i').test(s);
@@ -28,7 +28,7 @@ export function effectiveProfile(hh: string, userId: string, said: string, opts:
   const use: MemoryUse = { ...none, brands: [], avoid: [], styles: [], samples: [] };
   const mark = (m: store.MemoryItem, k: NonNullable<MemoryUse['samples']>[number]) => { if (m.sample) use.samples!.push(k); };
   for (const m of rows) {
-    if (m.category === 'shopping' && m.key === 'colour' && !requestColour) { use.colour = m.value; mark(m, 'colour'); }
+    if (m.category === 'shopping' && m.key === 'colour' && !requestColour) { use.colour = m.value.split(/\s*,\s*/)[0]; use.colours = m.value.split(/\s*,\s*/).filter(Boolean); mark(m, 'colour'); }
     else if (m.category === 'shopping' && m.key.startsWith('style:')) { use.styles.push(m.value); mark(m, 'style'); }
     else if (m.category === 'brand_like') { use.brands.push(m.value); mark(m, 'brand'); }
     // "Find me a Breville kettle" overrides "I don't like Breville" for this request.
@@ -36,7 +36,7 @@ export function effectiveProfile(hh: string, userId: string, said: string, opts:
     else if (m.category === 'budget' && m.key === 'max' && !requestBudget) { const n = Number(m.value); if (Number.isFinite(n) && n > 0) { use.budget = n; mark(m, 'budget'); } }
   }
   const profile = sanitizeProfile({
-    colours: [...(use.colour ? [use.colour] : []), ...(requestColour ? [] : form.colours)],
+    colours: [...(use.colours?.length ? use.colours : use.colour ? [use.colour] : []), ...(requestColour ? [] : form.colours)],
     brands: [...use.brands, ...form.brands],
     styles: [...use.styles, ...form.styles],
     avoid: [...use.avoid, ...form.avoid.filter((a) => !has(said_l, a))],
@@ -47,9 +47,11 @@ export function effectiveProfile(hh: string, userId: string, said: string, opts:
 }
 
 /** The Channel3 query: the user's product terms, plus a remembered colour only if the request named none. */
-export function personalisedQuery(query: string, p: Personalised): string {
-  if (!p.queryColour || has(query, p.queryColour)) return query;
-  return `${p.queryColour} ${query}`.slice(0, 200);
+export function personalisedQuery(query: string, _p: Personalised): string {
+  // A remembered colour is NOT added to the Channel3 query text any more: "black ps5" returned only controllers and
+  // "black women's t-shirts" narrowed results the person never asked to narrow. Remembered colour, budget and brands
+  // are applied locally in recommend() ranking and explained in personalisationLine(). Only the request's words go out.
+  return query;
 }
 
 /** "Shown first because you prefer red and under €100." Only what actually shaped the top result. */
@@ -67,7 +69,7 @@ export function personalisationLine(rec: Recommendation, products: ShopItem[], p
   const ignorePhrase = 'ignore my preferences';
   const notes: string[] = [];
   if (rec.avoidedCount && p.memoryUsed.avoid.length) notes.push(`I left out ${rec.avoidedCount} listing${rec.avoidedCount > 1 ? 's' : ''} with ${p.memoryUsed.avoid.slice(0, 2).join(' or ')}, as you asked.`);
-  if (p.memoryUsed.budget !== null && rec.profileBudgetRelaxed) notes.push(`Nothing was under your usual €${p.memoryUsed.budget}, so these are the closest, and they cost more.`);
+  if (p.memoryUsed.budget !== null && rec.profileBudgetRelaxed) notes.push(rec.profileBudgetFits ? `Most of these cost more than your usual €${p.memoryUsed.budget}, so I haven’t limited them to it.` : `Nothing was under your usual €${p.memoryUsed.budget}, so these are the closest, and they cost more.`);
   if (p.memoryUsed.colour && !used.some((u) => u.includes(p.memoryUsed.colour!)) && products.length) notes.push(`None of these listings says ${p.memoryUsed.colour}; these are the closest.`);
   if (!used.length && !notes.length) return null;
   const head = used.length ? `Shown first because ${used.join(' and ')}${sampleShaped ? ' (sample preferences: change or remove them in Profile)' : ''}.` : '';

@@ -43,7 +43,7 @@ export function labelOf(category: MemoryCategory, key: string, value: string): s
   if (category === 'brand_like') return `Likes the brand ${value}`;
   if (category === 'brand_avoid') return `Doesn't want ${value}`;
   if (category === 'budget') return `Usual budget: up to €${value}`;
-  if (category === 'shopping' && key === 'colour') return `Prefers the colour ${value}`;
+  if (category === 'shopping' && key === 'colour') return value.includes(',') ? `Prefers the colours ${value.split(/\s*,\s*/).join(' and ')}` : `Prefers the colour ${value}`;
   if (category === 'shopping' && key.startsWith('style:')) return `Prefers ${value}`;
   if (category === 'communication' && key === 'reply_length') return value === 'short' ? 'Prefers short answers' : `Answers: ${value}`;
   return value;
