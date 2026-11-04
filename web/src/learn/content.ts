@@ -4,8 +4,8 @@
  *
  * Writing rules (checked by tests/learn-docs.test.ts): plain English, numbered steps, no credentials, never "safe" as a
  * verdict, never claims of wallet access, personal transfers, PayPal endorsement or untested browsers/languages.
- * Screenshots are referenced by id ("g05/03-back-from-paypal"); scripts/shots-docs.mjs produces them and
- * web/public/docs-assets/manifest.json says where each came from (local test build or hosted).
+ * Screenshots are referenced by id ("g06/02-alex-review"); scripts/shots-docs.mjs produces them and
+ * web/public/docs-assets/manifest.json records each one (all published shots come from the hosted app).
  */
 
 export interface ShotRef { id: string; alt: string; cap: string }
@@ -92,7 +92,7 @@ export const GUIDES: Guide[] = [
       { t: 'Check the purchase card: Simple Dial Microwave 20L, SaySafe Demo Shop, €120.00 EUR, “PayPal Sandbox · no real money”. Because it is above Mary’s €75 limit, the button asks her family first. Nothing is paid yet.', shots: [{ id: 'g05/01-purchase-card', alt: 'Purchase card: Simple Dial Microwave 20L, €120.00 EUR, above your €75.00 limit, with an Allow button outlined.', cap: 'The exact item, shop and server price.' }] },
       { t: 'Under €75 you go straight to PayPal. Over €75, the family review comes first (guide 6). When the card says “Approved”, choose “Continue to PayPal”.', shots: [{ id: 'g05/02-continue-to-paypal', alt: 'Family review card saying Approved with a Continue to PayPal button outlined.', cap: 'After family approval: Continue to PayPal.' }] },
       { t: 'PayPal’s own sandbox page opens. Log in with a PayPal Sandbox buyer (personal) account and approve. Your normal PayPal login does not work there. Judges: the sandbox buyer login is in the Devpost testing instructions only; it is never shown on this site or in the code.', label: 'On PayPal’s page' },
-      { t: 'You come back to SaySafe. It checks the order with PayPal (amount, currency and item), captures the payment once, and shows the receipt.', shots: [{ id: 'g05/03-back-from-paypal', alt: 'Receipt screen after returning from PayPal: €120.00, Captured, with the item and shop.', cap: 'Back from PayPal: the receipt.' }] },
+      { t: 'You come back to SaySafe. It checks the order with PayPal (amount, currency and item), captures the payment once, and shows the receipt.' },
       { t: 'If you cancel on PayPal’s page, you come back with nothing charged.' },
     ],
     notes: ['SaySafe never sees your PayPal password.', 'Family approval is not the same as PayPal approval. Alex’s “yes” only lets Mary continue; Mary still approves the payment herself at PayPal.', 'SaySafe is an independent project, not affiliated with or endorsed by PayPal.'],
@@ -120,9 +120,9 @@ export const GUIDES: Guide[] = [
     intro: 'SaySafe only says “paid” once PayPal confirms the capture. A second, independent confirmation arrives as PayPal’s signed notice (a webhook), which SaySafe verifies with PayPal.',
     steps: [
       { t: 'After a Demo Shop payment, ask the Assistant:', prompt: 'Did my payment go through?' },
-      { t: 'The receipt card shows the item, €120.00, PayPal Sandbox, the status, a capture reference, the family approval and the webhook status, with “View in Activity”. Asking again shows the same receipt: it never pays twice.', shots: [{ id: 'g07/01-receipt-card', alt: 'Receipt card in the Assistant: Simple Dial Microwave 20L, €120.00, Captured, Family approved, webhook status, View in Activity.', cap: 'The receipt card in the Assistant.' }] },
-      { t: 'Open the full receipt for every detail: shop, amount, your approval at PayPal, the capture checked with PayPal, the webhook status and the PayPal order reference.', shots: [{ id: 'g07/02-receipt-page', alt: 'Full receipt page: €120.00, Captured, Verification pending, shop, amount, mode PayPal Sandbox, family approval and capture rows.', cap: 'The full receipt.' }] },
-      { t: 'Read the timeline: order created, family decision, buyer approved at PayPal, payment captured, capture checked with PayPal, and the signed PayPal notice. Each step says where it came from and what was verified.', shots: [{ id: 'g07/03-timeline', alt: 'Payment evidence timeline listing each step with its source and what was verified.', cap: 'The evidence timeline.' }] },
+      { t: 'The receipt card shows the item, €120.00, PayPal Sandbox, the status, a capture reference, the family approval and the webhook status, with “View in Activity”. Asking again shows the same receipt: it never pays twice.' },
+      { t: 'Open the full receipt for every detail: shop, amount, your approval at PayPal, the capture checked with PayPal, the webhook status and the PayPal order reference.' },
+      { t: 'Read the timeline: order created, family decision, buyer approved at PayPal, payment captured, capture checked with PayPal, and the signed PayPal notice. Each step says where it came from and what was verified.' },
       { t: '“Captured” comes first, from PayPal’s capture response, checked again with PayPal’s Payments API. “Verification pending” means PayPal’s signed notice hasn’t arrived yet; it usually arrives within seconds. Reload and it changes to “Verified — signed PayPal notice”.' },
     ],
     notes: ['Sample vs real: a “Sample data” purchase has no PayPal record and can’t be checked. A “Real PayPal Sandbox transaction” is one you made here with test money.', 'Pending: “Waiting for your PayPal approval” means PayPal hasn’t been approved yet; “Payment processing” means PayPal hasn’t finished. Cancelled: nothing was paid.', 'Real hosted sandbox evidence: captures 96T3543906935310P, 19D86010XS597545K and 0E885908SW635761P (test money).'],
@@ -146,7 +146,7 @@ export const GUIDES: Guide[] = [
     steps: [
       { t: 'Ask the Assistant:', prompt: 'Show my subscriptions', shots: [{ id: 'g09/01-subscriptions', alt: 'Subscriptions card listing sample subscriptions with monthly and yearly totals, labelled Sample data.', cap: 'Subscriptions with monthly and yearly totals.' }] },
       { t: 'Ask follow-ups: “Which costs the most?” or “What’s coming out next?”.', optional: true },
-      { t: 'Tap a subscription, then “Help me cancel”, or ask to cancel one. For a company outside SaySafe this is guidance only: cancel with the company itself, and stop any PayPal automatic payment in PayPal yourself. SaySafe can’t cancel other companies’ subscriptions.', shots: [{ id: 'g09/02-cancel-help', alt: 'Cancel help card with two steps: cancel the service with the company, and stop the PayPal automatic payment yourself.', cap: 'Cancelling: guidance only for outside companies.' }] },
+      { t: 'Tap a subscription, then “Help me cancel”, or ask to cancel one. For a company outside SaySafe this is guidance only: cancel with the company itself, and stop any PayPal automatic payment in PayPal yourself. SaySafe can’t cancel other companies’ subscriptions.' },
       { t: 'When you tell SaySafe you have cancelled, it shows “You told SaySafe this is cancelled — not confirmed by the provider”.' },
       { t: 'The SaySafe Demo Membership is different: a PayPal Sandbox subscription (test money) that SaySafe can start and cancel through PayPal’s Subscriptions API, only when you tap the button. Saying “yes” never cancels it.', optional: true, shots: [{ id: 'g09/03-demo-membership', alt: 'Demo Membership card with a Start Demo Membership button.', cap: 'The Demo Membership (PayPal Sandbox).' }] },
     ],
@@ -293,8 +293,8 @@ export const JUDGE_STEPS: { t: string; prompt?: string; optional?: boolean; shot
   { t: 'As Alex, check the exact item, amount and expiry, then choose “Approve”.', ui: ['Approve'], shot: { id: 'g06/02-alex-review', alt: 'Alex’s review card with Approve.', cap: 'Alex approves' }, guide: 'family-approval' },
   { t: 'Go back to Mary: Profile › “Back to Mary”, then Assistant. The same card now says “Approved”. Choose “Continue to PayPal”.', ui: ['Back to Mary', 'Continue to PayPal'], shot: { id: 'g06/06-mary-approved', alt: 'Mary’s card Approved with Continue to PayPal.', cap: 'Continue to PayPal' }, guide: 'family-approval' },
   { t: 'On PayPal’s sandbox page, log in with the judge sandbox buyer from the Devpost testing instructions and approve EUR 120.00. (Never a real PayPal login.)', guide: 'paypal-sandbox-purchase' },
-  { t: 'Back in SaySafe, read the receipt: Captured, checked with PayPal. Reload after a few seconds to see “Verified — signed PayPal notice”.', shot: { id: 'g07/02-receipt-page', alt: 'Receipt page: Captured.', cap: 'Receipt checked with PayPal' }, guide: 'verified-receipt' },
-  { t: 'Ask again. You get the same receipt; nothing is charged twice.', prompt: 'Did my payment go through?', shot: { id: 'g07/01-receipt-card', alt: 'Receipt card in the Assistant.', cap: 'Same receipt' }, guide: 'verified-receipt' },
+  { t: 'Back in SaySafe, read the receipt: Captured, checked with PayPal. Reload after a few seconds to see “Verified — signed PayPal notice”.', guide: 'verified-receipt' },
+  { t: 'Ask again. You get the same receipt; nothing is charged twice.', prompt: 'Did my payment go through?', guide: 'verified-receipt' },
   { t: 'Open Activity: the purchase is labelled “Real PayPal Sandbox transaction”, next to sample rows.', ui: ['Activity'], shot: { id: 'g08/01-activity', alt: 'Activity list with labels.', cap: 'Activity' }, guide: 'activity-search' },
   { t: 'Open Insights: Home › “View insights” for Mary; Alex’s dashboard is at /family/insights.', optional: true, ui: ['View insights'], shot: { id: 'g12/02-mary-insights', alt: 'Mary’s insights.', cap: 'Insights' }, guide: 'insights' },
   { t: 'Try a scam check: on Home choose “Things to try”, then “Check this suspicious message” and “Check this training example” (expect “Suspicious” for the fake invoice). Or choose “Check a message” on Home and paste the message below.', optional: true, ui: ['Things to try', 'Check this suspicious message', 'Check this training example', 'Check a message'], prompt: 'PayPal: your account is on hold. You owe €120 for a microwave order. Call 01 555 0199 to cancel.', shot: { id: 'g02/02-fake-invoice', alt: 'Suspicious result.', cap: 'Scam check' }, guide: 'check-a-suspicious-message' },

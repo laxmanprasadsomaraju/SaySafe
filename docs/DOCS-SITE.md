@@ -17,24 +17,28 @@ voice and language claims only as tested).
 
 ## Screenshots: one command
 
-```bash
-# local (mock PayPal :9999, recorded Channel3 :9998)
-npm run build && PORT=8792 scripts/local-stack.sh
-USE_PROXY=1 node scripts/shots-docs.mjs http://127.0.0.1:8792
+The published guide images are taken from the hosted app only (`source: "hosted"` in the manifest). No local or mock
+screenshots are shipped.
 
-# hosted, after deploying the final build (real Channel3, real PayPal Sandbox)
-PAYPAL_BUYER_EMAIL=… PAYPAL_BUYER_PASSWORD=… node scripts/shots-docs.mjs https://saysafe.onrender.com
+```bash
+# hosted (real Channel3; this sandbox reaches it through the HTTPS proxy)
+NODE_USE_ENV_PROXY=1 node scripts/shots-docs.mjs https://saysafe.onrender.com
 npm run build   # the pages read web/public/docs-assets/manifest.json at build time; commit docs-assets + manifest
 ```
 
 - Files: `web/public/docs-assets/<guide>/<nn>-<slug>-<w>.webp` (w = 390 phone at 2x, 1440 desktop), plus `manifest.json`
-  (source `local`/`hosted`, commit, whether it shows mock PayPal details).
-- The PayPal-hosted login/approval page is never captured. The buyer login is read from the environment only.
-- Local shots that show PayPal order/capture details get a “local test build (mock PayPal)” banner and their ids are
-  replaced by “[ID hidden · local test]”; the pages caption them “Illustration from local test build”.
-- Hosted without buyer credentials: everything except the receipt shots is re-shot; the receipt shots keep their
-  labelled local versions.
-- `ONLY=g05,g07` re-shoots selected guides. `USE_PROXY=1` (local only) loads real listing images through the egress proxy.
+  (source, base URL, commit, time taken).
+- The PayPal-hosted login/approval page is never captured. The buyer login is read from the environment only
+  (`PAYPAL_BUYER_EMAIL`, `PAYPAL_BUYER_PASSWORD`); without it the run creates no PayPal order and the receipt shots are
+  skipped.
+- Receipt shots (back from PayPal, receipt card, receipt page, timeline) need a completed sandbox payment, so they are
+  not in the current set; the guides describe those steps in text. A shot that can't be taken from the hosted app is
+  dropped, never replaced by a mock.
+- Product photos in Channel3 listings come from `cdn.trychannel3.com`, which the sandbox browser can't load, so they
+  may appear blank in the listing screenshots.
+- The script can still run against a local build (`node scripts/shots-docs.mjs http://127.0.0.1:8792`, mock PayPal,
+  stamped "local test build") for checking layout, but those images are not published.
+- `ONLY=g05,g07` re-shoots selected guides.
 
 ## QA
 

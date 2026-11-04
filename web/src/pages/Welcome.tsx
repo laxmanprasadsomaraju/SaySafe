@@ -11,7 +11,6 @@ const FLAGSHIP = [
   { id: 'g06/01-mary-waiting', t: 'Mary asks family', alt: 'Mary’s family review card: Pending, over her €75 limit.', cap: 'Over €75: waiting for family' },
   { id: 'g06/02-alex-review', t: 'Alex approves', alt: 'Alex’s review card with the exact item, €120.00 EUR, Approve and Decline.', cap: 'Alex sees the exact purchase' },
   { id: 'g06/06-mary-approved', t: 'Mary pays at PayPal', alt: 'Mary’s card: Approved, Continue to PayPal.', cap: 'Mary approves on PayPal’s page' },
-  { id: 'g07/01-receipt-card', t: 'Receipt checked', alt: 'Receipt card: Captured, checked with PayPal.', cap: '“Paid” only after PayPal confirms' },
 ];
 
 /**
@@ -220,12 +219,12 @@ export default function Welcome() {
         <p className="mt-8 text-lg text-ink-soft max-w-[70ch]"><b className="text-navy">The rule behind it:</b> AI explains, rules decide, the payer authorises at PayPal, and the server verifies. A family “yes” never replaces your own approval. Everything uses the PayPal sandbox: no real money.</p>
       </section>
 
-      {/* The flagship, in four real screens (Mary → Alex → PayPal → receipt) */}
+      {/* The flagship, in three real hosted screens (Mary → Alex → PayPal) */}
       <section aria-labelledby="flagship-h" className="bg-paper border-y border-line">
         <div className="wrap py-16 md:py-24 reveal">
           <p className="eyebrow">The flagship demo</p>
           <h2 id="flagship-h" className="display-2 mt-3 max-w-[22ch]">Mary asks, Alex approves, Mary pays at PayPal, SaySafe checks the receipt.</h2>
-          <ol className="mt-10 grid sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
+          <ol className="mt-10 grid sm:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center">
             {FLAGSHIP.map((f, i) => (
               <li key={f.id} className="flex flex-col items-center text-center max-w-[16rem]">
                 <p className="mb-3 flex items-center gap-2 font-bold"><span aria-hidden className="grid size-8 place-items-center rounded-full bg-navy text-white text-sm">{i + 1}</span><span className="sr-only">Step {i + 1}: </span>{f.t}</p>

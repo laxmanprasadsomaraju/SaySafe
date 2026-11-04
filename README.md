@@ -33,11 +33,11 @@ Completed end to end on the hosted app with a real sandbox buyer on 3 Nov 2026 (
 
 Every feature with its problem, example, data and limits: **[/features](https://saysafe.onrender.com/features)**.
 
-| Mary asks | Alex approves | Receipt | Insights |
+| Mary asks | Alex approves | Continue to PayPal | Insights |
 |---|---|---|---|
-| <img src="web/public/docs-assets/g03/01-owe-120-390.webp" width="170" alt="Possible matches for €120, labelled Sample data"> | <img src="web/public/docs-assets/g06/02-alex-review-390.webp" width="170" alt="Alex’s review card with the exact item, €120.00 EUR, Approve and Decline"> | <img src="web/public/docs-assets/g07/01-receipt-card-390.webp" width="170" alt="Receipt card: Captured, checked with PayPal"> | <img src="web/public/docs-assets/g12/02-mary-insights-390.webp" width="170" alt="Mary’s insights by kind of record"> |
+| <img src="web/public/docs-assets/g03/01-owe-120-390.webp" width="170" alt="Possible matches for €120, labelled Sample data"> | <img src="web/public/docs-assets/g06/02-alex-review-390.webp" width="170" alt="Alex’s review card with the exact item, €120.00 EUR, Approve and Decline"> | <img src="web/public/docs-assets/g06/06-mary-approved-390.webp" width="170" alt="Mary’s card: family Approved, Continue to PayPal"> | <img src="web/public/docs-assets/g12/02-mary-insights-390.webp" width="170" alt="Mary’s insights by kind of record"> |
 
-Screenshots come from `scripts/shots-docs.mjs`. Receipt-related images captured on the local test build use a mock PayPal: they carry a “local test build” banner and their ids are hidden. `web/public/docs-assets/manifest.json` records the source of every image.
+Screenshots are real captures of the hosted app (https://saysafe.onrender.com), taken with `scripts/shots-docs.mjs` on 4 November 2026; `web/public/docs-assets/manifest.json` records the source of every image (all `hosted`). Receipt screens need a completed sandbox payment, so they are described in text rather than shown; no mock images are used.
 
 ## Quick start
 

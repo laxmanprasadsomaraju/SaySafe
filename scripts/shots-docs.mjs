@@ -120,7 +120,7 @@ async function ask(p, text, card) {
   await sleep(700);
 }
 /** The app asks before leaving a screen with a purchase waiting ("Leave, keep it saved"): answer it like a person would. */
-async function leaveIfAsked(p) { const b = p.getByRole('button', { name: 'Leave, keep it saved' }); await b.waitFor({ timeout: 4000 }).then(() => b.click()).catch(() => {}); }
+async function leaveIfAsked(p) { const b = p.getByRole('button', { name: 'Leave, keep it saved' }); await b.waitFor({ timeout: HOSTED ? 20000 : 4000 }).then(() => b.click()).catch(() => {}); }
 async function at(p, w) { await p.setViewportSize({ width: w, height: w < 600 ? 844 : 900 }); await sleep(400); }
 async function step(name, fn) { try { await fn(); } catch (e) { failed.push(`${name}: ${e.message.split('\n')[0]}`); log('FAIL step', name, e.message.split('\n')[0]); await m?.screenshot({ path: path.join(TMP, `fail-${name}.png`) }).catch(() => {}); } }
 
@@ -252,6 +252,8 @@ try {
   // PayPal step. Never screenshotted. Local: mock approval. Hosted: buyer login from the environment, if given.
   let realReceipt = false;
   await step('paypal', async () => {
+    // Hosted without a buyer login: don't even create a PayPal order. Receipt shots are skipped, not mocked.
+    if (HOSTED && !(BUYER.email && BUYER.password)) throw new Error('hosted run without PAYPAL_BUYER_EMAIL/PAYPAL_BUYER_PASSWORD: no PayPal order created, receipt shots skipped');
     await last(m, 'family_status').getByRole('button', { name: 'Continue to PayPal' }).click();
     await m.waitForURL(/sandbox\.paypal\.com/, { timeout: 40000 });
     if (!HOSTED) {
@@ -272,6 +274,8 @@ try {
     if (HOSTED) { await sleep(20000); await m.reload(); await m.getByTestId('order-state').waitFor({ timeout: 40000 }); }
   });
   const rr = { paypal: true, realReceipt };
+  // Activity and Insights: on the hosted app these show real hosted data (no mock ids), so they are taken even without the buyer step.
+  const rv = { paypal: true, realReceipt: realReceipt || HOSTED };
   await step('receipt', async () => {
     if (!(await m.getByTestId('order-state').count())) throw new Error('no receipt page (PayPal step did not complete)');
     await snap(m, 'g05/03-back-from-paypal', { ...rr, hl: m.getByTestId('order-state') });
@@ -286,11 +290,11 @@ try {
   // Guide 8: Activity
   await step('activity', async () => {
     await m.goto(BASE + '/activity'); await m.waitForLoadState('networkidle'); await sleep(1000);
-    await at(m, 1440); await snap(m, 'g08/01-activity', { ...rr }); await at(m, 390);
+    await at(m, 1440); await snap(m, 'g08/01-activity', { ...rv }); await at(m, 390);
     const search = m.getByRole('searchbox').first();
-    if (await search.count()) { await search.fill('microwave'); await search.press('Enter'); await sleep(1200); await snap(m, 'g08/02-search', { ...rr, hl: search }); await search.fill(''); await search.press('Enter'); await sleep(600); }
+    if (await search.count()) { await search.fill('microwave'); await search.press('Enter'); await sleep(1200); await snap(m, 'g08/02-search', { ...rv, hl: search }); await search.fill(''); await search.press('Enter'); await sleep(600); }
     const filters = m.locator('main [role="group"], main fieldset').first();
-    if (await filters.count()) await snap(m, 'g08/03-filters', { ...rr, top: filters, hl: filters });
+    if (await filters.count()) await snap(m, 'g08/03-filters', { ...rv, top: filters, hl: filters });
   });
 
   // Guide 9: subscriptions
@@ -333,8 +337,8 @@ try {
     await snap(m, 'g01/03-home', { hl: m.locator('nav[aria-label="Shortcuts"]') });
     await snap(m, 'g12/01-home-insights-card', { top: m.getByTestId('home-insights'), hl: m.getByRole('link', { name: /View insights/ }) });
     await m.goto(BASE + '/insights'); await m.locator('#spending').waitFor({ timeout: 20000 }); await sleep(800);
-    await at(m, 1440); await snap(m, 'g12/02-mary-insights', { ...rr }); await at(m, 390);
-    await snap(m, 'g12/02-mary-insights', { ...rr });
+    await at(m, 1440); await snap(m, 'g12/02-mary-insights', { ...rv }); await at(m, 390);
+    await snap(m, 'g12/02-mary-insights', { ...rv });
   });
 
   // Guide 13: settings and accessibility

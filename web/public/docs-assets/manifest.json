@@ -5,574 +5,519 @@
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:01.462Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:10:42.159Z"
     },
     "g01/01-landing-390": {
       "file": "/docs-assets/g01/01-landing-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:02.796Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:10:43.687Z"
     },
     "g01/02-welcome-1440": {
       "file": "/docs-assets/g01/02-welcome-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:07.920Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:06.272Z"
     },
     "g01/02-welcome-390": {
       "file": "/docs-assets/g01/02-welcome-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:05.772Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:03.482Z"
     },
     "g01/03-home-390": {
       "file": "/docs-assets/g01/03-home-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:40.844Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:33.438Z"
     },
     "g01/04-demo-help-390": {
       "file": "/docs-assets/g01/04-demo-help-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:54.230Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:46.749Z"
     },
     "g02/01-training-examples-390": {
       "file": "/docs-assets/g02/01-training-examples-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:18.033Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:34.629Z"
     },
     "g02/02-fake-invoice-1440": {
       "file": "/docs-assets/g02/02-fake-invoice-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:21.845Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:46.081Z"
     },
     "g02/02-fake-invoice-390": {
       "file": "/docs-assets/g02/02-fake-invoice-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:20.085Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:44.450Z"
     },
     "g02/03-hi-mum-390": {
       "file": "/docs-assets/g02/03-hi-mum-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:24.300Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:56.908Z"
     },
     "g02/04-order-notice-390": {
       "file": "/docs-assets/g02/04-order-notice-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:26.113Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:07.012Z"
     },
     "g03/01-owe-120-1440": {
       "file": "/docs-assets/g03/01-owe-120-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:13.160Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:20.606Z"
     },
     "g03/01-owe-120-390": {
       "file": "/docs-assets/g03/01-owe-120-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:11.466Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:17.982Z"
     },
     "g03/02-john-duplicate-390": {
       "file": "/docs-assets/g03/02-john-duplicate-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:16.351Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:11:32.236Z"
     },
     "g04/01-listings-1440": {
       "file": "/docs-assets/g04/01-listings-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:34.250Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:26.197Z"
     },
     "g04/01-listings-390": {
       "file": "/docs-assets/g04/01-listings-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:32.262Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:24.388Z"
     },
     "g04/02-listing-detail-390": {
       "file": "/docs-assets/g04/02-listing-detail-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:36.165Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:28.616Z"
     },
     "g04/03-compare-390": {
       "file": "/docs-assets/g04/03-compare-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:37.912Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:30.472Z"
     },
     "g04/04-demo-shop-offer-390": {
       "file": "/docs-assets/g04/04-demo-shop-offer-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:39.106Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:31.384Z"
     },
     "g05/01-purchase-card-1440": {
       "file": "/docs-assets/g05/01-purchase-card-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:43.238Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:46.173Z"
     },
     "g05/01-purchase-card-390": {
       "file": "/docs-assets/g05/01-purchase-card-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T17:59:41.192Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:44.404Z"
     },
     "g05/02-continue-to-paypal-390": {
       "file": "/docs-assets/g05/02-continue-to-paypal-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:03.843Z"
-    },
-    "g05/03-back-from-paypal-390": {
-      "file": "/docs-assets/g05/03-back-from-paypal-390.webp",
-      "width": 780,
-      "height": 1688,
-      "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:06.145Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:30.359Z"
     },
     "g06/01-mary-waiting-390": {
       "file": "/docs-assets/g06/01-mary-waiting-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:08.915Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:52.149Z"
     },
     "g06/02-alex-review-1440": {
       "file": "/docs-assets/g06/02-alex-review-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:12.595Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:00.485Z"
     },
     "g06/02-alex-review-390": {
       "file": "/docs-assets/g06/02-alex-review-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:11.004Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:12:58.906Z"
     },
     "g06/03-alex-approved-390": {
       "file": "/docs-assets/g06/03-alex-approved-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:14.062Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:10.999Z"
     },
     "g06/04-alex-family-home-1440": {
       "file": "/docs-assets/g06/04-alex-family-home-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:17.414Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:16.174Z"
     },
     "g06/05-back-to-mary-390": {
       "file": "/docs-assets/g06/05-back-to-mary-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:25.154Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:26.731Z"
     },
     "g06/06-mary-approved-390": {
       "file": "/docs-assets/g06/06-mary-approved-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:27.834Z"
-    },
-    "g07/01-receipt-card-390": {
-      "file": "/docs-assets/g07/01-receipt-card-390.webp",
-      "width": 780,
-      "height": 1688,
-      "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:11.760Z"
-    },
-    "g07/02-receipt-page-1440": {
-      "file": "/docs-assets/g07/02-receipt-page-1440.webp",
-      "width": 1440,
-      "height": 900,
-      "viewport": 1440,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:07.903Z"
-    },
-    "g07/03-timeline-390": {
-      "file": "/docs-assets/g07/03-timeline-390.webp",
-      "width": 780,
-      "height": 1688,
-      "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:09.128Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:29.464Z"
     },
     "g08/01-activity-1440": {
       "file": "/docs-assets/g08/01-activity-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:15.327Z"
+      "source": "hosted",
+      "paypalMock": false,
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:35.412Z"
     },
     "g08/02-search-390": {
       "file": "/docs-assets/g08/02-search-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:18.263Z"
+      "source": "hosted",
+      "paypalMock": false,
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:38.033Z"
     },
     "g08/03-filters-390": {
       "file": "/docs-assets/g08/03-filters-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:20.165Z"
+      "source": "hosted",
+      "paypalMock": false,
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:39.788Z"
     },
     "g09/01-subscriptions-390": {
       "file": "/docs-assets/g09/01-subscriptions-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:22.599Z"
-    },
-    "g09/02-cancel-help-390": {
-      "file": "/docs-assets/g09/02-cancel-help-390.webp",
-      "width": 780,
-      "height": 1688,
-      "viewport": 390,
-      "source": "local",
-      "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:26.193Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:51.650Z"
     },
     "g09/03-demo-membership-390": {
       "file": "/docs-assets/g09/03-demo-membership-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:28.788Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:02.553Z"
     },
     "g10/01-find-alex-390": {
       "file": "/docs-assets/g10/01-find-alex-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:32.044Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:14.201Z"
     },
     "g10/02-send-money-390": {
       "file": "/docs-assets/g10/02-send-money-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:35.315Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:26.030Z"
     },
     "g11/01-voice-settings-390": {
       "file": "/docs-assets/g11/01-voice-settings-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:38.540Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:30.475Z"
     },
     "g11/02-speak-button-390": {
       "file": "/docs-assets/g11/02-speak-button-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:00:36.462Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:26.971Z"
     },
     "g12/01-home-insights-card-390": {
       "file": "/docs-assets/g12/01-home-insights-card-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:47.550Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:34.336Z"
     },
     "g12/02-mary-insights-1440": {
       "file": "/docs-assets/g12/02-mary-insights-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:51.092Z"
+      "source": "hosted",
+      "paypalMock": false,
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:38.634Z"
     },
     "g12/02-mary-insights-390": {
       "file": "/docs-assets/g12/02-mary-insights-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
-      "paypalMock": true,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:52.238Z"
+      "source": "hosted",
+      "paypalMock": false,
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:39.940Z"
     },
     "g12/03-alex-insights-1440": {
       "file": "/docs-assets/g12/03-alex-insights-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:22.227Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:22.715Z"
     },
     "g12/03-alex-insights-390": {
       "file": "/docs-assets/g12/03-alex-insights-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:23.468Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:13:24.061Z"
     },
     "g13/01-profile-1440": {
       "file": "/docs-assets/g13/01-profile-1440.webp",
       "width": 1440,
       "height": 900,
       "viewport": 1440,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:55.233Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:44.161Z"
     },
     "g13/02-accessibility-390": {
       "file": "/docs-assets/g13/02-accessibility-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:56.553Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:45.864Z"
     },
     "g13/03-assistant-menu-390": {
       "file": "/docs-assets/g13/03-assistant-menu-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "ce72e3d",
-      "takenAt": "2026-11-03T19:25:58.898Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:49.778Z"
     },
     "g14/01-sample-order-390": {
       "file": "/docs-assets/g14/01-sample-order-390.webp",
       "width": 780,
       "height": 1688,
       "viewport": 390,
-      "source": "local",
+      "source": "hosted",
       "paypalMock": false,
-      "base": "local",
-      "commit": "8bf88dd",
-      "takenAt": "2026-11-03T18:01:00.240Z"
+      "base": "https://saysafe.onrender.com",
+      "commit": "e7f6eb4",
+      "takenAt": "2026-11-04T14:14:53.675Z"
     }
   },
-  "generatedAt": "2026-11-03T19:26:00.293Z",
-  "lastBase": "local"
+  "generatedAt": "2026-11-04T14:14:53.679Z",
+  "lastBase": "https://saysafe.onrender.com"
 }

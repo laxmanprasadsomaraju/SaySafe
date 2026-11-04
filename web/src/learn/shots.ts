@@ -1,13 +1,13 @@
 /**
  * Screenshot lookup for the Learn pages. web/public/docs-assets/manifest.json is written by scripts/shots-docs.mjs and
- * says, for every image, its size and where it came from (local test build with mock PayPal, or the hosted app).
+ * says, for every image, its size and where it came from (published shots: the hosted app).
  */
 import manifest from '../../public/docs-assets/manifest.json';
 
 export interface ShotFile { file: string; width: number; height: number; viewport: number; source: 'local' | 'hosted'; paypalMock: boolean }
 const shots = (manifest as { shots: Record<string, ShotFile> }).shots;
 
-/** Both widths of one screenshot id ("g05/03-back-from-paypal"), whichever exist. */
+/** Both widths of one screenshot id ("g06/02-alex-review"), whichever exist. */
 export function shotFiles(id: string): { phone?: ShotFile; desktop?: ShotFile } {
   return { phone: shots[`${id}-390`], desktop: shots[`${id}-1440`] };
 }

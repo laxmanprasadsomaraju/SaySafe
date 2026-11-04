@@ -15,9 +15,16 @@ const ack = (id: string) => { try { const a = JSON.parse(sessionStorage.getItem(
 /** The person chose to leave on purpose (e.g. "Try as Alex too"): don't ask again for this purchase. */
 export const acknowledgeLeave = (id: string) => ack(id);
 
+/**
+ * Whether a navigation should be held. The acknowledgement is read at navigation time, not at render time:
+ * "Try as Alex too" acknowledges and navigates in the same tick, before any re-render.
+ */
+export const leaveBlocker = (when: boolean, id: string) =>
+  ({ currentLocation, nextLocation }: { currentLocation: { pathname: string }; nextLocation: { pathname: string } }) =>
+    when && !acked(id) && !handoffActive() && currentLocation.pathname !== nextLocation.pathname;
+
 export function LeaveGuard({ when, id, title, detail }: { when: boolean; id: string; title: string; detail: string }) {
-  const active = when && !acked(id);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => active && !handoffActive() && currentLocation.pathname !== nextLocation.pathname);
+  const blocker = useBlocker(leaveBlocker(when, id));
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current;
